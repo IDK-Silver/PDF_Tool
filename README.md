@@ -1,3 +1,4 @@
+# 還未設計完成
 # PDF_Tool
 PDF_Tool 可以把PDF文件轉換成圖片的格式。
 
