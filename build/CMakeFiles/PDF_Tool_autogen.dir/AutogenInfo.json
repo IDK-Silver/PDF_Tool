@@ -70,9 +70,19 @@
 	"HEADERS" : 
 	[
 		[
+			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.h",
+			"MU",
+			"X2OPCQFLF7/moc_PDFtoImage.cpp"
+		],
+		[
 			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.h",
 			"MU",
 			"RP6H5YPAQS/moc_MainWindow.cpp"
+		],
+		[
+			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.h",
+			"MU",
+			"N5RC4C6X7X/moc_PDFWidget.cpp"
 		]
 	],
 	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
@@ -129,7 +139,15 @@
 	"SOURCES" : 
 	[
 		[
+			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp",
+			"MU"
+		],
+		[
 			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp",
+			"MU"
+		],
+		[
+			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp",
 			"MU"
 		],
 		[ "C:/Users/a2882/Documents/Code/PDF_Tool/src/main.cpp", "MU" ]

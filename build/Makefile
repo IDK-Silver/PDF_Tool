@@ -181,6 +181,33 @@ PDF_Tool_autogen/mocs_compilation.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/mocs_compilation.cpp.s
 .PHONY : PDF_Tool_autogen/mocs_compilation.cpp.s
 
+libraries/PDFtoImage/PDFtoImage.obj: libraries/PDFtoImage/PDFtoImage.cpp.obj
+
+.PHONY : libraries/PDFtoImage/PDFtoImage.obj
+
+# target to build an object file
+libraries/PDFtoImage/PDFtoImage.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj
+.PHONY : libraries/PDFtoImage/PDFtoImage.cpp.obj
+
+libraries/PDFtoImage/PDFtoImage.i: libraries/PDFtoImage/PDFtoImage.cpp.i
+
+.PHONY : libraries/PDFtoImage/PDFtoImage.i
+
+# target to preprocess a source file
+libraries/PDFtoImage/PDFtoImage.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.i
+.PHONY : libraries/PDFtoImage/PDFtoImage.cpp.i
+
+libraries/PDFtoImage/PDFtoImage.s: libraries/PDFtoImage/PDFtoImage.cpp.s
+
+.PHONY : libraries/PDFtoImage/PDFtoImage.s
+
+# target to generate assembly for a file
+libraries/PDFtoImage/PDFtoImage.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.s
+.PHONY : libraries/PDFtoImage/PDFtoImage.cpp.s
+
 src/Widget/MainWindow/MainWindow.obj: src/Widget/MainWindow/MainWindow.cpp.obj
 
 .PHONY : src/Widget/MainWindow/MainWindow.obj
@@ -207,6 +234,33 @@ src/Widget/MainWindow/MainWindow.s: src/Widget/MainWindow/MainWindow.cpp.s
 src/Widget/MainWindow/MainWindow.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/src/Widget/MainWindow/MainWindow.cpp.s
 .PHONY : src/Widget/MainWindow/MainWindow.cpp.s
+
+src/Widget/PDFWidget/PDFWidget.obj: src/Widget/PDFWidget/PDFWidget.cpp.obj
+
+.PHONY : src/Widget/PDFWidget/PDFWidget.obj
+
+# target to build an object file
+src/Widget/PDFWidget/PDFWidget.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj
+.PHONY : src/Widget/PDFWidget/PDFWidget.cpp.obj
+
+src/Widget/PDFWidget/PDFWidget.i: src/Widget/PDFWidget/PDFWidget.cpp.i
+
+.PHONY : src/Widget/PDFWidget/PDFWidget.i
+
+# target to preprocess a source file
+src/Widget/PDFWidget/PDFWidget.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.i
+.PHONY : src/Widget/PDFWidget/PDFWidget.cpp.i
+
+src/Widget/PDFWidget/PDFWidget.s: src/Widget/PDFWidget/PDFWidget.cpp.s
+
+.PHONY : src/Widget/PDFWidget/PDFWidget.s
+
+# target to generate assembly for a file
+src/Widget/PDFWidget/PDFWidget.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.s
+.PHONY : src/Widget/PDFWidget/PDFWidget.cpp.s
 
 src/main.obj: src/main.cpp.obj
 
@@ -248,9 +302,15 @@ help:
 	@echo ... PDF_Tool_autogen/mocs_compilation.obj
 	@echo ... PDF_Tool_autogen/mocs_compilation.i
 	@echo ... PDF_Tool_autogen/mocs_compilation.s
+	@echo ... libraries/PDFtoImage/PDFtoImage.obj
+	@echo ... libraries/PDFtoImage/PDFtoImage.i
+	@echo ... libraries/PDFtoImage/PDFtoImage.s
 	@echo ... src/Widget/MainWindow/MainWindow.obj
 	@echo ... src/Widget/MainWindow/MainWindow.i
 	@echo ... src/Widget/MainWindow/MainWindow.s
+	@echo ... src/Widget/PDFWidget/PDFWidget.obj
+	@echo ... src/Widget/PDFWidget/PDFWidget.i
+	@echo ... src/Widget/PDFWidget/PDFWidget.s
 	@echo ... src/main.obj
 	@echo ... src/main.i
 	@echo ... src/main.s

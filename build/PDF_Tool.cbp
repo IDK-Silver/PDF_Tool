@@ -107,6 +107,12 @@
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/mocs_compilation.cpp">
 			<Option target="PDF_Tool"/>
 		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp">
+			<Option target="PDF_Tool"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.h">
+			<Option target="PDF_Tool"/>
+		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp">
 			<Option target="PDF_Tool"/>
 		</Unit>
@@ -114,6 +120,15 @@
 			<Option target="PDF_Tool"/>
 		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.ui">
+			<Option target="PDF_Tool"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp">
+			<Option target="PDF_Tool"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.h">
+			<Option target="PDF_Tool"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.ui">
 			<Option target="PDF_Tool"/>
 		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/main.cpp">
