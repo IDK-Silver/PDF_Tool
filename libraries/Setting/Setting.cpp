@@ -20,20 +20,16 @@ Setting::~Setting() {
     delete settings;
 }
 
-void Setting::write(const QString &key, const QString &value) {
-    this->settings->setValue(this->section + "/" + key, value);
+void Setting::write(const QString &input_key, const QVariant &input_value) {
+    this->settings->setValue(this->section + "/" + input_key, input_value);
 }
 
-void Setting::write(const QString &input_section, const QString &input_key, const QString &input_value) {
+void Setting::write(const QString &input_section, const QString &input_key, const QVariant &input_value) {
     this->settings->setValue(input_section + "/" + input_key, input_value);
 }
 
-void Setting::write(const QString &input_section, const QString &input_key, const QStringList &values) {
-    this->settings->setValue(input_section + "/" + input_key, values);
-}
-
-QString Setting::read(const QString &key) {
-    return this->settings->value(this->section + "/" + key).toString();
+QVariant Setting::read(const QString &key) {
+    return this->settings->value(this->section + "/" + key);
 }
 
 void Setting::change_section(const QString &input_section) {
@@ -49,13 +45,19 @@ void Setting::generate_file() {
 
     {   // PDF Widget Option
         Setting_Sections::PDFWidget option;
+
+        QStringList format_list = {"JPG", "PNG"};
+        this->write(option.section, option.key.format_list, format_list);
+        QStringList dpi_list = {"96", "300"};
+        this->write(option.section, option.key.dpi_list, dpi_list);
+
         this->write(option.section, option.key.dpi, "300");
         this->write(option.section, option.key.format, "PNG");
-        this->write(option.section, option.key.format_list, {"JPG", "PNG"});
-        this->write(option.section, option.key.dpi_list, {"96", "300"});
 
     }
 }
+
+
 
 
 

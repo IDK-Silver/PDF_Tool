@@ -32,9 +32,19 @@ void PDFWidget::add_file() {
 void PDFWidget::init() {
     this->settings = new Setting(section.section);
 
-    if (!settings->is_file_generate()) {    // 生成設定檔案
-        settings->generate_file();
+    if (!settings->is_file_generate()) {    // 檢查是否生成檔案
+        settings->generate_file();  // 生成設定檔案
     }
+
+    // 初始化 DPI 選項
+    ui->comboBox_dpi->addItems(settings->read(section.key.dpi_list).toStringList());
+    ui->comboBox_dpi->setCurrentText(settings->read(section.key.dpi).toString());
+
+    // 初始化 圖片格式 選項
+    ui->comboBox_format->addItems(settings->read(section.key.format_list).toStringList());
+    ui->comboBox_format->setCurrentText(settings->read(section.key.format).toString());
+
+
 }
 
 

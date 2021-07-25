@@ -18,10 +18,9 @@ public:
     bool is_file_generate();
     void generate_file();
     void change_section(const QString &section);
-    void write(const QString &key, const QString &value);
-    void write(const QString &input_section, const QString &key, const QString &value);
-    void write(const QString &input_section, const QString &key, const QStringList & values);
-    QString read(const QString &key);
+    void write(const QString &input_key, const QVariant &input_value);
+    void write(const QString &input_section, const QString &input_key, const QVariant &input_value);
+    QVariant read(const QString &key);
 
 private:
     QSettings *settings;
