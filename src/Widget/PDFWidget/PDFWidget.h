@@ -6,7 +6,7 @@
 #define PDF_TOOL_PDFWIDGET_H
 
 #include <QWidget>
-
+#include "libraries/Setting/Setting.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class PDFWidget; }
@@ -17,11 +17,17 @@ Q_OBJECT
 
 public:
     explicit PDFWidget(QWidget *parent = nullptr);
-
     ~PDFWidget() override;
 
 private:
     Ui::PDFWidget *ui;
+    Setting *settings{};
+    Setting_Sections::PDFWidget section;
+
+    void init();
+
+private slots:
+    void add_file();
 };
 
 

@@ -75,6 +75,11 @@
 			"X2OPCQFLF7/moc_PDFtoImage.cpp"
 		],
 		[
+			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.h",
+			"MU",
+			"CDSLBL4Y44/moc_Setting.cpp"
+		],
+		[
 			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.h",
 			"MU",
 			"RP6H5YPAQS/moc_MainWindow.cpp"
@@ -140,6 +145,10 @@
 	[
 		[
 			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp",
+			"MU"
+		],
+		[
+			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.cpp",
 			"MU"
 		],
 		[

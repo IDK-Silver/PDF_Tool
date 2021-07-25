@@ -6,6 +6,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 set(CMAKE_DEPENDS_CHECK_CXX
   "C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/mocs_compilation.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/build/CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/mocs_compilation.cpp.obj"
   "C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/build/CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/build/CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj"
   "C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/build/CMakeFiles/PDF_Tool.dir/src/Widget/MainWindow/MainWindow.cpp.obj"
   "C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/build/CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj"
   "C:/Users/a2882/Documents/Code/PDF_Tool/src/main.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/build/CMakeFiles/PDF_Tool.dir/src/main.cpp.obj"

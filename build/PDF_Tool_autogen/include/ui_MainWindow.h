@@ -10,13 +10,8 @@
 #define UI_MAINWINDOW_H
 
 #include <QtCore/QVariant>
-#include <QtWidgets/QAction>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QMainWindow>
-#include <QtWidgets/QMenu>
-#include <QtWidgets/QMenuBar>
-#include <QtWidgets/QPushButton>
-#include <QtWidgets/QToolBar>
 #include <QtWidgets/QWidget>
 
 QT_BEGIN_NAMESPACE
@@ -25,10 +20,6 @@ class Ui_MainWindow
 {
 public:
     QWidget *centralwidget;
-    QPushButton *pushButton;
-    QToolBar *toolBar;
-    QMenuBar *menuBar;
-    QMenu *menus;
 
     void setupUi(QMainWindow *MainWindow)
     {
@@ -37,21 +28,7 @@ public:
         MainWindow->resize(818, 542);
         centralwidget = new QWidget(MainWindow);
         centralwidget->setObjectName(QString::fromUtf8("centralwidget"));
-        pushButton = new QPushButton(centralwidget);
-        pushButton->setObjectName(QString::fromUtf8("pushButton"));
-        pushButton->setGeometry(QRect(280, 140, 93, 28));
         MainWindow->setCentralWidget(centralwidget);
-        toolBar = new QToolBar(MainWindow);
-        toolBar->setObjectName(QString::fromUtf8("toolBar"));
-        MainWindow->addToolBar(Qt::TopToolBarArea, toolBar);
-        menuBar = new QMenuBar(MainWindow);
-        menuBar->setObjectName(QString::fromUtf8("menuBar"));
-        menuBar->setGeometry(QRect(0, 0, 818, 25));
-        menus = new QMenu(menuBar);
-        menus->setObjectName(QString::fromUtf8("menus"));
-        MainWindow->setMenuBar(menuBar);
-
-        menuBar->addAction(menus->menuAction());
 
         retranslateUi(MainWindow);
 
@@ -61,9 +38,6 @@ public:
     void retranslateUi(QMainWindow *MainWindow)
     {
         MainWindow->setWindowTitle(QCoreApplication::translate("MainWindow", "MainWindow", nullptr));
-        pushButton->setText(QCoreApplication::translate("MainWindow", "PushButton", nullptr));
-        toolBar->setWindowTitle(QCoreApplication::translate("MainWindow", "toolBar", nullptr));
-        menus->setTitle(QCoreApplication::translate("MainWindow", "s", nullptr));
     } // retranslateUi
 
 };

@@ -23,5 +23,10 @@
   "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
   "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\libraries\\PDFtoImage\\PDFtoImage.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\libraries\\PDFtoImage\\PDFtoImage.cpp",
   "file": "C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp"
+},
+{
+  "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
+  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\libraries\\Setting\\Setting.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\libraries\\Setting\\Setting.cpp",
+  "file": "C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.cpp"
 }
 ]

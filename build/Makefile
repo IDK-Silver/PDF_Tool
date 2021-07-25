@@ -208,6 +208,33 @@ libraries/PDFtoImage/PDFtoImage.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.s
 .PHONY : libraries/PDFtoImage/PDFtoImage.cpp.s
 
+libraries/Setting/Setting.obj: libraries/Setting/Setting.cpp.obj
+
+.PHONY : libraries/Setting/Setting.obj
+
+# target to build an object file
+libraries/Setting/Setting.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj
+.PHONY : libraries/Setting/Setting.cpp.obj
+
+libraries/Setting/Setting.i: libraries/Setting/Setting.cpp.i
+
+.PHONY : libraries/Setting/Setting.i
+
+# target to preprocess a source file
+libraries/Setting/Setting.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.i
+.PHONY : libraries/Setting/Setting.cpp.i
+
+libraries/Setting/Setting.s: libraries/Setting/Setting.cpp.s
+
+.PHONY : libraries/Setting/Setting.s
+
+# target to generate assembly for a file
+libraries/Setting/Setting.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.s
+.PHONY : libraries/Setting/Setting.cpp.s
+
 src/Widget/MainWindow/MainWindow.obj: src/Widget/MainWindow/MainWindow.cpp.obj
 
 .PHONY : src/Widget/MainWindow/MainWindow.obj
@@ -305,6 +332,9 @@ help:
 	@echo ... libraries/PDFtoImage/PDFtoImage.obj
 	@echo ... libraries/PDFtoImage/PDFtoImage.i
 	@echo ... libraries/PDFtoImage/PDFtoImage.s
+	@echo ... libraries/Setting/Setting.obj
+	@echo ... libraries/Setting/Setting.i
+	@echo ... libraries/Setting/Setting.s
 	@echo ... src/Widget/MainWindow/MainWindow.obj
 	@echo ... src/Widget/MainWindow/MainWindow.i
 	@echo ... src/Widget/MainWindow/MainWindow.s

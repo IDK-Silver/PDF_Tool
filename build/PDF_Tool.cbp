@@ -113,6 +113,12 @@
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.h">
 			<Option target="PDF_Tool"/>
 		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.cpp">
+			<Option target="PDF_Tool"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.h">
+			<Option target="PDF_Tool"/>
+		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp">
 			<Option target="PDF_Tool"/>
 		</Unit>

@@ -93,12 +93,12 @@ clean: CMakeFiles/PDF_Tool_autogen.dir/clean
 CMakeFiles/PDF_Tool.dir/all: CMakeFiles/PDF_Tool_autogen.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles --progress-num=1,2,3,4,5,6 "Built target PDF_Tool"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles --progress-num=1,2,3,4,5,6,7 "Built target PDF_Tool"
 .PHONY : CMakeFiles/PDF_Tool.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/PDF_Tool.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles 7
+	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles 8
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 CMakeFiles/PDF_Tool.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles 0
 .PHONY : CMakeFiles/PDF_Tool.dir/rule
@@ -120,7 +120,7 @@ CMakeFiles/PDF_Tool.dir/clean:
 CMakeFiles/PDF_Tool_autogen.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool_autogen.dir\build.make CMakeFiles/PDF_Tool_autogen.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool_autogen.dir\build.make CMakeFiles/PDF_Tool_autogen.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles --progress-num=7 "Built target PDF_Tool_autogen"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles --progress-num=8 "Built target PDF_Tool_autogen"
 .PHONY : CMakeFiles/PDF_Tool_autogen.dir/all
 
 # Build rule for subdir invocation for target.
