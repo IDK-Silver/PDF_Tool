@@ -5,6 +5,7 @@ CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/mocs_compilation.cpp.obj
  ../libraries/Setting/Setting.h
  ../src/Widget/PDFWidget/PDFWidget.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDir
+ C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSet
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSettings
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QString
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qalgorithms.h
@@ -323,6 +324,7 @@ CMakeFiles/PDF_Tool.dir/src/Widget/MainWindow/MainWindow.cpp.obj
  ../libraries/Setting/Setting.h
  ../src/Widget/PDFWidget/PDFWidget.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDir
+ C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSet
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSettings
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QString
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QVariant
@@ -450,6 +452,7 @@ CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj
  ../libraries/Setting/Setting.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDebug
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDir
+ C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSet
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSettings
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QString
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QVariant
@@ -570,7 +573,7 @@ CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/QGroupBox
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/QHBoxLayout
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/QLabel
- C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/QListView
+ C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/QListWidget
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/QPushButton
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/QSpacerItem
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/QVBoxLayout
@@ -594,6 +597,7 @@ CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qlayout.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qlayoutitem.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qlistview.h
+ C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qlistwidget.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qpushbutton.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qrubberband.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qsizepolicy.h
@@ -613,6 +617,7 @@ CMakeFiles/PDF_Tool.dir/src/main.cpp.obj
  ../src/Widget/MainWindow/MainWindow.h
  ../src/Widget/PDFWidget/PDFWidget.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDir
+ C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSet
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSettings
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QString
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qalgorithms.h

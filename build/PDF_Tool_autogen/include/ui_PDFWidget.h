@@ -16,7 +16,7 @@
 #include <QtWidgets/QGroupBox>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QLabel>
-#include <QtWidgets/QListView>
+#include <QtWidgets/QListWidget>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QSpacerItem>
 #include <QtWidgets/QVBoxLayout>
@@ -29,7 +29,7 @@ class Ui_PDFWidget
 public:
     QHBoxLayout *horizontalLayout_2;
     QVBoxLayout *verticalLayout_4;
-    QListView *listView;
+    QListWidget *listWidget;
     QHBoxLayout *horizontalLayout;
     QPushButton *btn_addFile;
     QPushButton *btn_delFile;
@@ -54,10 +54,10 @@ public:
         horizontalLayout_2->setObjectName(QString::fromUtf8("horizontalLayout_2"));
         verticalLayout_4 = new QVBoxLayout();
         verticalLayout_4->setObjectName(QString::fromUtf8("verticalLayout_4"));
-        listView = new QListView(PDFWidget);
-        listView->setObjectName(QString::fromUtf8("listView"));
+        listWidget = new QListWidget(PDFWidget);
+        listWidget->setObjectName(QString::fromUtf8("listWidget"));
 
-        verticalLayout_4->addWidget(listView);
+        verticalLayout_4->addWidget(listWidget);
 
         horizontalLayout = new QHBoxLayout();
         horizontalLayout->setObjectName(QString::fromUtf8("horizontalLayout"));

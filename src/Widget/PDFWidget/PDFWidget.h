@@ -6,6 +6,7 @@
 #define PDF_TOOL_PDFWIDGET_H
 
 #include <QWidget>
+#include <QSet>
 #include "libraries/Setting/Setting.h"
 
 QT_BEGIN_NAMESPACE
@@ -23,11 +24,13 @@ private:
     Ui::PDFWidget *ui;
     Setting *settings{};
     Setting_Sections::PDFWidget section;
+    QVector<QString> files;
 
     void init();
 
 private slots:
     void add_file();
+    void del_file();
 };
 
 

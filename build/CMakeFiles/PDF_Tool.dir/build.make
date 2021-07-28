@@ -52,10 +52,10 @@ cmake_force:
 SHELL = cmd.exe
 
 # The CMake executable.
-CMAKE_COMMAND = "C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe"
+CMAKE_COMMAND = C:\Development\Qt\Tools\CMake_64\bin\cmake.exe
 
 # The command to remove a file.
-RM = "C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E rm -f
+RM = C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -185,44 +185,44 @@ PDF_Tool.exe: CMakeFiles/PDF_Tool.dir/linklibs.rsp
 PDF_Tool.exe: CMakeFiles/PDF_Tool.dir/objects1.rsp
 PDF_Tool.exe: CMakeFiles/PDF_Tool.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Linking CXX executable PDF_Tool.exe"
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libpoppler-105.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libpoppler-cpp-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libpoppler-qt5-1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/liblcms2-2.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libfreetype-6.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libcurl-4.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libbz2-1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libbrotlidec.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libharfbuzz-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libpng16-16.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/zlib1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libbrotlicommon.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libglib-2.0-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libjpeg-8.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libnspr4.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/nss3.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libopenjp2-7.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/smime3.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libtiff-5.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libgraphite2.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libcrypto-1_1-x64.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libidn2-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libnghttp2-14.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libpsl-5.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libssh2-1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libssl-1_1-x64.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libzstd.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/nssutil3.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libplc4.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libplds4.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libdeflate.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libjbig-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/liblzma-5.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libwebp-7.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libintl-8.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libpcre-1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libiconv-2.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E copy C:/Development/msys2/mingw64/bin/libunistring-2.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libpoppler-105.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libpoppler-cpp-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libpoppler-qt5-1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/liblcms2-2.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libfreetype-6.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libcurl-4.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libbz2-1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libbrotlidec.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libharfbuzz-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libpng16-16.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/zlib1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libbrotlicommon.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libglib-2.0-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libjpeg-8.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libnspr4.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/nss3.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libopenjp2-7.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/smime3.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libtiff-5.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libgraphite2.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libcrypto-1_1-x64.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libidn2-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libnghttp2-14.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libpsl-5.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libssh2-1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libssl-1_1-x64.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libzstd.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/nssutil3.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libplc4.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libplds4.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libdeflate.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libjbig-0.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/liblzma-5.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libwebp-7.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libintl-8.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libpcre-1.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libiconv-2.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
+	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E copy C:/Development/msys2/mingw64/bin/libunistring-2.dll C:/Users/a2882/Documents/Code/PDF_Tool/build
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles\PDF_Tool.dir\link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

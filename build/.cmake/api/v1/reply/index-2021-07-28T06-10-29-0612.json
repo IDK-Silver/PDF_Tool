@@ -8,10 +8,10 @@
 		},
 		"paths" : 
 		{
-			"cmake" : "C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/bin/cmake.exe",
-			"cpack" : "C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/bin/cpack.exe",
-			"ctest" : "C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/bin/ctest.exe",
-			"root" : "C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19"
+			"cmake" : "C:/Development/Qt/Tools/CMake_64/bin/cmake.exe",
+			"cpack" : "C:/Development/Qt/Tools/CMake_64/bin/cpack.exe",
+			"ctest" : "C:/Development/Qt/Tools/CMake_64/bin/ctest.exe",
+			"root" : "C:/Development/Qt/Tools/CMake_64/share/cmake-3.19"
 		},
 		"version" : 
 		{
@@ -35,7 +35,7 @@
 			}
 		},
 		{
-			"jsonFile" : "cache-v2-b3e6eb1c7181970dd5ec.json",
+			"jsonFile" : "cache-v2-14e1d5db175b6b4aae89.json",
 			"kind" : "cache",
 			"version" : 
 			{
@@ -68,7 +68,7 @@
 				"responses" : 
 				[
 					{
-						"jsonFile" : "cache-v2-b3e6eb1c7181970dd5ec.json",
+						"jsonFile" : "cache-v2-14e1d5db175b6b4aae89.json",
 						"kind" : "cache",
 						"version" : 
 						{
