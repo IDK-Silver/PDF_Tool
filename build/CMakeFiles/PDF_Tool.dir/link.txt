@@ -1,3 +1,3 @@
 "C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E rm -f CMakeFiles\PDF_Tool.dir/objects.a
 C:\Development\Qt\Tools\mingw810_64\bin\ar.exe cr CMakeFiles\PDF_Tool.dir/objects.a @CMakeFiles\PDF_Tool.dir\objects1.rsp
-C:\Development\Qt\Tools\mingw810_64\bin\x86_64-w64-mingw32-g++.exe -g -Wl,--whole-archive CMakeFiles\PDF_Tool.dir/objects.a -Wl,--no-whole-archive -o PDF_Tool.exe -Wl,--out-implib,libPDF_Tool.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\PDF_Tool.dir\linklibs.rsp
+C:\Development\Qt\Tools\mingw810_64\bin\x86_64-w64-mingw32-g++.exe -O3 -DNDEBUG -mwindows -Wl,--whole-archive CMakeFiles\PDF_Tool.dir/objects.a -Wl,--no-whole-archive -o PDF_Tool.exe -Wl,--out-implib,libPDF_Tool.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\PDF_Tool.dir\linklibs.rsp

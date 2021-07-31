@@ -1,37 +1,37 @@
 [
 {
   "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
-  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\PDF_Tool_autogen\\mocs_compilation.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\build\\PDF_Tool_autogen\\mocs_compilation.cpp",
+  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\PDF_Tool_autogen\\mocs_compilation.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\build\\PDF_Tool_autogen\\mocs_compilation.cpp",
   "file": "C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/mocs_compilation.cpp"
 },
 {
   "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
-  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\src\\main.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\src\\main.cpp",
+  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\src\\main.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\src\\main.cpp",
   "file": "C:/Users/a2882/Documents/Code/PDF_Tool/src/main.cpp"
 },
 {
   "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
-  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\src\\Widget\\MainWindow\\MainWindow.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\src\\Widget\\MainWindow\\MainWindow.cpp",
+  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\src\\Widget\\MainWindow\\MainWindow.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\src\\Widget\\MainWindow\\MainWindow.cpp",
   "file": "C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp"
 },
 {
   "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
-  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\src\\Widget\\PDFWidget\\PDFWidget.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\src\\Widget\\PDFWidget\\PDFWidget.cpp",
+  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\src\\Widget\\PDFWidget\\PDFWidget.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\src\\Widget\\PDFWidget\\PDFWidget.cpp",
   "file": "C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp"
 },
 {
   "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
-  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\libraries\\PDFtoImage\\PDFtoImage.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\libraries\\PDFtoImage\\PDFtoImage.cpp",
+  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\libraries\\PDFtoImage\\PDFtoImage.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\libraries\\PDFtoImage\\PDFtoImage.cpp",
   "file": "C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp"
 },
 {
   "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
-  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\libraries\\Setting\\Setting.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\libraries\\Setting\\Setting.cpp",
+  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\libraries\\Setting\\Setting.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\libraries\\Setting\\Setting.cpp",
   "file": "C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.cpp"
 },
 {
   "directory": "C:/Users/a2882/Documents/Code/PDF_Tool/build",
-  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -g -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\PDF_Tool_autogen\\6WJNPILU4A\\qrc_resource.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\build\\PDF_Tool_autogen\\6WJNPILU4A\\qrc_resource.cpp",
+  "command": "C:\\Development\\Qt\\Tools\\mingw810_64\\bin\\x86_64-w64-mingw32-g++.exe -DQT_CORE_LIB -DQT_GUI_LIB -DQT_NO_DEBUG -DQT_WIDGETS_LIB @CMakeFiles/PDF_Tool.dir/includes_CXX.rsp -O3 -DNDEBUG -std=gnu++14 -o CMakeFiles\\PDF_Tool.dir\\PDF_Tool_autogen\\6WJNPILU4A\\qrc_resource.cpp.obj -c C:\\Users\\a2882\\Documents\\Code\\PDF_Tool\\build\\PDF_Tool_autogen\\6WJNPILU4A\\qrc_resource.cpp",
   "file": "C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp"
 }
 ]

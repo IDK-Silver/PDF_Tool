@@ -30,7 +30,7 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 43,
+				"line" : 46,
 				"parent" : 0
 			},
 			{
@@ -42,7 +42,7 @@
 			{
 				"command" : 2,
 				"file" : 0,
-				"line" : 45,
+				"line" : 52,
 				"parent" : 0
 			},
 			{
@@ -59,7 +59,7 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : "-g"
+					"fragment" : "-O3 -DNDEBUG"
 				},
 				{
 					"fragment" : "-std=gnu++14"
@@ -74,6 +74,10 @@
 				{
 					"backtrace" : 3,
 					"define" : "QT_GUI_LIB"
+				},
+				{
+					"backtrace" : 3,
+					"define" : "QT_NO_DEBUG"
 				},
 				{
 					"backtrace" : 3,
@@ -144,6 +148,79 @@
 				5,
 				8,
 				10,
+				14
+			]
+		},
+		{
+			"defines" : 
+			[
+				{
+					"backtrace" : 3,
+					"define" : "QT_CORE_LIB"
+				},
+				{
+					"backtrace" : 3,
+					"define" : "QT_GUI_LIB"
+				},
+				{
+					"backtrace" : 3,
+					"define" : "QT_NO_DEBUG"
+				},
+				{
+					"backtrace" : 3,
+					"define" : "QT_WIDGETS_LIB"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"path" : "C:/Users/a2882/Documents/Code/PDF_Tool/build"
+				},
+				{
+					"path" : "C:/Users/a2882/Documents/Code/PDF_Tool"
+				},
+				{
+					"backtrace" : 0,
+					"path" : "C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/include"
+				},
+				{
+					"backtrace" : 4,
+					"path" : "C:/Development/msys2/mingw64/include"
+				},
+				{
+					"backtrace" : 3,
+					"isSystem" : true,
+					"path" : "C:/Development/Qt/5.15.2/mingw81_64/include"
+				},
+				{
+					"backtrace" : 3,
+					"isSystem" : true,
+					"path" : "C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets"
+				},
+				{
+					"backtrace" : 3,
+					"isSystem" : true,
+					"path" : "C:/Development/Qt/5.15.2/mingw81_64/include/QtGui"
+				},
+				{
+					"backtrace" : 3,
+					"isSystem" : true,
+					"path" : "C:/Development/Qt/5.15.2/mingw81_64/include/QtANGLE"
+				},
+				{
+					"backtrace" : 3,
+					"isSystem" : true,
+					"path" : "C:/Development/Qt/5.15.2/mingw81_64/include/QtCore"
+				},
+				{
+					"backtrace" : 3,
+					"isSystem" : true,
+					"path" : "C:/Development/Qt/5.15.2/mingw81_64/./mkspecs/win32-g++"
+				}
+			],
+			"language" : "RC",
+			"sourceIndexes" : 
+			[
 				13
 			]
 		}
@@ -161,11 +238,11 @@
 		"commandFragments" : 
 		[
 			{
-				"fragment" : "-g",
+				"fragment" : "-O3 -DNDEBUG",
 				"role" : "flags"
 			},
 			{
-				"fragment" : "",
+				"fragment" : "-mwindows",
 				"role" : "flags"
 			},
 			{
@@ -197,6 +274,10 @@
 				"role" : "libraries"
 			},
 			{
+				"fragment" : "C:\\Development\\Qt\\5.15.2\\mingw81_64\\lib\\libqtmain.a",
+				"role" : "libraries"
+			},
+			{
 				"fragment" : "-lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32",
 				"role" : "libraries"
 			}
@@ -222,7 +303,8 @@
 				5,
 				8,
 				10,
-				13
+				13,
+				14
 			]
 		},
 		{
@@ -248,7 +330,7 @@
 			"name" : "CMake Rules",
 			"sourceIndexes" : 
 			[
-				14
+				15
 			]
 		}
 	],
@@ -325,6 +407,12 @@
 			"backtrace" : 1,
 			"path" : "resource/resource.qrc",
 			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 1,
+			"path" : "resource/win32_rc.rc",
+			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 0,

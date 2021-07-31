@@ -31,12 +31,13 @@
 				<Option output="C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool.exe" prefix_auto="0" extension_auto="0"/>
 				<Option working_dir="C:/Users/a2882/Documents/Code/PDF_Tool/build"/>
 				<Option object_output="./"/>
-				<Option type="1"/>
+				<Option type="0"/>
 				<Option compiler="gcc"/>
 				<Compiler>
 					<Add option="-DQT_WIDGETS_LIB"/>
 					<Add option="-DQT_GUI_LIB"/>
 					<Add option="-DQT_CORE_LIB"/>
+					<Add option="-DQT_NO_DEBUG"/>
 					<Add directory="C:/Users/a2882/Documents/Code/PDF_Tool/build"/>
 					<Add directory="C:/Users/a2882/Documents/Code/PDF_Tool"/>
 					<Add directory="C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/include"/>
@@ -59,12 +60,13 @@
 				<Option output="C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool.exe" prefix_auto="0" extension_auto="0"/>
 				<Option working_dir="C:/Users/a2882/Documents/Code/PDF_Tool/build"/>
 				<Option object_output="./"/>
-				<Option type="1"/>
+				<Option type="0"/>
 				<Option compiler="gcc"/>
 				<Compiler>
 					<Add option="-DQT_WIDGETS_LIB"/>
 					<Add option="-DQT_GUI_LIB"/>
 					<Add option="-DQT_CORE_LIB"/>
+					<Add option="-DQT_NO_DEBUG"/>
 					<Add directory="C:/Users/a2882/Documents/Code/PDF_Tool/build"/>
 					<Add directory="C:/Users/a2882/Documents/Code/PDF_Tool"/>
 					<Add directory="C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/include"/>
@@ -126,6 +128,9 @@
 			<Option target="PDF_Tool"/>
 		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/resource/resource.qrc">
+			<Option target="PDF_Tool"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/resource/win32_rc.rc">
 			<Option target="PDF_Tool"/>
 		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp">

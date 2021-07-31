@@ -262,6 +262,15 @@ libraries/Setting/Setting.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.s
 .PHONY : libraries/Setting/Setting.cpp.s
 
+resource/win32_rc.obj: resource/win32_rc.rc.obj
+
+.PHONY : resource/win32_rc.obj
+
+# target to build an object file
+resource/win32_rc.rc.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/resource/win32_rc.rc.obj
+.PHONY : resource/win32_rc.rc.obj
+
 src/Widget/MainWindow/MainWindow.obj: src/Widget/MainWindow/MainWindow.cpp.obj
 
 .PHONY : src/Widget/MainWindow/MainWindow.obj
@@ -365,6 +374,7 @@ help:
 	@echo ... libraries/Setting/Setting.obj
 	@echo ... libraries/Setting/Setting.i
 	@echo ... libraries/Setting/Setting.s
+	@echo ... resource/win32_rc.obj
 	@echo ... src/Widget/MainWindow/MainWindow.obj
 	@echo ... src/Widget/MainWindow/MainWindow.i
 	@echo ... src/Widget/MainWindow/MainWindow.s

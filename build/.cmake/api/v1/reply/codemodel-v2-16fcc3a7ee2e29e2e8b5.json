@@ -19,7 +19,7 @@
 					]
 				}
 			],
-			"name" : "Debug",
+			"name" : "Release",
 			"projects" : 
 			[
 				{
@@ -40,14 +40,14 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "PDF_Tool::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-PDF_Tool-Debug-775976e9aa2a360a2327.json",
+					"jsonFile" : "target-PDF_Tool-Release-cbd092d892ca5ae713a1.json",
 					"name" : "PDF_Tool",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "PDF_Tool_autogen::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-PDF_Tool_autogen-Debug-e85597b672a4a6fb82ed.json",
+					"jsonFile" : "target-PDF_Tool_autogen-Release-e85597b672a4a6fb82ed.json",
 					"name" : "PDF_Tool_autogen",
 					"projectIndex" : 0
 				}

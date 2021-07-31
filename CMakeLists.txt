@@ -34,13 +34,20 @@ set(PROJECT_SOURCES
         src/Widget/PDFWidget/PDFWidget.cpp src/Widget/PDFWidget/PDFWidget.h src/Widget/PDFWidget/PDFWidget.ui
         libraries/PDFtoImage/PDFtoImage.cpp libraries/PDFtoImage/PDFtoImage.h
         libraries/Setting/Setting.cpp libraries/Setting/Setting.h
-        resource/resource.qrc)
+        resource/resource.qrc resource/win32_rc.rc)
 
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets REQUIRED)
 
-
-add_executable(PDF_Tool ${PROJECT_SOURCES})
+if (WIN32)
+    if (CMAKE_BUILD_TYPE STREQUAL Debug)
+        add_executable(PDF_Tool ${PROJECT_SOURCES})
+    else()
+        add_executable(PDF_Tool WIN32 ${PROJECT_SOURCES})
+    endif()
+else()
+    add_executable(PDF_Tool ${PROJECT_SOURCES})
+endif()
 
 target_link_libraries(PDF_Tool PRIVATE Qt${QT_VERSION_MAJOR}::Widgets poppler-qt5 poppler-cpp)
 

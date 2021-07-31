@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <utility>
 #include <QDir>
+#include <QStandardPaths>
 
 
 
@@ -13,10 +14,14 @@
 
 Setting::Setting(QString input_filepath, QString input_section) : section(std::move(input_section)), filepath(std::move(input_filepath)) {
     this->settings = new QSettings(this->filepath, QSettings::IniFormat);
+    QDir dir;
+    dir.mkdir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
 }
 
 Setting::Setting(QString input_section) : section(std::move(input_section)){
-    this->filepath =QDir::currentPath() + QDir::separator() + this->filename;
+    this->filepath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QDir::separator() + this->filename;
+    QDir dir;
+    dir.mkdir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
     this->settings = new QSettings(this->filepath, QSettings::IniFormat);
 }
 
@@ -46,7 +51,6 @@ bool Setting::is_file_generate() {
 }
 
 void Setting::generate_file() {
-
     {   // PDF Widget Option
         Setting_Sections::PDFWidget option;
 

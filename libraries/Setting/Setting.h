@@ -9,6 +9,8 @@
 #include <QSettings>
 #include <QDir>
 
+#define APP_Name "PDF_Tool"
+
 #ifdef Q_OS_WIN32
 #define Picture_Folder_Name "Pictures"
 #endif

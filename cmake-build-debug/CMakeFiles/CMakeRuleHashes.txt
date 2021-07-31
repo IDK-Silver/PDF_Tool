@@ -1,0 +1,3 @@
+# Hashes of file build rules.
+4902b33036e2c04f83d3f3bc325d341c CMakeFiles/PDF_Tool_autogen
+f72ca78c3401aad2ed00ae1f6f3993a8 PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp

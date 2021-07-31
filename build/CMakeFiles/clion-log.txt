@@ -1,4 +1,4 @@
-"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -G "CodeBlocks - MinGW Makefiles" C:\Users\a2882\Documents\Code\PDF_Tool
+"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Release -G "CodeBlocks - MinGW Makefiles" C:\Users\a2882\Documents\Code\PDF_Tool
 -- Configuring done
 -- Generating done
 -- Build files have been written to: C:/Users/a2882/Documents/Code/PDF_Tool/build

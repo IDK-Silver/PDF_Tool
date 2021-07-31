@@ -1338,3 +1338,5 @@ CMakeFiles/PDF_Tool.dir/src/main.cpp.obj
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qtwidgetsglobal.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets/qwidget.h
  C:/Users/a2882/Documents/Code/PDF_Tool/src/main.cpp
+CMakeFiles/PDF_Tool.dir/resource/win32_rc.rc.obj
+ C:/Users/a2882/Documents/Code/PDF_Tool/resource/win32_rc.rc
