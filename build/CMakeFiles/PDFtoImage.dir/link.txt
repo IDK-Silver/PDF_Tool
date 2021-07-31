@@ -1,3 +1,0 @@
-"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E rm -f CMakeFiles\PDFtoImage.dir/objects.a
-C:\Development\Qt\Tools\mingw810_64\bin\ar.exe cr CMakeFiles\PDFtoImage.dir/objects.a @CMakeFiles\PDFtoImage.dir\objects1.rsp
-C:\Development\Qt\Tools\mingw810_64\bin\x86_64-w64-mingw32-g++.exe -g -shared -o libPDFtoImage.dll -Wl,--out-implib,libPDFtoImage.dll.a -Wl,--major-image-version,0,--minor-image-version,0 -Wl,--whole-archive CMakeFiles\PDFtoImage.dir/objects.a -Wl,--no-whole-archive @CMakeFiles\PDFtoImage.dir\linklibs.rsp
