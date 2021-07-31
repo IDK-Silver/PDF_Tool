@@ -61,7 +61,7 @@ void Setting::generate_file() {
 
         this->write(option.section, option.key.dpi, "300");
         this->write(option.section, option.key.format, "PNG");
-        this->write(option.section, option.key.image_output_path, QDir::homePath() + "/" + QString(Picture_Folder_Name));
+        this->write(option.section, option.key.image_output_path, QDir::homePath() + "/" + QString(Picture_Folder_Name) + "/" + "轉換圖片");
 
     }
 }

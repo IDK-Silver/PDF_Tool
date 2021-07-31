@@ -12,6 +12,7 @@
 #include <QProgressDialog>
 #include <QMessageBox>
 #include <QDesktopServices>
+#include <QDir>
 
 
 PDFWidget::PDFWidget(QWidget *parent) :
@@ -28,7 +29,9 @@ PDFWidget::PDFWidget(QWidget *parent) :
         qDebug() << "Finished";
 
         QMessageBox::about(this, "通知", "全部檔案以轉換成功");
-        QDesktopServices::openUrl(this->settings->read(section.key.image_output_path).toString());
+        QtConcurrent::run([&] () {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(this->settings->read(section.key.image_output_path).toString()));
+        });
         delete this->progressDialog;
     });
 
@@ -107,6 +110,13 @@ void PDFWidget::conversion() {
         auto file_num = 0;
         // 是否有正常轉換完成
         bool result = true;
+
+        // 檢查除圖片輸出目錄是否存在 沒有的話進行創建
+        QDir qDir;
+        if (!qDir.exists(this->settings->read(this->section.key.image_output_path).toString())) {
+            qDir.mkdir(this->settings->read(this->section.key.image_output_path).toString());
+        }
+
 
         for (const auto& file : this->files) {
             auto render = new PDFtoImage(file);
