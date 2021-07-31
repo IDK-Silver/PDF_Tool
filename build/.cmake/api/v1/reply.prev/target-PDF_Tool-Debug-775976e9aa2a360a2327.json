@@ -30,7 +30,7 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 42,
+				"line" : 43,
 				"parent" : 0
 			},
 			{
@@ -42,7 +42,7 @@
 			{
 				"command" : 2,
 				"file" : 0,
-				"line" : 44,
+				"line" : 45,
 				"parent" : 0
 			},
 			{
@@ -143,7 +143,8 @@
 				2,
 				5,
 				8,
-				10
+				10,
+				13
 			]
 		}
 	],
@@ -220,7 +221,8 @@
 				2,
 				5,
 				8,
-				10
+				10,
+				13
 			]
 		},
 		{
@@ -238,7 +240,15 @@
 			"sourceIndexes" : 
 			[
 				4,
-				7
+				7,
+				12
+			]
+		},
+		{
+			"name" : "CMake Rules",
+			"sourceIndexes" : 
+			[
+				14
 			]
 		}
 	],
@@ -310,6 +320,24 @@
 			"backtrace" : 1,
 			"path" : "libraries/Setting/Setting.h",
 			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 1,
+			"path" : "resource/resource.qrc",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 0,
+			"compileGroupIndex" : 0,
+			"isGenerated" : true,
+			"path" : "build/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "build/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.rule",
+			"sourceGroupIndex" : 3
 		}
 	],
 	"type" : "EXECUTABLE"

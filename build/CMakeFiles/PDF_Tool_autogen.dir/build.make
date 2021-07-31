@@ -52,10 +52,10 @@ cmake_force:
 SHELL = cmd.exe
 
 # The CMake executable.
-CMAKE_COMMAND = C:\Development\Qt\Tools\CMake_64\bin\cmake.exe
+CMAKE_COMMAND = "C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe"
 
 # The command to remove a file.
-RM = C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E rm -f
+RM = "C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -73,7 +73,7 @@ include CMakeFiles/PDF_Tool_autogen.dir/progress.make
 
 CMakeFiles/PDF_Tool_autogen:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=C:\Users\a2882\Documents\Code\PDF_Tool\build\CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC and UIC for target PDF_Tool"
-	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E cmake_autogen C:/Users/a2882/Documents/Code/PDF_Tool/build/CMakeFiles/PDF_Tool_autogen.dir/AutogenInfo.json Debug
+	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E cmake_autogen C:/Users/a2882/Documents/Code/PDF_Tool/build/CMakeFiles/PDF_Tool_autogen.dir/AutogenInfo.json Debug
 
 PDF_Tool_autogen: CMakeFiles/PDF_Tool_autogen
 PDF_Tool_autogen: CMakeFiles/PDF_Tool_autogen.dir/build.make

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <QProgressDialog>
 #include <QMessageBox>
+#include <QDesktopServices>
 
 
 PDFWidget::PDFWidget(QWidget *parent) :
@@ -25,14 +26,17 @@ PDFWidget::PDFWidget(QWidget *parent) :
 
     connect(&watcher, &QFutureWatcher<bool>::finished, [=] () {
         qDebug() << "Finished";
+
         QMessageBox::about(this, "通知", "全部檔案以轉換成功");
+        QDesktopServices::openUrl(this->settings->read(section.key.image_output_path).toString());
         delete this->progressDialog;
     });
 
     connect(&watcher, &QFutureWatcher<bool>::progressValueChanged, [&] (int value) {
         this->progressDialog->setValue(value);
     });
-    connect(&watcher, &QFutureWatcher<bool>::progressTextChanged, [&] (const QString text) {
+
+    connect(&watcher, &QFutureWatcher<bool>::progressTextChanged, [&] (const QString& text) {
         this->progressDialog->setLabelText(text);
     });
 

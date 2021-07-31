@@ -11,10 +11,16 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>PDF工具</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="../../../resource/resource.qrc">
+    <normaloff>:/Icon/app-icon.ico</normaloff>:/Icon/app-icon.ico</iconset>
   </property>
   <widget class="QWidget" name="centralwidget"/>
  </widget>
- <resources/>
+ <resources>
+  <include location="../../../resource/resource.qrc"/>
+ </resources>
  <connections/>
 </ui>

@@ -57,10 +57,10 @@ cmake_force:
 SHELL = cmd.exe
 
 # The CMake executable.
-CMAKE_COMMAND = C:\Development\Qt\Tools\CMake_64\bin\cmake.exe
+CMAKE_COMMAND = "C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe"
 
 # The command to remove a file.
-RM = C:\Development\Qt\Tools\CMake_64\bin\cmake.exe -E rm -f
+RM = "C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -76,8 +76,8 @@ CMAKE_BINARY_DIR = C:\Users\a2882\Documents\Code\PDF_Tool\build
 
 # Special rule for the target edit_cache
 edit_cache:
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake cache editor..."
-	C:\Development\Qt\Tools\CMake_64\bin\cmake-gui.exe -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "No interactive CMake dialog available..."
+	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E echo "No interactive CMake dialog available."
 .PHONY : edit_cache
 
 # Special rule for the target edit_cache
@@ -88,7 +88,7 @@ edit_cache/fast: edit_cache
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --cyan "Running CMake to regenerate build system..."
-	C:\Development\Qt\Tools\CMake_64\bin\cmake.exe --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : rebuild_cache
 
 # Special rule for the target rebuild_cache
@@ -153,6 +153,33 @@ PDF_Tool_autogen: cmake_check_build_system
 PDF_Tool_autogen/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool_autogen.dir\build.make CMakeFiles/PDF_Tool_autogen.dir/build
 .PHONY : PDF_Tool_autogen/fast
+
+PDF_Tool_autogen/6WJNPILU4A/qrc_resource.obj: PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.obj
+
+.PHONY : PDF_Tool_autogen/6WJNPILU4A/qrc_resource.obj
+
+# target to build an object file
+PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.obj
+.PHONY : PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.obj
+
+PDF_Tool_autogen/6WJNPILU4A/qrc_resource.i: PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.i
+
+.PHONY : PDF_Tool_autogen/6WJNPILU4A/qrc_resource.i
+
+# target to preprocess a source file
+PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.i
+.PHONY : PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.i
+
+PDF_Tool_autogen/6WJNPILU4A/qrc_resource.s: PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.s
+
+.PHONY : PDF_Tool_autogen/6WJNPILU4A/qrc_resource.s
+
+# target to generate assembly for a file
+PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\PDF_Tool.dir\build.make CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.s
+.PHONY : PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.s
 
 PDF_Tool_autogen/mocs_compilation.obj: PDF_Tool_autogen/mocs_compilation.cpp.obj
 
@@ -326,6 +353,9 @@ help:
 	@echo ... rebuild_cache
 	@echo ... PDF_Tool_autogen
 	@echo ... PDF_Tool
+	@echo ... PDF_Tool_autogen/6WJNPILU4A/qrc_resource.obj
+	@echo ... PDF_Tool_autogen/6WJNPILU4A/qrc_resource.i
+	@echo ... PDF_Tool_autogen/6WJNPILU4A/qrc_resource.s
 	@echo ... PDF_Tool_autogen/mocs_compilation.obj
 	@echo ... PDF_Tool_autogen/mocs_compilation.i
 	@echo ... PDF_Tool_autogen/mocs_compilation.s

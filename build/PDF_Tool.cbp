@@ -5,7 +5,7 @@
 		<Option title="PDF_Tool"/>
 		<Option makefile_is_custom="1"/>
 		<Option compiler="gcc"/>
-		<Option virtualFolders="CMake Files\;CMake Files\..\;CMake Files\..\..\;CMake Files\..\..\..\;CMake Files\..\..\..\..\;CMake Files\..\..\..\..\..\;CMake Files\..\..\..\..\..\Development\;CMake Files\..\..\..\..\..\Development\Qt\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5Widgets\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5Gui\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5Core\;"/>
+		<Option virtualFolders="CMake Files\;CMake Files\..\;CMake Files\..\..\;CMake Files\..\..\..\;CMake Files\..\..\..\..\;CMake Files\..\..\..\..\..\;CMake Files\..\..\..\..\..\Development\;CMake Files\..\..\..\..\..\Development\Qt\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5Widgets\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5Gui\;CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5Core\;CMake Files\resource\;"/>
 		<Build>
 			<Target title="all">
 				<Option working_dir="C:/Users/a2882/Documents/Code/PDF_Tool/build"/>
@@ -104,6 +104,12 @@
 				</MakeCommands>
 			</Target>
 		</Build>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp">
+			<Option target="PDF_Tool"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.rule">
+			<Option target="PDF_Tool"/>
+		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/build/PDF_Tool_autogen/mocs_compilation.cpp">
 			<Option target="PDF_Tool"/>
 		</Unit>
@@ -117,6 +123,9 @@
 			<Option target="PDF_Tool"/>
 		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.h">
+			<Option target="PDF_Tool"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/resource/resource.qrc">
 			<Option target="PDF_Tool"/>
 		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp">
@@ -238,6 +247,9 @@
 		</Unit>
 		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/../../../../../Development/Qt/5.15.2/mingw81_64/lib/cmake/Qt5Core/Qt5CoreMacros.cmake">
 			<Option virtualFolder="CMake Files\..\..\..\..\..\Development\Qt\5.15.2\mingw81_64\lib\cmake\Qt5Core\"/>
+		</Unit>
+		<Unit filename="C:/Users/a2882/Documents/Code/PDF_Tool/resource/resource.qrc">
+			<Option virtualFolder="CMake Files\resource\"/>
 		</Unit>
 	</Project>
 </CodeBlocks_project_file>

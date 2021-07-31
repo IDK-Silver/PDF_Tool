@@ -33,7 +33,8 @@ set(PROJECT_SOURCES
         src/Widget/MainWindow/MainWindow.cpp src/Widget/MainWindow/MainWindow.h src/Widget/MainWindow/MainWindow.ui
         src/Widget/PDFWidget/PDFWidget.cpp src/Widget/PDFWidget/PDFWidget.h src/Widget/PDFWidget/PDFWidget.ui
         libraries/PDFtoImage/PDFtoImage.cpp libraries/PDFtoImage/PDFtoImage.h
-        libraries/Setting/Setting.cpp libraries/Setting/Setting.h)
+        libraries/Setting/Setting.cpp libraries/Setting/Setting.h
+        resource/resource.qrc)
 
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets REQUIRED)
