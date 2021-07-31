@@ -102,6 +102,7 @@ public:
 
         comboBox_dpi = new QComboBox(groupBox);
         comboBox_dpi->setObjectName(QString::fromUtf8("comboBox_dpi"));
+        comboBox_dpi->setMinimumSize(QSize(100, 0));
 
         gridLayout->addWidget(comboBox_dpi, 0, 1, 1, 1);
 
@@ -135,7 +136,7 @@ public:
 
     void retranslateUi(QWidget *PDFWidget)
     {
-        PDFWidget->setWindowTitle(QCoreApplication::translate("PDFWidget", "PDFWidget", nullptr));
+        PDFWidget->setWindowTitle(QCoreApplication::translate("PDFWidget", "PDFWidget_Widget", nullptr));
         btn_addFile->setText(QCoreApplication::translate("PDFWidget", "\346\226\260\345\242\236\346\252\224\346\241\210", nullptr));
         btn_delFile->setText(QCoreApplication::translate("PDFWidget", "\345\210\252\351\231\244\346\252\224\346\241\210", nullptr));
         groupBox->setTitle(QCoreApplication::translate("PDFWidget", "\350\275\211\346\252\224\350\250\255\345\256\232", nullptr));

@@ -395,6 +395,7 @@ CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDebug
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDir
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSettings
+ C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QStandardPaths
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QString
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qalgorithms.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qarraydata.h
@@ -449,6 +450,7 @@ CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qshareddata.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qsharedpointer.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qsharedpointer_impl.h
+ C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qstandardpaths.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qstring.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qstringalgorithms.h
  C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qstringbuilder.h

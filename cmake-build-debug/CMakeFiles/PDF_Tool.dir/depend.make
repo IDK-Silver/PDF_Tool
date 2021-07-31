@@ -394,6 +394,7 @@ CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: ../libraries/PD
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDebug
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QDir
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QSettings
+CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QStandardPaths
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/QString
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qalgorithms.h
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qarraydata.h
@@ -448,6 +449,7 @@ CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.1
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qshareddata.h
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qsharedpointer.h
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qsharedpointer_impl.h
+CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qstandardpaths.h
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qstring.h
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qstringalgorithms.h
 CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtCore/qstringbuilder.h

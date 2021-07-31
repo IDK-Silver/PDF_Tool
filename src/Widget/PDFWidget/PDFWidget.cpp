@@ -87,6 +87,7 @@ void PDFWidget::conversion() {
     this->progressDialog = new QProgressDialog();
     this->progressDialog->setLabelText("正在轉換第1個檔案");
     this->progressDialog->setMaximum(this->files.size());
+    this->progressDialog->setMinimumSize(this->progressDialog->size().width() + 120, this->progressDialog->size().height());
     this->progressDialog->show();
 
     //多執行序進行轉檔
