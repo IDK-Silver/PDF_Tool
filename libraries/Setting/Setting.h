@@ -9,6 +9,13 @@
 #include <QSettings>
 #include <QDir>
 
+#ifdef Q_OS_WIN32
+#define Picture_Folder_Name "Pictures"
+#endif
+
+#ifdef Q_OS_LINUX
+#define Picture_Folder_Name "圖片"
+#endif
 
 class Setting {
 public:
@@ -37,6 +44,7 @@ namespace Setting_Sections {
             QString format_list = {"Format-List"};
             QString dpi = "Last-Choose-DPi";
             QString format = "Last-Choose-Format";
+            QString image_output_path = "default_output_path";
         };
         keys key;
     };

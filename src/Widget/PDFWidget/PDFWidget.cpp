@@ -6,17 +6,35 @@
 
 #include "PDFWidget.h"
 #include "ui_PDFWidget.h"
-#include <QDebug>
+#include "libraries/PDFtoImage/PDFtoImage.h"
 #include <QtWidgets/QFileDialog>
 #include <algorithm>
+#include <QProgressDialog>
+#include <QMessageBox>
+
 
 PDFWidget::PDFWidget(QWidget *parent) :
         QWidget(parent), ui(new Ui::PDFWidget) {
     ui->setupUi(this);
+
     init();
 
     connect(this->ui->btn_addFile, SIGNAL(clicked()), SLOT(add_file()));
     connect(this->ui->btn_delFile, SIGNAL(clicked()), SLOT(del_file()));
+    connect(this->ui->btn_conversion, SIGNAL(clicked()), SLOT(conversion()));
+
+    connect(&watcher, &QFutureWatcher<bool>::finished, [=] () {
+        qDebug() << "Finished";
+        QMessageBox::about(this, "通知", "全部檔案以轉換成功");
+        delete this->progressDialog;
+    });
+
+    connect(&watcher, &QFutureWatcher<bool>::progressValueChanged, [&] (int value) {
+        this->progressDialog->setValue(value);
+    });
+    connect(&watcher, &QFutureWatcher<bool>::progressTextChanged, [&] (const QString text) {
+        this->progressDialog->setLabelText(text);
+    });
 
 }
 
@@ -53,9 +71,58 @@ void PDFWidget::del_file() {
 
     // 刪除選單裡的選項
     for (auto &widget : select_file) {
+        this->files.removeOne(widget->text());
         ui->listWidget->removeItemWidget(widget);
         delete widget;
     }
+}
+
+void PDFWidget::conversion() {
+
+    // 設定進度條
+    this->progressDialog = new QProgressDialog();
+    this->progressDialog->setLabelText("正在轉換第1個檔案");
+    this->progressDialog->setMaximum(this->files.size());
+    this->progressDialog->show();
+
+    //多執行序進行轉檔
+    QtConcurrent::run( [&] {
+
+        // 設定交戶介面
+        QFutureInterface<bool> interface;
+
+        // 設定進度條範圍
+        interface.reportStarted();
+        interface.setProgressRange(0, this->files.size());
+
+        // 連結 watcher
+        watcher.setFuture(interface.future());
+
+        // 正在轉換檔案的 Index
+        auto file_num = 0;
+        // 是否有正常轉換完成
+        bool result = true;
+
+        for (const auto& file : this->files) {
+            auto render = new PDFtoImage(file);
+
+            render->conversion_image(this->settings->read(this->section.key.image_output_path).toString(),
+                                     file.split("/").last().split(".").first(),
+                                     this->settings->read(this->section.key.dpi).toInt(),
+                                     this->settings->read(this->section.key.format).toString());
+
+            int progress = (file_num + 1);
+            interface.setProgressValueAndText(
+                    progress,
+                    QString("正在轉換第%1個檔案" ).arg(progress + 1));
+            delete render;
+            file_num++;
+        }
+
+        // 回報進度 更新進度條
+        interface.reportResult(result);
+        interface.reportFinished();
+    });
 }
 
 

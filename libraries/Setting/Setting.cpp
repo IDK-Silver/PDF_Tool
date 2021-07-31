@@ -7,6 +7,10 @@
 #include <utility>
 #include <QDir>
 
+
+
+
+
 Setting::Setting(QString input_filepath, QString input_section) : section(std::move(input_section)), filepath(std::move(input_filepath)) {
     this->settings = new QSettings(this->filepath, QSettings::IniFormat);
 }
@@ -53,6 +57,7 @@ void Setting::generate_file() {
 
         this->write(option.section, option.key.dpi, "300");
         this->write(option.section, option.key.format, "PNG");
+        this->write(option.section, option.key.image_output_path, QDir::homePath() + "/" + QString(Picture_Folder_Name));
 
     }
 }

@@ -7,6 +7,8 @@
 
 #include <QWidget>
 #include <QSet>
+#include <QtConcurrent/QtConcurrent>
+#include <QProgressDialog>
 #include "libraries/Setting/Setting.h"
 
 QT_BEGIN_NAMESPACE
@@ -25,12 +27,16 @@ private:
     Setting *settings{};
     Setting_Sections::PDFWidget section;
     QVector<QString> files;
+    QFutureWatcher<bool> watcher;
+    QProgressDialog *progressDialog{};
 
-    void init();
+    void init();    //初始化介面選項 & 各項參數
+
 
 private slots:
     void add_file();
     void del_file();
+    void conversion();
 };
 
 
