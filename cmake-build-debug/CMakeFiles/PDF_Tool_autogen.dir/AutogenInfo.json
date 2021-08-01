@@ -1,15 +1,15 @@
 {
-	"BUILD_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/PDF_Tool_autogen",
-	"CMAKE_BINARY_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug",
-	"CMAKE_CURRENT_BINARY_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug",
-	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool",
+	"BUILD_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/PDF_Tool_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool",
 	"CMAKE_EXECUTABLE" : "C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/bin/cmake.exe",
 	"CMAKE_LIST_FILES" : 
 	[
-		"C:/Users/a2882/Documents/Code/PDF_Tool/CMakeLists.txt",
-		"C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/3.19.2/CMakeSystem.cmake",
+		"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/CMakeLists.txt",
+		"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/3.19.2/CMakeSystem.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/CMakeSystemSpecificInitialize.cmake",
-		"C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/3.19.2/CMakeCXXCompiler.cmake",
+		"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/3.19.2/CMakeCXXCompiler.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/CMakeSystemSpecificInformation.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/CMakeGenericSystem.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/CMakeInitializeConfigs.cmake",
@@ -25,7 +25,7 @@
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/Compiler/CMakeCommonCompilerMacros.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/Platform/Windows-GNU-CXX.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/Platform/Windows-GNU.cmake",
-		"C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/3.19.2/CMakeRCCompiler.cmake",
+		"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/3.19.2/CMakeRCCompiler.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/CMakeRCInformation.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/Platform/Windows-windres.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/Platform/Windows-GNU-CXX-ABI.cmake",
@@ -66,37 +66,37 @@
 		"C:/Development/Qt/5.15.2/mingw81_64/lib/cmake/Qt5Widgets/Qt5WidgetsConfigExtras.cmake",
 		"C:/Development/Qt/5.15.2/mingw81_64/lib/cmake/Qt5Widgets/Qt5WidgetsMacros.cmake",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/CMakeParseArguments.cmake",
-		"C:/Users/a2882/Documents/Code/PDF_Tool/resource/resource.qrc"
+		"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/resource/resource.qrc"
 	],
-	"CMAKE_SOURCE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool",
+	"CMAKE_SOURCE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool",
 	"DEP_FILE" : "",
 	"DEP_FILE_RULE_NAME" : "",
 	"HEADERS" : 
 	[
 		[
-			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.h",
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/libraries/PDFtoImage/PDFtoImage.h",
 			"MU",
 			"X2OPCQFLF7/moc_PDFtoImage.cpp"
 		],
 		[
-			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.h",
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/libraries/Setting/Setting.h",
 			"MU",
 			"CDSLBL4Y44/moc_Setting.cpp"
 		],
 		[
-			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.h",
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/MainWindow/MainWindow.h",
 			"MU",
 			"RP6H5YPAQS/moc_MainWindow.cpp"
 		],
 		[
-			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.h",
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/PDFWidget.h",
 			"MU",
 			"N5RC4C6X7X/moc_PDFWidget.cpp"
 		]
 	],
 	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
-	"INCLUDE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/include",
-	"MOC_COMPILATION_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/mocs_compilation.cpp",
+	"INCLUDE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/include",
+	"MOC_COMPILATION_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/mocs_compilation.cpp",
 	"MOC_DEFINITIONS" : [ "QT_CORE_LIB", "QT_GUI_LIB", "QT_WIDGETS_LIB" ],
 	"MOC_DEPEND_FILTERS" : 
 	[
@@ -107,9 +107,9 @@
 	],
 	"MOC_INCLUDES" : 
 	[
-		"C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug",
-		"C:/Users/a2882/Documents/Code/PDF_Tool",
-		"C:/Development/msys2/mingw64/include",
+		"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug",
+		"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool",
+		"C:/Development/msys64/mingw64/include",
 		"C:/Development/Qt/5.15.2/mingw81_64/include",
 		"C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets",
 		"C:/Development/Qt/5.15.2/mingw81_64/include/QtGui",
@@ -134,36 +134,39 @@
 		"-c",
 		"C:/Program Files/JetBrains/CLion 2021.1.2/bin/cmake/win/share/cmake-3.19/Modules/CMakeCXXCompilerABI.cpp"
 	],
-	"MOC_PREDEFS_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/moc_predefs.h",
+	"MOC_PREDEFS_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/moc_predefs.h",
 	"MOC_RELAXED_MODE" : false,
 	"MOC_SKIP" : [],
 	"MULTI_CONFIG" : false,
 	"PARALLEL" : 8,
-	"PARSE_CACHE_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool_autogen.dir/ParseCache.txt",
+	"PARSE_CACHE_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool_autogen.dir/ParseCache.txt",
 	"QT_MOC_EXECUTABLE" : "C:/Development/Qt/5.15.2/mingw81_64/bin/moc.exe",
 	"QT_UIC_EXECUTABLE" : "C:/Development/Qt/5.15.2/mingw81_64/bin/uic.exe",
 	"QT_VERSION_MAJOR" : 5,
 	"QT_VERSION_MINOR" : 15,
-	"SETTINGS_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool_autogen.dir/AutogenUsed.txt",
+	"SETTINGS_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool_autogen.dir/AutogenUsed.txt",
 	"SOURCES" : 
 	[
 		[
-			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp",
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp",
 			"MU"
 		],
 		[
-			"C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.cpp",
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/libraries/Setting/Setting.cpp",
 			"MU"
 		],
 		[
-			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp",
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp",
 			"MU"
 		],
 		[
-			"C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp",
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp",
 			"MU"
 		],
-		[ "C:/Users/a2882/Documents/Code/PDF_Tool/src/main.cpp", "MU" ]
+		[
+			"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/main.cpp",
+			"MU"
+		]
 	],
 	"UIC_OPTIONS" : [],
 	"UIC_SEARCH_PATHS" : [],

@@ -61,10 +61,10 @@ RM = "C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E 
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = C:\Users\a2882\Documents\Code\PDF_Tool
+CMAKE_SOURCE_DIR = C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = C:\Users\a2882\Documents\Code\PDF_Tool\cmake-build-debug
+CMAKE_BINARY_DIR = C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool\cmake-build-debug
 
 # Utility rule file for PDF_Tool_autogen.
 
@@ -72,8 +72,8 @@ CMAKE_BINARY_DIR = C:\Users\a2882\Documents\Code\PDF_Tool\cmake-build-debug
 include CMakeFiles/PDF_Tool_autogen.dir/progress.make
 
 CMakeFiles/PDF_Tool_autogen:
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=C:\Users\a2882\Documents\Code\PDF_Tool\cmake-build-debug\CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC and UIC for target PDF_Tool"
-	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E cmake_autogen C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool_autogen.dir/AutogenInfo.json Debug
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool\cmake-build-debug\CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC and UIC for target PDF_Tool"
+	"C:\Program Files\JetBrains\CLion 2021.1.2\bin\cmake\win\bin\cmake.exe" -E cmake_autogen C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool_autogen.dir/AutogenInfo.json Debug
 
 PDF_Tool_autogen: CMakeFiles/PDF_Tool_autogen
 PDF_Tool_autogen: CMakeFiles/PDF_Tool_autogen.dir/build.make
@@ -90,6 +90,6 @@ CMakeFiles/PDF_Tool_autogen.dir/clean:
 .PHONY : CMakeFiles/PDF_Tool_autogen.dir/clean
 
 CMakeFiles/PDF_Tool_autogen.dir/depend:
-	$(CMAKE_COMMAND) -E cmake_depends "MinGW Makefiles" C:\Users\a2882\Documents\Code\PDF_Tool C:\Users\a2882\Documents\Code\PDF_Tool C:\Users\a2882\Documents\Code\PDF_Tool\cmake-build-debug C:\Users\a2882\Documents\Code\PDF_Tool\cmake-build-debug C:\Users\a2882\Documents\Code\PDF_Tool\cmake-build-debug\CMakeFiles\PDF_Tool_autogen.dir\DependInfo.cmake --color=$(COLOR)
+	$(CMAKE_COMMAND) -E cmake_depends "MinGW Makefiles" C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool\cmake-build-debug C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool\cmake-build-debug C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool\cmake-build-debug\CMakeFiles\PDF_Tool_autogen.dir\DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/PDF_Tool_autogen.dir/depend
 

@@ -46,17 +46,17 @@ void Setting::change_section(const QString &input_section) {
 }
 
 bool Setting::is_file_generate() {
-    QDir qDir(this->filepath);
-    return qDir.exists();
+    QFileInfo fileInfo(this->filepath);
+    return fileInfo.exists();
 }
 
 void Setting::generate_file() {
     {   // PDF Widget Option
         Setting_Sections::PDFWidget option;
 
-        QStringList format_list = {"JPG", "PNG"};
+        QStringList format_list = {"JPG", "PNG", "BMP", "TIF", "WEBP"};
         this->write(option.section, option.key.format_list, format_list);
-        QStringList dpi_list = {"96", "300"};
+        QStringList dpi_list = {"72", "96", "163", "300"};
         this->write(option.section, option.key.dpi_list, dpi_list);
 
         this->write(option.section, option.key.dpi, "300");

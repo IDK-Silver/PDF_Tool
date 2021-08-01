@@ -5,13 +5,13 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.obj"
-  "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/mocs_compilation.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/mocs_compilation.cpp.obj"
-  "C:/Users/a2882/Documents/Code/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj"
-  "C:/Users/a2882/Documents/Code/PDF_Tool/libraries/Setting/Setting.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj"
-  "C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/src/Widget/MainWindow/MainWindow.cpp.obj"
-  "C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj"
-  "C:/Users/a2882/Documents/Code/PDF_Tool/src/main.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/src/main.cpp.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/6WJNPILU4A/qrc_resource.cpp.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/PDF_Tool_autogen/mocs_compilation.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/PDF_Tool_autogen/mocs_compilation.cpp.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/libraries/PDFtoImage/PDFtoImage.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/libraries/Setting/Setting.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/libraries/Setting/Setting.cpp.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/src/Widget/MainWindow/MainWindow.cpp.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/main.cpp" "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/src/main.cpp.obj"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 
@@ -27,7 +27,7 @@ set(CMAKE_CXX_TARGET_INCLUDE_PATH
   "."
   "../"
   "PDF_Tool_autogen/include"
-  "C:/Development/msys2/mingw64/include"
+  "C:/Development/msys64/mingw64/include"
   "C:/Development/Qt/5.15.2/mingw81_64/include"
   "C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets"
   "C:/Development/Qt/5.15.2/mingw81_64/include/QtGui"
@@ -36,7 +36,7 @@ set(CMAKE_CXX_TARGET_INCLUDE_PATH
   "C:/Development/Qt/5.15.2/mingw81_64/./mkspecs/win32-g++"
   )
 set(CMAKE_DEPENDS_CHECK_RC
-  "C:/Users/a2882/Documents/Code/PDF_Tool/resource/win32_rc.rc" "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/resource/win32_rc.rc.obj"
+  "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/resource/win32_rc.rc" "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/CMakeFiles/PDF_Tool.dir/resource/win32_rc.rc.obj"
   )
 
 # Preprocessor definitions for this target.
@@ -51,7 +51,7 @@ set(CMAKE_RC_TARGET_INCLUDE_PATH
   "."
   "../"
   "PDF_Tool_autogen/include"
-  "C:/Development/msys2/mingw64/include"
+  "C:/Development/msys64/mingw64/include"
   "C:/Development/Qt/5.15.2/mingw81_64/include"
   "C:/Development/Qt/5.15.2/mingw81_64/include/QtWidgets"
   "C:/Development/Qt/5.15.2/mingw81_64/include/QtGui"

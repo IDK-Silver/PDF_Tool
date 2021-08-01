@@ -3018,7 +3018,7 @@ QtCore/qglobal.h
 QtXml/qtxml-config.h
 -
 
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-annotation.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-annotation.h
 QtCore/QDateTime
 -
 QtCore/QSharedDataPointer
@@ -3042,11 +3042,11 @@ QtGui/QFont
 QtXml/QDomDocument
 -
 poppler-export.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-export.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-export.h
 
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-export.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-export.h
 
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-link.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-link.h
 QtCore/QString
 -
 QtCore/QRectF
@@ -3056,31 +3056,31 @@ QtCore/QSharedDataPointer
 QtCore/QVector
 -
 poppler-export.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-export.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-export.h
 
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-optcontent.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-optcontent.h
 QtCore/QAbstractListModel
 -
 poppler-export.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-export.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-export.h
 poppler-link.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-link.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-link.h
 
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-page-transition.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-page-transition.h
 poppler-export.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-export.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-export.h
 QtCore/qglobal.h
 -
 
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-qt5.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-qt5.h
 poppler-annotation.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-annotation.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-annotation.h
 poppler-link.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-link.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-link.h
 poppler-optcontent.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-optcontent.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-optcontent.h
 poppler-page-transition.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-page-transition.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-page-transition.h
 QtCore/QByteArray
 -
 QtCore/QDateTime
@@ -3090,15 +3090,15 @@ QtCore/QSet
 QtXml/QDomDocument
 -
 poppler-export.h
-C:/Development/msys2/mingw64/include/poppler/qt5/poppler-export.h
+C:/Development/msys64/mingw64/include/poppler/qt5/poppler-export.h
 
-C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp
+C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp
 PDFWidget.h
-C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.h
+C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/PDFWidget.h
 ui_PDFWidget.h
-C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/ui_PDFWidget.h
+C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/ui_PDFWidget.h
 libraries/PDFtoImage/PDFtoImage.h
-C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/libraries/PDFtoImage/PDFtoImage.h
+C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/libraries/PDFtoImage/PDFtoImage.h
 QtWidgets/QFileDialog
 -
 algorithm
@@ -3112,7 +3112,7 @@ QDesktopServices
 QDir
 -
 
-C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/PDFWidget.h
+C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/PDFWidget.h
 QWidget
 -
 QSet
@@ -3122,7 +3122,7 @@ QtConcurrent/QtConcurrent
 QProgressDialog
 -
 libraries/Setting/Setting.h
-C:/Users/a2882/Documents/Code/PDF_Tool/src/Widget/PDFWidget/libraries/Setting/Setting.h
+C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/libraries/Setting/Setting.h
 
 PDF_Tool_autogen/include/ui_PDFWidget.h
 QtCore/QVariant

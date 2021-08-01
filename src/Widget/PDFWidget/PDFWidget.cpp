@@ -25,6 +25,16 @@ PDFWidget::PDFWidget(QWidget *parent) :
     connect(this->ui->btn_delFile, SIGNAL(clicked()), SLOT(del_file()));
     connect(this->ui->btn_conversion, SIGNAL(clicked()), SLOT(conversion()));
 
+    connect(this->ui->comboBox_dpi, &QComboBox::currentTextChanged, [&] (const QString& text) {
+        this->settings->write(this->section.key.dpi, text);
+        qDebug() << QString("Change DPI to %1").arg(text);
+    });
+
+    connect(this->ui->comboBox_format, &QComboBox::currentTextChanged, [&] (const QString& text) {
+       this->settings->write(this->section.key.format, text);
+        qDebug() << QString("Change Format to %1").arg(text);
+    });
+
     connect(&watcher, &QFutureWatcher<bool>::finished, [=] () {
         qDebug() << "Finished";
 
@@ -85,7 +95,7 @@ void PDFWidget::del_file() {
 }
 
 void PDFWidget::conversion() {
-
+    qDebug() << "Start Conversion File";
     // 設定進度條
     this->progressDialog = new QProgressDialog();
     this->progressDialog->setLabelText("正在轉換第1個檔案");
@@ -148,6 +158,7 @@ void PDFWidget::init() {
     if (!settings->is_file_generate()) {
         // 生成設定檔案
         settings->generate_file();
+        qDebug() << "Generate Setting File";
     }
 
     // 初始化 DPI 選項

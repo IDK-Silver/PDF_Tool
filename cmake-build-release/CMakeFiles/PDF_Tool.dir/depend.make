@@ -382,12 +382,12 @@ CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/
 CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtXml/qdom.h
 CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtXml/qtxml-config.h
 CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtXml/qtxmlglobal.h
-CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-annotation.h
-CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-export.h
-CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-link.h
-CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-optcontent.h
-CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-page-transition.h
-CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-qt5.h
+CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-annotation.h
+CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-export.h
+CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-link.h
+CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-optcontent.h
+CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-page-transition.h
+CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-qt5.h
 CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: ../libraries/PDFtoImage/PDFtoImage.cpp
 CMakeFiles/PDF_Tool.dir/libraries/PDFtoImage/PDFtoImage.cpp.obj: ../libraries/PDFtoImage/PDFtoImage.h
 
@@ -1061,12 +1061,12 @@ CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/Q
 CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtXml/qdom.h
 CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtXml/qtxml-config.h
 CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/Qt/5.15.2/mingw81_64/include/QtXml/qtxmlglobal.h
-CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-annotation.h
-CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-export.h
-CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-link.h
-CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-optcontent.h
-CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-page-transition.h
-CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys2/mingw64/include/poppler/qt5/poppler-qt5.h
+CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-annotation.h
+CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-export.h
+CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-link.h
+CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-optcontent.h
+CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-page-transition.h
+CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: C:/Development/msys64/mingw64/include/poppler/qt5/poppler-qt5.h
 CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: ../src/Widget/PDFWidget/PDFWidget.cpp
 CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: ../src/Widget/PDFWidget/PDFWidget.h
 CMakeFiles/PDF_Tool.dir/src/Widget/PDFWidget/PDFWidget.cpp.obj: PDF_Tool_autogen/include/ui_PDFWidget.h

@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/a2882/Documents/Code/PDF_Tool
+# Install script for directory: C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "C:/Users/a2882/Documents/Code/PDF_Tool/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

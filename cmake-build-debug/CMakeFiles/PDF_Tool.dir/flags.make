@@ -11,7 +11,7 @@ CXX_FLAGS = -g -std=gnu++14
 
 RC_DEFINES = -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB
 
-RC_INCLUDES = -I C:\Users\a2882\Documents\Code\PDF_Tool\cmake-build-debug -I C:\Users\a2882\Documents\Code\PDF_Tool -I C:\Users\a2882\Documents\Code\PDF_Tool\cmake-build-debug\PDF_Tool_autogen\include -I C:\Development\msys2\mingw64\include -I C:\Development\Qt\5.15.2\mingw81_64\include -I C:\Development\Qt\5.15.2\mingw81_64\include\QtWidgets -I C:\Development\Qt\5.15.2\mingw81_64\include\QtGui -I C:\Development\Qt\5.15.2\mingw81_64\include\QtANGLE -I C:\Development\Qt\5.15.2\mingw81_64\include\QtCore -I C:\Development\Qt\5.15.2\mingw81_64\.\mkspecs\win32-g++
+RC_INCLUDES = -I C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool\cmake-build-debug -I C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool -I C:\Users\a2882\Documents\Code\PDF_Tool_Project\PDF_Tool\cmake-build-debug\PDF_Tool_autogen\include -I C:\Development\msys64\mingw64\include -I C:\Development\Qt\5.15.2\mingw81_64\include -I C:\Development\Qt\5.15.2\mingw81_64\include\QtWidgets -I C:\Development\Qt\5.15.2\mingw81_64\include\QtGui -I C:\Development\Qt\5.15.2\mingw81_64\include\QtANGLE -I C:\Development\Qt\5.15.2\mingw81_64\include\QtCore -I C:\Development\Qt\5.15.2\mingw81_64\.\mkspecs\win32-g++
 
 RC_FLAGS = 
 
