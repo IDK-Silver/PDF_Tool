@@ -899,4 +899,5 @@ C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/libraries/Setting/Settin
 C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/MainWindow/MainWindow.cpp
  uic:ui_MainWindow.h
 C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/Widget/PDFWidget/PDFWidget.cpp
+ uic:ui_PDFWidget.h
 C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/src/main.cpp

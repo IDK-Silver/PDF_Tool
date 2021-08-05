@@ -12,7 +12,7 @@
 #include <QProgressDialog>
 #include <QMessageBox>
 #include <QDesktopServices>
-#include <QDir>
+
 
 
 PDFWidget::PDFWidget(QWidget *parent) :
@@ -61,6 +61,7 @@ PDFWidget::~PDFWidget() {
 }
 
 void PDFWidget::add_file() {
+    
     // 取的選取的檔案
     auto choose_files =  QFileDialog::getOpenFileNames(this, "選取PDF檔", QDir::homePath().append("/Pictures"), "PDF檔 (*.pdf)");
 
@@ -80,6 +81,10 @@ void PDFWidget::add_file() {
     QStringList list(files.begin(), files.end());
     ui->listWidget->clear();
     ui->listWidget->addItems(list);
+
+    if (!this->ui->listWidget->size().isEmpty()) {
+        ui->listWidget->setCurrentRow(0);
+    }
 }
 
 void PDFWidget::del_file() {
