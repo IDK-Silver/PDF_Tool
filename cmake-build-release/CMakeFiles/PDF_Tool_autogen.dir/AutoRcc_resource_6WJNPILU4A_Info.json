@@ -1,22 +1,22 @@
 {
-	"BUILD_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-release/PDF_Tool_autogen",
-	"CMAKE_BINARY_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-release",
-	"CMAKE_CURRENT_BINARY_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-release",
-	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool",
-	"CMAKE_SOURCE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool",
-	"INCLUDE_DIR" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-release/PDF_Tool_autogen/include",
+	"BUILD_DIR" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release/PDF_Tool_autogen",
+	"CMAKE_BINARY_DIR" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release",
+	"CMAKE_CURRENT_BINARY_DIR" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release",
+	"CMAKE_CURRENT_SOURCE_DIR" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool",
+	"CMAKE_SOURCE_DIR" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool",
+	"INCLUDE_DIR" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release/PDF_Tool_autogen/include",
 	"INPUTS" : 
 	[
-		"C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/resource/app-icon.ico"
+		"C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/resource/app-icon.ico"
 	],
-	"LOCK_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-release/CMakeFiles/PDF_Tool_autogen.dir/AutoRcc_resource_6WJNPILU4A_Lock.lock",
+	"LOCK_FILE" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release/CMakeFiles/PDF_Tool_autogen.dir/AutoRcc_resource_6WJNPILU4A_Lock.lock",
 	"MULTI_CONFIG" : false,
 	"OPTIONS" : [ "-name", "resource" ],
 	"OUTPUT_CHECKSUM" : "6WJNPILU4A",
 	"OUTPUT_NAME" : "qrc_resource.cpp",
 	"RCC_EXECUTABLE" : "C:/Development/Qt/5.15.2/mingw81_64/bin/rcc.exe",
 	"RCC_LIST_OPTIONS" : [ "--list" ],
-	"SETTINGS_FILE" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/cmake-build-release/CMakeFiles/PDF_Tool_autogen.dir/AutoRcc_resource_6WJNPILU4A_Used.txt",
-	"SOURCE" : "C:/Users/a2882/Documents/Code/PDF_Tool_Project/PDF_Tool/resource/resource.qrc",
+	"SETTINGS_FILE" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release/CMakeFiles/PDF_Tool_autogen.dir/AutoRcc_resource_6WJNPILU4A_Used.txt",
+	"SOURCE" : "C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/resource/resource.qrc",
 	"VERBOSITY" : 0
 }
