@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.2)
 project(PDF_Tool LANGUAGES CXX)
 
 set(TARGET_NAME ${PROJECT_NAME}) 
-set(MINGW_BIN_PATH "C:/Development/msys2/mingw64/bin")
-set(other_library_path "C:/Development/msys2/mingw64")
+set(MINGW_BIN_PATH "C:/Development/msys64/mingw64/bin")
+set(other_library_path "C:/Development/msys64/mingw64")
 
 set(Win32_dll "libpoppler-105.dll" "libpoppler-cpp-0.dll" "libpoppler-qt5-1.dll" "liblcms2-2.dll" "libfreetype-6.dll"
         "libcurl-4.dll" "libbz2-1.dll" "libbrotlidec.dll" "libharfbuzz-0.dll" "libpng16-16.dll"

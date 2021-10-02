@@ -108,7 +108,8 @@ void PDFWidget::conversion() {
     this->progressDialog->setMinimumSize(this->progressDialog->size().width() + 120, this->progressDialog->size().height());
     this->progressDialog->show();
 
-    //多執行序進行轉檔
+    // 多執行序進行轉檔
+    // 避免UI介面卡住
     QtConcurrent::run( [&] {
 
         // 設定交戶介面
@@ -134,18 +135,17 @@ void PDFWidget::conversion() {
 
 
         for (const auto& file : this->files) {
-            auto render = new PDFtoImage(file);
-
+            qDebug() << "Conversion " << file;
+            auto render = std::make_unique<PDFtoImage>(file);
             render->conversion_image(this->settings->read(this->section.key.image_output_path).toString(),
                                      file.split("/").last().split(".").first(),
                                      this->settings->read(this->section.key.dpi).toInt(),
                                      this->settings->read(this->section.key.format).toString());
-
+            qDebug() << "Conversion File Success";
             int progress = (file_num + 1);
             interface.setProgressValueAndText(
                     progress,
                     QString("正在轉換第%1個檔案" ).arg(progress + 1));
-            delete render;
             file_num++;
         }
 

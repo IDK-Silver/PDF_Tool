@@ -10,6 +10,7 @@
 #include <QDir>
 
 #define APP_Name "PDF_Tool"
+#define APP_Version "1.2"
 
 #ifdef Q_OS_WIN32
 #define Picture_Folder_Name "Pictures"

@@ -13,7 +13,7 @@ PDFtoImage::PDFtoImage(const QString& file_path)
     this->max_cpu_core = QThread::idealThreadCount();
     QThreadPool::globalInstance()->setMaxThreadCount(QThread::idealThreadCount());
 
-    qDebug() << this->max_cpu_core;
+    qDebug() << "Max Thread " << this->max_cpu_core;
 
     std::shared_ptr<Poppler::Document> input_document(Poppler::Document::load(file_path));  //讀取文件
     this->document = std::move(input_document);
@@ -80,14 +80,29 @@ void PDFtoImage::conversion_image(const QString& output_path, const QString& fil
 
         // 執行剩餘的頁數
         for (int last = 0; last < over; last++) {
-            QtConcurrent::run(this, &PDFtoImage::conversion_image_one, this->document,  index, conversion_data);
+            auto future =  QtConcurrent::run(this, &PDFtoImage::conversion_image_one, this->document,  index, conversion_data);
+            futures.push_back(future);
             index++;
         }
+
+        for (auto future : futures) {
+            future.waitForFinished();
+        }
+
     }
+    // 如果PDF頁數小於最大核心數
     else {
+        // 紀錄執行續的狀況
+        QVector<QFuture<void>> futures;
+
         for (int index = 0; index < this->document->numPages(); index++) {
             //        conversion_image_one(index, conversion_data);
-            QtConcurrent::run(this, &PDFtoImage::conversion_image_one, this->document,  index, conversion_data);
+            auto future = QtConcurrent::run(this, &PDFtoImage::conversion_image_one, this->document,  index, conversion_data);
+            futures.push_back(future);
+        }
+
+        for (auto future : futures) {
+            future.waitForFinished();
         }
     }
 
