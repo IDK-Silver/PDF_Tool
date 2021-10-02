@@ -51,6 +51,13 @@ namespace Setting_Sections {
         };
         keys key;
     };
+    struct PDF_Tool {
+        QString section = "PDF-Tool";
+        struct keys {
+            QString version = "Version";
+        };
+        keys key;
+    };
 }
 
 #endif //PDF_TOOL_SETTING_H

@@ -6,8 +6,10 @@
 #define PDF_TOOL_MAINWINDOW_H
 
 #include <QMainWindow>
-#include "src/Widget/PDFWidget/PDFWidget.h"
 #include <QString>
+#include "src/Widget/PDFWidget/PDFWidget.h"
+#include "libraries/Setting/Setting.h"
+
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -23,7 +25,11 @@ public:
 
 private:
     Ui::MainWindow *ui;
-    PDFWidget *pdfWidget = new PDFWidget();
+    Setting_Sections::PDF_Tool section;
+    std::shared_ptr<Setting> settings = std::make_shared<Setting>(section.section);
+    std::shared_ptr<PDFWidget> pdfWidget;
+
+    void init();
 };
 
 

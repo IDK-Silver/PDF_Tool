@@ -51,6 +51,12 @@ bool Setting::is_file_generate() {
 }
 
 void Setting::generate_file() {
+    {   // PDF Tool Option Main Option
+        Setting_Sections::PDF_Tool option;
+
+        this->write(option.section, option.key.version, APP_Version);
+    }
+
     {   // PDF Widget Option
         Setting_Sections::PDFWidget option;
 

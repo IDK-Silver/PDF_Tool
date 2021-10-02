@@ -159,13 +159,6 @@ void PDFWidget::conversion() {
 void PDFWidget::init() {
     this->settings = new Setting(section.section);
 
-    // 檢查是否生成檔案
-    if (!settings->is_file_generate()) {
-        // 生成設定檔案
-        settings->generate_file();
-        qDebug() << "Generate Setting File";
-    }
-
     // 初始化 DPI 選項
     ui->comboBox_dpi->addItems(settings->read(section.key.dpi_list).toStringList());
     ui->comboBox_dpi->setCurrentText(settings->read(section.key.dpi).toString());
