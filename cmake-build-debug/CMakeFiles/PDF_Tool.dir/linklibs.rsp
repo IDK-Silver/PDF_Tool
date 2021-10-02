@@ -1,1 +1,0 @@
-  -LC:/Development/msys2/mingw64/lib  C:/Development/Qt/5.15.2/mingw81_64/lib/libQt5Widgets.a -lpoppler-qt5 -lpoppler-cpp C:/Development/Qt/5.15.2/mingw81_64/lib/libQt5Gui.a C:/Development/Qt/5.15.2/mingw81_64/lib/libQt5Core.a -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 

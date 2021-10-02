@@ -1,4 +1,0 @@
-C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release/CMakeFiles/edit_cache.dir
-C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release/CMakeFiles/PDF_Tool.dir
-C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release/CMakeFiles/rebuild_cache.dir
-C:/Users/a2882/Documents/PDF_Tool_Project/PDF_Tool/cmake-build-release/CMakeFiles/PDF_Tool_autogen.dir
