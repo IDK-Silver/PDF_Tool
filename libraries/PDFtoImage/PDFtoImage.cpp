@@ -16,7 +16,10 @@ PDFtoImage::PDFtoImage(const QString& file_path)
     qDebug() << "Max Thread " << this->max_cpu_core;
 
     std::shared_ptr<Poppler::Document> input_document(Poppler::Document::load(file_path));  //讀取文件
+
     this->document = std::move(input_document);
+    document->setRenderHint(Poppler::Document::Antialiasing);
+    document->setRenderHint(Poppler::Document::TextAntialiasing);
 
     this->num_pages = this->document->numPages();   // 紀錄頁數
 
