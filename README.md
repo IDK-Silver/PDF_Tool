@@ -4,6 +4,11 @@ PDF工具可以把PDF文件轉換為圖片的格式，可以選擇要轉換的�
 
 轉換圖片的時候會根據CPU的核心數量去進行分配轉檔任務，來加快多頁PDF的轉換速度。
 
+## 下載可執行檔
+* Windows [點我下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/1.2/PDF-Tool-Setup.exe)
+
+
+
 # 編譯說明
 
 ## Ubuntu 
