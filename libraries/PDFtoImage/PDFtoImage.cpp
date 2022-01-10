@@ -10,18 +10,22 @@
 
 PDFtoImage::PDFtoImage(const QString& file_path)
 {
+    // 設定最多的CPU核心數
     this->max_cpu_core = QThread::idealThreadCount();
     QThreadPool::globalInstance()->setMaxThreadCount(QThread::idealThreadCount());
 
     qDebug() << "Max Thread " << this->max_cpu_core;
 
-    std::shared_ptr<Poppler::Document> input_document(Poppler::Document::load(file_path));  //讀取文件
-
+    //讀取文件
+    std::shared_ptr<Poppler::Document> input_document(Poppler::Document::load(file_path));  
     this->document = std::move(input_document);
+
+    //把圖片鋸齒處理
     document->setRenderHint(Poppler::Document::Antialiasing);
     document->setRenderHint(Poppler::Document::TextAntialiasing);
 
-    this->num_pages = this->document->numPages();   // 紀錄頁數
+     // 紀錄頁數
+    this->num_pages = this->document->numPages();  
 
     if (this->document->isLocked()) {   // 偵測PDF有沒有密碼
         qDebug() << "PDF file is lock";
