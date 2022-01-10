@@ -3,8 +3,7 @@ cmake_minimum_required(VERSION 3.2)
 project(PDF_Tool LANGUAGES CXX)
 
 set(TARGET_NAME ${PROJECT_NAME}) 
-set(MINGW_BIN_PATH "C:/Development/msys64/mingw64/bin")
-set(other_library_path "C:/Development/msys64/mingw64")
+
 
 set(Win32_dll "libpoppler-105.dll" "libpoppler-cpp-0.dll" "libpoppler-qt5-1.dll" "liblcms2-2.dll" "libfreetype-6.dll"
         "libcurl-4.dll" "libbz2-1.dll" "libbrotlidec.dll" "libharfbuzz-0.dll" "libpng16-16.dll"
@@ -32,9 +31,11 @@ set(PROJECT_SOURCES
         src/main.cpp
         src/Widget/MainWindow/MainWindow.cpp src/Widget/MainWindow/MainWindow.h src/Widget/MainWindow/MainWindow.ui
         src/Widget/PDFWidget/PDFWidget.cpp src/Widget/PDFWidget/PDFWidget.h src/Widget/PDFWidget/PDFWidget.ui
+        src/Widget/PDFView_Widget/PDFView_Widget.cpp  src/Widget/PDFView_Widget/PDFView_Widget.h src/Widget/PDFView_Widget/PDFView_Widget.ui
         libraries/PDFtoImage/PDFtoImage.cpp libraries/PDFtoImage/PDFtoImage.h
         libraries/Setting/Setting.cpp libraries/Setting/Setting.h
-        resource/resource.qrc resource/win32_rc.rc)
+        resource/resource.qrc resource/win32_rc.rc 
+        libraries/PDFUtils/PDFUtils.cpp libraries/PDFUtils/PDFUtils.h)
 
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets REQUIRED)
@@ -51,14 +52,14 @@ endif()
 
 target_link_libraries(PDF_Tool PRIVATE Qt${QT_VERSION_MAJOR}::Widgets poppler-qt5 poppler-cpp)
 
-if (WIN32)
-    foreach(dll ${Win32_dll})
-        set(LIBGCC_DLL "${MINGW_BIN_PATH}/${dll}") 
-        add_custom_command(TARGET ${TARGET_NAME} PRE_BUILD 
-        COMMAND ${CMAKE_COMMAND} -E copy 
-        ${LIBGCC_DLL} $<TARGET_FILE_DIR:${TARGET_NAME}>) 
-    endforeach()
-endif()
+#if (WIN32)
+#    foreach(dll ${Win32_dll})
+#        set(LIBGCC_DLL "${MINGW_BIN_PATH}/${dll}")
+#        add_custom_command(TARGET ${TARGET_NAME} PRE_BUILD
+#        COMMAND ${CMAKE_COMMAND} -E copy
+#        ${LIBGCC_DLL} $<TARGET_FILE_DIR:${TARGET_NAME}>)
+#    endforeach()
+#endif()
 
 
 

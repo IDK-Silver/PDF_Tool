@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>PDFView_Widget</class>
+ <widget class="QWidget" name="PDFView_Widget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>624</width>
+    <height>536</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <widget class="QGroupBox" name="groupBox">
+   <property name="geometry">
+    <rect>
+     <x>180</x>
+     <y>140</y>
+     <width>120</width>
+     <height>80</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>GroupBox</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
