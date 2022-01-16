@@ -12,11 +12,15 @@
 #include "libraries/Setting/Setting.h"
 
 QT_BEGIN_NAMESPACE
-namespace Ui { class PDFWidget; }
+namespace Ui
+{
+    class PDFWidget;
+}
 QT_END_NAMESPACE
 
-class PDFWidget : public QWidget {
-Q_OBJECT
+class PDFWidget : public QWidget
+{
+    Q_OBJECT
 
 public:
     explicit PDFWidget(QWidget *parent = nullptr);
@@ -30,14 +34,12 @@ private:
     QFutureWatcher<bool> watcher;
     QProgressDialog *progressDialog{};
 
-    void init();    //初始化介面選項 & 各項參數
-
+    void init(); //初始化介面選項 & 各項參數
 
 private slots:
     void add_file();
     void del_file();
     void conversion();
 };
-
 
 #endif //PDF_TOOL_PDFWIDGET_H

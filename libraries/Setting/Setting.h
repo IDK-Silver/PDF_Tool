@@ -20,9 +20,10 @@
 #define Picture_Folder_Name "圖片"
 #endif
 
-class Setting {
+class Setting
+{
 public:
-    Setting(QString input_filepath, QString  section);
+    Setting(QString input_filepath, QString section);
     explicit Setting(QString input_section);
     ~Setting();
     bool is_file_generate();
@@ -39,10 +40,13 @@ private:
     QString filename = "setting.ini";
 };
 
-namespace Setting_Sections {
-    struct PDFWidget {
+namespace Setting_Sections
+{
+    struct PDFWidget
+    {
         QString section = "PDF-Widget-Option";
-        struct keys {
+        struct keys
+        {
             QString dpi_list = "DPI-List";
             QString format_list = {"Format-List"};
             QString dpi = "Last-Choose-DPi";
@@ -51,9 +55,12 @@ namespace Setting_Sections {
         };
         keys key;
     };
-    struct PDF_Tool {
+    struct PDF_Tool
+    {
+
         QString section = "PDF-Tool";
-        struct keys {
+        struct keys
+        {
             QString version = "Version";
         };
         keys key;

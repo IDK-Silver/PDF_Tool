@@ -9,18 +9,17 @@
 #include <memory>
 #include <QString>
 
-class PDFUtils {
-public :
+class PDFUtils
+{
+public:
     PDFUtils();
     ~PDFUtils();
 
-    void get_pdf(const QString& input_path);
-    
+    void get_pdf(const QString &input_path);
 
 private:
     QString pdf_input_path;
     std::shared_ptr<Poppler::Document> pdf_document;
 };
-
 
 #endif //PDF_TOOL_PDFUTILS_H

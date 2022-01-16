@@ -11,13 +11,16 @@
 #include "src/Widget/PDFView_Widget/PDFView_Widget.h"
 #include "libraries/Setting/Setting.h"
 
-
 QT_BEGIN_NAMESPACE
-namespace Ui { class MainWindow; }
+namespace Ui
+{
+    class MainWindow;
+}
 QT_END_NAMESPACE
 
-class MainWindow : public QMainWindow {
-Q_OBJECT
+class MainWindow : public QMainWindow
+{
+    Q_OBJECT
 
 public:
     explicit MainWindow(QWidget *parent = nullptr);
@@ -33,15 +36,13 @@ private:
 
     // program widget variable(pointer)
 
-        // pdf conversion image widget
-        std::shared_ptr<PDFWidget> pdfWidget;
+    // pdf conversion image widget
+    std::shared_ptr<PDFWidget> pdfWidget;
 
-        // pdf view widget
-        std::shared_ptr<PDFView_Widget> pdfView_Widget;
-    
+    // pdf view widget
+    std::shared_ptr<PDFView_Widget> pdfView_Widget;
 
     void init();
 };
-
 
 #endif //PDF_TOOL_MAINWINDOW_H
