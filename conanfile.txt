@@ -1,0 +1,13 @@
+[requires]
+libjpeg/9e
+libpng/1.6.38
+opencv/4.5.5
+poppler/21.07.0
+
+[generators]
+cmake
+CMakeDeps
+CMakeToolchain
+
+[imports]
+bin, *dll -> ./bin
