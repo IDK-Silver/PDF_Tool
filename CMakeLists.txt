@@ -37,7 +37,7 @@ set(PROJECT_SOURCES
         resource/resource.qrc resource/win32_rc.rc 
         libraries/PDFUtils/PDFUtils.cpp libraries/PDFUtils/PDFUtils.h)
 
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets REQUIRED)
+find_package(QT NAMES Qt5 COMPONENTS Widgets REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets REQUIRED)
 
 if (WIN32)
