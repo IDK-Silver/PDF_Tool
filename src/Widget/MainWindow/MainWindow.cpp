@@ -19,8 +19,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     this->pdfView_Widget = std::make_shared<PDFView_Widget>();
 
     //set main windows widget
-    // setCentralWidget(pdfWidget->window());
-    setCentralWidget(this->pdfView_Widget->window());
+    setCentralWidget(pdfWidget->window());
+    // setCentralWidget(this->pdfView_Widget->window());
 }
 
 MainWindow::~MainWindow()
