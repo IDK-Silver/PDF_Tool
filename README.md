@@ -1,54 +1,16 @@
-# PDF工具
+# Tauri + Vue + TypeScript
 
-PDF工具可以把PDF文件轉換為圖片的格式，可以選擇要轉換的圖片格式以及DPI。
+This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
 
-轉換圖片的時候會根據CPU的核心數量去進行分配轉檔任務，來加快多頁PDF的轉換速度。
+## Recommended IDE Setup
 
-## 下載可執行檔
-* Windows [點我下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/1.2/PDF-Tool-Setup.exe)
+- [VS Code](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
 
+## Type Support For `.vue` Imports in TS
 
+Since TypeScript cannot handle type information for `.vue` imports, they are shimmed to be a generic Vue component type by default. In most cases this is fine if you don't really care about component prop types outside of templates. However, if you wish to get actual prop types in `.vue` imports (for example to get props validation when using manual `h(...)` calls), you can enable Volar's Take Over mode by following these steps:
 
-# 編譯說明
+1. Run `Extensions: Show Built-in Extensions` from VS Code's command palette, look for `TypeScript and JavaScript Language Features`, then right click and select `Disable (Workspace)`. By default, Take Over mode will enable itself if the default TypeScript extension is disabled.
+2. Reload the VS Code window by running `Developer: Reload Window` from the command palette.
 
-## Ubuntu 
-
-* Download Source Code
-```
-git clone https://github.com/IDK-Silver/PDF_Tool.git
-```
-* Install Qt5 
-```
- sudo apt-get install qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools
-```
-
-* Install Poppler
-```
-sudo apt-get install poppler-utils libpoppler-qt5-dev libpoppler-cpp-dev
-```
-
-* Make directory 
-```
-cd PDF_Tool/ 
-mkdir build 
-cd build/
-```
-
-* Generate makefile and building
-```
-camke ..
-make 
-```
-
-* Run APP
-```
-./PDF_Tool
-```
-
-
-
-
-
-
-
-
+You can learn more about Take Over mode [here](https://github.com/johnsoncodehk/volar/discussions/471).
