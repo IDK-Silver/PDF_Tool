@@ -363,14 +363,14 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
 
 <template>
   <div class="view-mode-root">
-    <header class="view-header" v-if="props.activeFile">
+    <header class="view-header">
       <div class="header-left">
         <button v-if="leftCollapsed" class="btn-expand" type="button" @click="setLeftCollapsed?.(false)"
           aria-label="展開側欄" title="展開側欄">
           <ChevronDoubleRightIcon class="icon" aria-hidden="true" />
         </button>
       </div>
-      <div class="header-right">
+      <div class="header-right" v-if="props.activeFile">
         <div class="zoom-controls">
           <span class="zoom-indicator">{{ Math.round(scale * 100) }}%</span>
           <button type="button" class="btn" :class="{ active: zoomMode === 'actual' }"
