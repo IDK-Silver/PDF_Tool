@@ -466,7 +466,7 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
 }
 
 .zoom-controls .btn.active {
-  background: var(--hover, #f3f4f6);
+  background: var(--selected, #f3f4f6);
 }
 
 .zoom-controls .zoom-indicator {

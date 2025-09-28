@@ -8,7 +8,7 @@
     --border: #e5e7eb;
     --hover: #f9fafb;
     /* 選取使用中性色（灰），避免藍色 */
-    --selected: #f3f4f6;      /* gray-100 */
+    --selected: #d7dce5;      /* gray-100 */
     --selected-bar: #d1d5db;  /* gray-300 */
     --accent: #2563eb;
     --accent-foreground: #ffffff;

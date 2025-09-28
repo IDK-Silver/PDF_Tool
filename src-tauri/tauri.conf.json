@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "pdf_tool",
+  "productName": "Kano PDF",
   "version": "0.1.0",
-  "identifier": "com.yuufeng.pdf_tool",
+  "identifier": "com.yuufeng.pdf-tool",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "pdf_tool",
+        "title": "Kano PDF",
         "width": 800,
         "height": 600,
         "dragDropEnabled": true
