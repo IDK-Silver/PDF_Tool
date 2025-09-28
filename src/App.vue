@@ -8,6 +8,8 @@ import { useModeFiles } from './composables/useModeFiles'
 import type { Mode } from './types/pdf'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 import { loadAppState, saveAppState, saveAppStateDebounced } from './composables/persistence'
 
 const route = useRoute()
@@ -92,6 +94,7 @@ function basename(p: string) {
 // Drag & Drop (Tauri file-drop)
 const isDragging = ref(false)
 let unlistenDrag: (() => void) | null = null
+let unlistenFileOpen: (() => void) | null = null
 const prevent = (e: Event) => { e.preventDefault() }
 let handleWinResize: (() => void) | null = null
 
@@ -137,6 +140,43 @@ onMounted(async () => {
 
     window.addEventListener('dragover', prevent)
     window.addEventListener('drop', prevent)
+
+    // 處理檔案開啟的函數
+    const handleFileOpen = (paths: string[]) => {
+      console.log('[App.vue] Handling file open:', paths)
+      if (paths && Array.isArray(paths)) {
+        let lastAddedId = null
+        for (const path of paths) {
+          // 檔案路徑已在後端處理完成，直接使用
+          if (path.toLowerCase().endsWith('.pdf')) {
+            const id = addTo(mode.value, { path, name: basename(path) })
+            if (id) lastAddedId = id
+          }
+        }
+        // 自動選擇並顯示最後開啟的檔案
+        if (lastAddedId) {
+          setActiveId(lastAddedId)
+        }
+      }
+    }
+
+    // 監聽檔案開啟事件（統一事件）
+    unlistenFileOpen = await listen('open-file', (event) => {
+      console.log('[App.vue] Open-file event received:', event)
+      handleFileOpen(event.payload as string[])
+    })
+
+    // 主動獲取初始檔案（處理冷啟動的情況）
+    try {
+      const initialFiles = await invoke<string[]>('frontend_ready')
+      if (initialFiles && initialFiles.length > 0) {
+        console.log('[App.vue] Got initial files from frontend_ready:', initialFiles)
+        handleFileOpen(initialFiles)
+      }
+    } catch (err) {
+      console.warn('[App.vue] Failed to call frontend_ready:', err)
+    }
+
     // Preferred v2 API: Webview onDragDropEvent
     unlistenDrag = await getCurrentWebview().onDragDropEvent((e) => {
       const payload = e.payload
@@ -260,6 +300,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('drop', prevent)
   window.removeEventListener('contextmenu', handleContextMenu)
   try { unlistenDrag?.() } finally { unlistenDrag = null }
+  try { unlistenFileOpen?.() } finally { unlistenFileOpen = null }
   if (handleWinResize) {
     try { window.removeEventListener('resize', handleWinResize) } finally { handleWinResize = null }
   }
