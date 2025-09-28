@@ -433,7 +433,10 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 0;
+  /* stretch header border to the edges of right column */
+  margin-left: -12px;
+  margin-right: -12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border, #e5e7eb);
 }
 
