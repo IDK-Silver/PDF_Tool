@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute, useRouter } from "vue-router"
 import ModeTabs from './components/ModeTabs.vue'
+import AppHeader from './components/AppHeader.vue'
 import FileListPanel from './components/FileListPanel.vue'
 import { useModeFiles } from './composables/useModeFiles'
 import type { Mode } from './types/pdf'
@@ -11,6 +12,7 @@ import { loadAppState, saveAppStateDebounced } from './composables/persistence'
 
 const route = useRoute()
 const router = useRouter()
+const isSettings = computed(() => route.path.startsWith('/settings'))
 
 // 將模式與路由同步（雙向）
 const mode = computed<Mode>({
@@ -164,6 +166,7 @@ function onRemove(id: string) {
   removeFromCurrent(id)
 }
 function onSelect(id: string | null) { setActiveId(id) }
+function onTabNavigate(m: Mode) { mode.value = m }
 
 // Persist on changes (lists, active selections, queries, and mode)
 function persistNow() {
@@ -217,19 +220,20 @@ function onResizeStart(e: PointerEvent) {
 </script>
 
 <template>
-  <main class="app-grid" :style="{ gridTemplateColumns: leftWidth + 'px 6px 1fr' }">
+  <main class="app-grid" :style="{ gridTemplateColumns: (isSettings ? '0px 0px 1fr' : leftWidth + 'px 6px 1fr') }">
     <div v-if="isDragging" class="drop-overlay" aria-hidden="true">
       PDF 匯入
     </div>
     <section class="left-col">
       <header class="menu">
-        <ModeTabs v-model="mode" />
+        <AppHeader />
+        <ModeTabs v-if="!isSettings" v-model="mode" @navigate="onTabNavigate" />
       </header>
-      <FileListPanel :key="mode" :files="filteredFiles" :active-id="currentActiveId" v-model:query="currentQuery"
+      <FileListPanel v-if="!isSettings" :key="mode" :files="filteredFiles" :active-id="currentActiveId" v-model:query="currentQuery"
         @add="onAddFiles" @select="onSelect" @remove="onRemove">
       </FileListPanel>
     </section>
-    <div
+    <div v-show="!isSettings"
       class="col-resizer"
       role="separator"
       aria-orientation="vertical"

@@ -93,3 +93,52 @@ export async function clearAppState(): Promise<void> {
     await store.save()
   } catch {}
 }
+
+// ----- App Settings (stored separately to avoid conflicts with appState writes) -----
+export type AppSettings = {
+  exportDpi: number
+  exportFormat: 'png' | 'jpeg'
+  jpegQuality?: number // 0..1 for canvas quality
+  defaultZoomMode?: 'actual' | 'fit'
+}
+
+const SETTINGS_KEY = 'appSettings'
+
+function defaultSettings(): AppSettings {
+  return { exportDpi: 300, exportFormat: 'png', jpegQuality: 0.9, defaultZoomMode: 'fit' }
+}
+
+export async function loadSettings(): Promise<AppSettings> {
+  const store = await getStore()
+  if (!store) return defaultSettings()
+  try {
+    const data = (await store.get(SETTINGS_KEY)) as AppSettings | undefined
+    return { ...defaultSettings(), ...(data ?? {}) }
+  } catch {
+    return defaultSettings()
+  }
+}
+
+export async function saveSettings(settings: AppSettings): Promise<void> {
+  const store = await getStore()
+  if (!store) return
+  try {
+    await store.set(SETTINGS_KEY, settings)
+    await store.save()
+  } catch (e) {
+    console.warn('Failed to save settings', e)
+  }
+}
+
+let settingsTimer: ReturnType<typeof setTimeout> | null = null
+let pendingSettings: AppSettings | null = null
+export function saveSettingsDebounced(settings: AppSettings, delayMs = 500) {
+  pendingSettings = settings
+  if (settingsTimer) clearTimeout(settingsTimer)
+  settingsTimer = setTimeout(async () => {
+    settingsTimer = null
+    if (pendingSettings) {
+      try { await saveSettings(pendingSettings) } finally { pendingSettings = null }
+    }
+  }, delayMs)
+}

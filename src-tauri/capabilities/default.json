@@ -7,6 +7,9 @@
     "core:default",
     "dialog:default",
     "opener:default",
-    "store:default"
+    "store:default",
+    "fs:default",
+    { "identifier": "fs:scope", "allow": [ { "path": "$HOME/**" } ] },
+    { "identifier": "fs:allow-write-file", "allow": [ { "path": "$HOME/**" } ] }
   ]
 }
