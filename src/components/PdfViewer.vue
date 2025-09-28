@@ -63,6 +63,10 @@ const maxConcurrentRenders = 3
 let inFlight = 0
 const renderQueue: PageView[] = []
 const currentIndex = ref<number>(0)
+// Throttle text layer rendering to idle after scroll/zoom
+const TEXT_IDLE_MS = 120
+const textBufferPages = ref<number>(1) // render text only near center
+let textIdleTimer: number | null = null
 
 function enqueue(pv: PageView) {
   if (pv.queued) return
@@ -90,8 +94,8 @@ async function startRender(pv: PageView) {
     // If token changed during render (superseded), ignore
     if (pv.renderToken !== token) return
     pv.lastRenderedScale = pv.scale
-    // Render text layer after canvas if container exists
-    await renderTextLayerForPage(doc, pv)
+    // Delay text-layer rendering to idle; a scheduled pass will handle it
+    scheduleTextLayerPass()
   } finally {
     pv.queued = false
     inFlight--
@@ -182,7 +186,13 @@ async function renderPage(doc: PDFDocumentProxy, pageView: PageView) {
   } catch (error: any) {
     const name = error?.name || ''
     const msg = (error?.message || '').toString()
-    if (name === 'RenderingCancelledException' || msg.includes('Rendering cancelled')) {
+    const lower = msg.toLowerCase()
+    if (
+      name === 'RenderingCancelledException' ||
+      lower.includes('rendering cancelled') ||
+      lower.includes('rendering canceled') ||
+      lower.includes('cancel')
+    ) {
       // Ignore expected cancellations during re-render (e.g., scale/resize changes)
       return
     }
@@ -242,7 +252,14 @@ async function renderTextLayerForPage(doc: PDFDocumentProxy, pageView: PageView)
   } catch (error: any) {
     const name = error?.name || ''
     const msg = (error?.message || '').toString()
-    if (name === 'RenderingCancelledException' || msg.includes('Rendering cancelled')) return
+    const lower = msg.toLowerCase()
+    if (
+      name === 'RenderingCancelledException' ||
+      lower.includes('rendering cancelled') ||
+      lower.includes('rendering canceled') ||
+      lower.includes('textlayer') && lower.includes('cancel') ||
+      lower.includes('cancel') // swallow any cancel/canceled/cancelled variants
+    ) return
     emit('doc-error', error)
   }
 }
@@ -382,6 +399,7 @@ watch(
         currentIndex.value = 0
       }
       updateRenderWindow()
+      scheduleTextLayerPass()
       if (toRaw(props.doc) === doc) emit('doc-loaded', total)
       return
     }
@@ -395,6 +413,7 @@ watch(
       for (const pv of pages.value) { pv.lastRenderedScale = undefined }
       updateRenderWindow()
       lastScale = scale
+      scheduleTextLayerPass()
       emit('doc-loaded', pages.value.length)
     }
   },
@@ -433,7 +452,12 @@ function updateCurrentPage() {
 function onScroll() {
   if (suppressVisibleUpdate) return
   if (rafId) cancelAnimationFrame(rafId)
-  rafId = requestAnimationFrame(() => { rafId = null; updateCurrentPage(); updateRenderWindow() })
+  rafId = requestAnimationFrame(() => {
+    rafId = null
+    updateCurrentPage()
+    updateRenderWindow()
+    scheduleTextLayerPass()
+  })
 }
 watch(containerRef, (el, prev) => {
   try { prev?.removeEventListener('scroll', onScroll) } catch {}
@@ -443,6 +467,7 @@ onBeforeUnmount(() => {
   const el = containerRef.value
   try { el?.removeEventListener('scroll', onScroll) } catch {}
   if (rafId) { cancelAnimationFrame(rafId); rafId = null }
+  if (textIdleTimer) { try { clearTimeout(textIdleTimer) } catch {}; textIdleTimer = null }
 })
 
 // Keep anchor stable on container resize
@@ -496,6 +521,23 @@ function scrollToPageOffset(pageNumber: number, offsetPx: number) {
 }
 
 defineExpose({ scrollToPage, getPageMetrics, scrollToPageOffset })
+
+function scheduleTextLayerPass() {
+  if (textIdleTimer) { try { clearTimeout(textIdleTimer) } catch {} }
+  textIdleTimer = window.setTimeout(() => { textIdleTimer = null; void renderTextLayersForWindow() }, TEXT_IDLE_MS)
+}
+
+async function renderTextLayersForWindow() {
+  const n = pages.value.length
+  if (!n || !lastDoc) return
+  const idx = currentIndex.value
+  const start = Math.max(0, idx - textBufferPages.value)
+  const end = Math.min(n - 1, idx + textBufferPages.value)
+  for (let i = start; i <= end; i++) {
+    const pv = pages.value[i]
+    try { await renderTextLayerForPage(lastDoc, pv) } catch { /* ignore */ }
+  }
+}
 
 function onPageContextMenu(event: MouseEvent, page: PageView) {
   event.preventDefault()
