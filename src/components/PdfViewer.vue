@@ -67,6 +67,13 @@ const currentIndex = ref<number>(0)
 const TEXT_IDLE_MS = 120
 const textBufferPages = ref<number>(1) // render text only near center
 let textIdleTimer: number | null = null
+// Defer canvas re-render during active zoom; use CSS transform first
+const RENDER_IDLE_MS = 160
+let renderIdleTimer: number | null = null
+let renderPaused = false
+// Track a target visual scale for CSS-zoom bridging across scroll/zoom
+let cssZoomTargetScale: number | null = null
+let cssZoomBaseScale: number | null = null
 
 function enqueue(pv: PageView) {
   if (pv.queued) return
@@ -106,6 +113,7 @@ async function startRender(pv: PageView) {
 function updateRenderWindow() {
   const n = pages.value.length
   if (!n) return
+  if (renderPaused) return
   const idx = currentIndex.value
   const start = Math.max(0, idx - bufferPages.value)
   const end = Math.min(n - 1, idx + bufferPages.value)
@@ -148,6 +156,8 @@ async function resetPages() {
   baseWidth.value = 0
   scaledHeights.value = []
   tops.value = []
+  cssZoomTargetScale = null
+  cssZoomBaseScale = null
 }
 
 async function renderPage(doc: PDFDocumentProxy, pageView: PageView) {
@@ -183,6 +193,15 @@ async function renderPage(doc: PDFDocumentProxy, pageView: PageView) {
     })
     pageView.renderTask = markRaw(renderTask)
     await renderTask.promise
+    // Clear any temporary CSS transform once true pixels are ready
+    try {
+      canvas.style.transform = 'none'
+      canvas.style.willChange = ''
+    } catch {}
+    // If this canvas reached target scale, no more CSS zoom bridge needed for it
+    if (cssZoomTargetScale != null && pageView.scale === cssZoomTargetScale) {
+      // no-op here; logic in applyCanvasTransformForZoom checks lastRenderedScale
+    }
   } catch (error: any) {
     const name = error?.name || ''
     const msg = (error?.message || '').toString()
@@ -322,6 +341,7 @@ function reanchorToCenter(_oldScale: number, newScale: number) {
   suppressVisibleUpdate = true
   container.scrollTo({ top: Math.max(0, newAnchorTop), behavior: 'auto' })
   // release next frame
+  currentIndex.value = idx
   requestAnimationFrame(() => { suppressVisibleUpdate = false })
 }
 
@@ -404,15 +424,22 @@ watch(
       return
     }
 
-    // Same document, only scale changed: do not rebuild DOM, just re-render pages
+    // Same document, only scale changed: do not rebuild DOM, delay true re-render
     if (scale !== lastScale) {
       emit('doc-loading')
       // Reanchor and update predictive layout immediately
       reanchorToCenter(lastScale, scale)
+      // Smooth visual scale: temporarily transform canvases until true re-render
+      cssZoomBaseScale = lastScale
+      cssZoomTargetScale = scale
+      applyCanvasTransformForZoom()
+      fillCanvasToContainer()
       // Invalidate rendered scale and schedule only visible window
       for (const pv of pages.value) { pv.lastRenderedScale = undefined }
-      updateRenderWindow()
+      // Defer actual canvas re-render until idle to keep zoom smooth
+      scheduleRenderPass()
       lastScale = scale
+      // Text layer also deferred; schedule its idle pass
       scheduleTextLayerPass()
       emit('doc-loaded', pages.value.length)
     }
@@ -456,6 +483,9 @@ function onScroll() {
     rafId = null
     updateCurrentPage()
     updateRenderWindow()
+    // If a CSS zoom target is active, keep new visible pages visually scaled
+    if (cssZoomTargetScale != null) applyCanvasTransformForZoom()
+    if (cssZoomTargetScale != null) fillCanvasToContainer()
     scheduleTextLayerPass()
   })
 }
@@ -468,6 +498,7 @@ onBeforeUnmount(() => {
   try { el?.removeEventListener('scroll', onScroll) } catch {}
   if (rafId) { cancelAnimationFrame(rafId); rafId = null }
   if (textIdleTimer) { try { clearTimeout(textIdleTimer) } catch {}; textIdleTimer = null }
+  if (renderIdleTimer) { try { clearTimeout(renderIdleTimer) } catch {}; renderIdleTimer = null }
 })
 
 // Keep anchor stable on container resize
@@ -536,6 +567,61 @@ async function renderTextLayersForWindow() {
   for (let i = start; i <= end; i++) {
     const pv = pages.value[i]
     try { await renderTextLayerForPage(lastDoc, pv) } catch { /* ignore */ }
+  }
+}
+
+function fillCanvasToContainer() {
+  const n = pages.value.length
+  if (!n) return
+  const idx = currentIndex.value
+  const start = Math.max(0, idx - bufferPages.value)
+  const end = Math.min(n - 1, idx + bufferPages.value)
+  for (let i = start; i <= end; i++) {
+    const pv = pages.value[i]
+    const canvas = pv.canvas
+    if (!canvas) continue
+    try {
+      // Make the canvas element itself flex to container while resizing
+      canvas.style.width = '100%'
+      canvas.style.height = 'auto'
+    } catch {}
+  }
+}
+
+function scheduleRenderPass() {
+  if (renderIdleTimer) { try { clearTimeout(renderIdleTimer) } catch {} }
+  renderPaused = true
+  renderIdleTimer = window.setTimeout(() => {
+    renderIdleTimer = null
+    renderPaused = false
+    updateRenderWindow()
+  }, RENDER_IDLE_MS)
+}
+
+function applyCanvasTransformForZoom() {
+  // apply transform to visible window (center ± bufferPages)
+  const n = pages.value.length
+  if (!n || cssZoomTargetScale == null) return
+  const idx = currentIndex.value
+  const start = Math.max(0, idx - bufferPages.value)
+  const end = Math.min(n - 1, idx + bufferPages.value)
+  for (let i = start; i <= end; i++) {
+    const pv = pages.value[i]
+    const canvas = pv.canvas
+    if (!canvas) continue
+    // Only apply transform to canvases whose pixels are still at older scale
+    const fromScale = (pv.lastRenderedScale ?? cssZoomBaseScale ?? lastScale)
+    if (!fromScale || fromScale === cssZoomTargetScale) {
+      try { canvas.style.transform = 'none'; canvas.style.willChange = '' } catch {}
+      continue
+    }
+    const ratio = cssZoomTargetScale / fromScale
+    if (!Number.isFinite(ratio) || ratio <= 0) continue
+    try {
+      canvas.style.transformOrigin = '0 0'
+      canvas.style.transform = `scale(${ratio})`
+      canvas.style.willChange = 'transform'
+    } catch {}
   }
 }
 
