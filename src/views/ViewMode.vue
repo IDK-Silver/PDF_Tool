@@ -542,9 +542,9 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  border-radius: 8px;
-  background: var(--surface, #f8fafc);
-  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 0;
+  background: transparent;
+  border: none;
   overflow: hidden;
 }
 
