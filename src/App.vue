@@ -219,17 +219,29 @@ function onResizeStart(e: PointerEvent) {
   function onMove(ev: PointerEvent) {
     leftWidth.value = clamp(start + (ev.clientX - startX))
   }
-  function onUp(ev: PointerEvent) {
-    try { (target as any).releasePointerCapture?.(ev.pointerId) } catch {}
+  function finish() {
     window.removeEventListener('pointermove', onMove)
     window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onCancel)
+    window.removeEventListener('blur', onBlur, true)
+    target.removeEventListener('lostpointercapture', onLostCapture)
     document.body.style.userSelect = ''
     document.body.style.cursor = ''
   }
+  function onUp(ev: PointerEvent) {
+    try { (target as any).releasePointerCapture?.(ev.pointerId) } catch {}
+    finish()
+  }
+  function onCancel(_ev: PointerEvent) { finish() }
+  function onLostCapture(_ev: Event) { finish() }
+  function onBlur() { finish() }
   document.body.style.userSelect = 'none'
   document.body.style.cursor = 'col-resize'
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
+  window.addEventListener('pointercancel', onCancel)
+  window.addEventListener('blur', onBlur, true)
+  target.addEventListener('lostpointercapture', onLostCapture)
 }
 
 

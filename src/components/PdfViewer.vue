@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch, markRaw, toRaw, onMounted } from 'vue'
-// @ts-ignore: provided by pdfjs-dist web bundle, no TS types here
-import { renderTextLayer } from 'pdfjs-dist/web/pdf_viewer'
+import { loadPdfViewer } from '../lib/pdfjs-viewer'
 import type { ComponentPublicInstance } from 'vue'
 import type { PDFDocumentProxy } from '../lib/pdfjs'
 import type { PagePointerContext } from '../types/viewer'
@@ -27,14 +26,15 @@ interface PageView {
   canvas: HTMLCanvasElement | null
   renderTask: any
   container?: HTMLDivElement | null
+  inner?: HTMLDivElement | null
   // virtualization/render control
   renderToken?: number
   queued?: boolean
   lastRenderedScale?: number
   // text selection layer
-  textLayer?: HTMLDivElement | null
   textTask?: any
   textToken?: number
+  textBuilder?: any
 }
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -116,7 +116,11 @@ function updateRenderWindow() {
       // cancel out-of-range render to free resources
       if (pv.renderTask) void cancelTask(pv.renderTask)
       if (pv.textTask) void cancelTextTask(pv.textTask)
-      if (pv.textLayer) pv.textLayer.textContent = ''
+      try {
+        const host = pv.inner || pv.container
+        const tl = host?.querySelector('.textLayer')
+        if (tl) tl.remove()
+      } catch {}
       pv.queued = false
     }
   }
@@ -161,8 +165,9 @@ async function renderPage(doc: PDFDocumentProxy, pageView: PageView) {
 
     canvas.width = Math.floor(viewport.width * outputScale)
     canvas.height = Math.floor(viewport.height * outputScale)
-    canvas.style.width = `${Math.floor(viewport.width)}px`
-    canvas.style.height = `${Math.floor(viewport.height)}px`
+    // Use exact CSS pixel sizes to avoid fractional rounding drift vs text layer
+    canvas.style.width = `${viewport.width}px`
+    canvas.style.height = `${viewport.height}px`
 
     const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined
 
@@ -193,22 +198,42 @@ async function cancelTextTask(task: any) {
 
 async function renderTextLayerForPage(doc: PDFDocumentProxy, pageView: PageView) {
   try {
-    const container = pageView.textLayer
+    const container = pageView.inner || pageView.container || null
     if (!container) return
+    // Cancel and clear previous
     await cancelTextTask(pageView.textTask)
+    pageView.textTask = null
+    pageView.textBuilder?.cancel?.()
+    pageView.textBuilder = null
+
     const pdfPage = await doc.getPage(pageView.pageNumber)
     const viewport = pdfPage.getViewport({ scale: pageView.scale })
-    const textContent = await pdfPage.getTextContent()
-    container.textContent = ''
-    const task = renderTextLayer({
-      textContentSource: textContent,
-      container,
-      viewport,
-      textDivs: [],
-      enhanceTextSelection: true,
-    } as any)
-    pageView.textTask = markRaw(task)
-    await task.promise
+    try { container.querySelector('.textLayer')?.remove() } catch {}
+
+    // Ensure viewer is loaded and pdfjsLib is initialized
+    const { TextLayerBuilder } = await loadPdfViewer()
+    // Build a TextLayer and append its div into our container
+    const builder = new (TextLayerBuilder as any)({
+      pdfPage,
+      onAppend: (div: HTMLDivElement) => {
+        try { container.appendChild(div) } catch {}
+      },
+    })
+    pageView.textBuilder = markRaw(builder)
+    const promise = builder.render({ viewport })
+    pageView.textTask = markRaw({ promise, cancel: () => builder.cancel() })
+    await promise
+    try {
+      const divEl = (builder as any).div as HTMLDivElement
+      if (divEl) {
+        divEl.style.width = `${viewport.width}px`
+        divEl.style.height = `${viewport.height}px`
+        divEl.style.pointerEvents = 'auto'
+        ;(divEl.style as any)['userSelect'] = 'text'
+        ;(divEl.style as any)['webkitUserSelect'] = 'text'
+        divEl.style.zIndex = '2'
+      }
+    } catch {}
   } catch (error: any) {
     const name = error?.name || ''
     const msg = (error?.message || '').toString()
@@ -386,8 +411,8 @@ function setContainerRef(el: HTMLDivElement | Element | ComponentPublicInstance 
   page.container = (el as HTMLDivElement | null) ?? null
 }
 
-function setTextLayerRef(el: HTMLDivElement | Element | ComponentPublicInstance | null, page: PageView) {
-  page.textLayer = (el as HTMLDivElement | null) ?? null
+function setInnerRef(el: HTMLDivElement | Element | ComponentPublicInstance | null, page: PageView) {
+  page.inner = (el as HTMLDivElement | null) ?? null
 }
 
 // Compute current page using container center + binary search (no DOM reads)
@@ -506,9 +531,8 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
         :style="{ width: `${page.width || 600}px` }"
         :ref="(el) => setContainerRef(el, page)"
       >
-        <div class="page-inner" :style="{ width: `${page.width || 600}px`, height: `${page.height || 0}px` }" @contextmenu="(e) => onPageContextMenu(e, page)">
+        <div class="page-inner" :style="{ width: `${page.width || 600}px`, height: `${page.height || 0}px` }" @contextmenu="(e) => onPageContextMenu(e, page)" :ref="(el) => setInnerRef(el, page)">
           <canvas :ref="(el) => setCanvasRef(el, page)" class="page-canvas" />
-          <div class="text-layer textLayer" :ref="(el) => setTextLayerRef(el, page)"></div>
           <div class="page-overlay"></div>
         </div>
         <div class="page-number">第 {{ page.pageNumber }} 頁</div>
@@ -560,12 +584,16 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
   display: block;
   width: 100%;
   height: auto;
+  position: relative;
+  z-index: 0;
+  pointer-events: none; /* 讓選取事件命中文字層 */
 }
 
 .page-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none; /* 不阻擋文字選取/點擊 */
+  z-index: 1;
 }
 
 .page-number {
@@ -573,18 +601,23 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
   color: var(--text-muted, #6b7280);
 }
 
-/* PDF.js 文字層 */
-.text-layer, .textLayer {
+/* PDF.js 文字層（使用 deep 以套用到動態插入的節點） */
+:deep(.textLayer) {
   position: absolute;
-  inset: 0;
-  color: transparent; /* 避免與底圖顏色混干擾 */
+  left: 0;
+  top: 0;
+  pointer-events: auto;
+  z-index: 2;
+  cursor: text;
   user-select: text;
   -webkit-user-select: text;
-  pointer-events: auto;
 }
-.text-layer span, .textLayer span {
+:deep(.textLayer span) {
   position: absolute;
   transform-origin: 0 0;
   white-space: pre;
+  line-height: 1;
+  user-select: text;
+  -webkit-user-select: text;
 }
 </style>
