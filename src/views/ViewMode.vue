@@ -70,6 +70,7 @@ async function ensureBasePageWidth() {
 }
 const lastAppliedScale = ref(1)
 function setZoomFit() { applyScaleWithAnchor(computeFitScale(), 'fit') }
+function setZoomActual() { applyScaleWithAnchor(1, 'actual') }
 async function applyScaleWithAnchor(newScale: number, mode: 'actual'|'fit'|'custom' = 'custom') {
   const viewer: any = viewerRef.value
   const page = currentPage.value || 1
@@ -328,16 +329,19 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
 <template>
   <div class="view-mode-root">
     <header class="view-header" v-if="props.activeFile">
-      <div class="title">
+      <div class="header-left">
         <button v-if="leftCollapsed" class="btn-expand" type="button" @click="setLeftCollapsed?.(false)"
           aria-label="展開側欄" title="展開側欄">
           <ChevronDoubleRightIcon class="icon" aria-hidden="true" />
         </button>
-        <h2 :title="props.activeFile.name">{{ props.activeFile.name }}</h2>
       </div>
       <div class="header-right">
         <div class="zoom-controls">
+          <span class="zoom-indicator">{{ Math.round(scale * 100) }}%</span>
+          <button type="button" class="btn" :class="{ active: zoomMode === 'actual' }"
+            @click="setZoomActual">實際大小</button>
           <button type="button" class="btn" :class="{ active: zoomMode === 'fit' }" @click="setZoomFit">縮放到適當大小</button>
+
         </div>
         <div class="page-controls" v-if="pageCount">
           <button class="btn nav" type="button" :disabled="currentPage <= 1" @click="prevPage" aria-label="上一頁">
@@ -391,22 +395,15 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
 
 .view-header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border, #e5e7eb);
 }
 
-.view-header h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text, #111827);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.header-left { display: flex; align-items: center; gap: 6px; }
+.header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 
 .meta {
   color: var(--text-muted, #6b7280);
@@ -414,40 +411,35 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
   margin: 0;
 }
 
-.view-header .title {
-  flex: 1 1 auto;
-  min-width: 0;
-  /* 允許收縮以觸發 ellipsis */
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-right {
-  flex-shrink: 0;
-}
 
 .zoom-controls {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 .zoom-controls .btn {
   border: 1px solid var(--border, #e5e7eb);
   background: #fff;
   border-radius: 6px;
-  padding: 4px 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  line-height: 1.2;
   cursor: pointer;
 }
 
 .zoom-controls .btn.active {
   background: var(--hover, #f3f4f6);
+}
+
+.zoom-controls .zoom-indicator {
+  display: inline-flex;
+  width: 56px;
+  justify-content: flex-end;
+  align-items: center;
+  color: var(--text-muted, #6b7280);
+  font-size: 13px;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .btn-expand { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: none; background: transparent; color: var(--text, #111827); border-radius: 6px; cursor: pointer; margin-right: 6px; }
