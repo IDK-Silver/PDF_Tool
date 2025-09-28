@@ -59,15 +59,20 @@ body {
 }
 *::-webkit-scrollbar-track {
   background: var(--scrollbar-track);
+  border: none;
 }
 *::-webkit-scrollbar-thumb {
   background-color: var(--scrollbar-thumb);
   border-radius: 8px;
-  border: 1.5px solid transparent; /* keeps it visually thin, no shadow */
-  background-clip: padding-box;
+  /* 移除所有邊線 */
+  border: none;
+  background-clip: content-box;
 }
 *::-webkit-scrollbar-thumb:hover {
   background-color: var(--scrollbar-thumb-hover);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .panel {

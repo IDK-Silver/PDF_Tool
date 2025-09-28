@@ -686,6 +686,23 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
   background: var(--surface, #f9fafb);
 }
 
+/* 確保 PDF 檢視器的滾動條也沒有邊線 */
+.pdf-viewer::-webkit-scrollbar {
+  width: 6px;
+}
+.pdf-viewer::-webkit-scrollbar-track {
+  background: transparent;
+  border: none;
+}
+.pdf-viewer::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 8px;
+  border: none;
+}
+.pdf-viewer::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
 .empty-state {
   margin: auto;
   color: var(--text-muted, #6b7280);
