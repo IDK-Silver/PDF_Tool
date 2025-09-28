@@ -5,18 +5,12 @@ const props = defineProps<{ file: PdfFile; active?: boolean; disabled?: boolean 
 
 const emit = defineEmits<{
   (e: 'select', id: string): void
-  (e: 'context', payload: { id: string; x: number; y: number }): void
   (e: 'remove', id: string): void
 }>()
 
 function onSelect() {
   if (props.disabled) return
   emit('select', props.file.id)
-}
-function onContext(e: MouseEvent) {
-  e.preventDefault()
-  if (props.disabled) return
-  emit('context', { id: props.file.id, x: e.clientX, y: e.clientY })
 }
 function onRemove(e: MouseEvent) {
   e.stopPropagation()
@@ -33,11 +27,10 @@ function onRemove(e: MouseEvent) {
     tabindex="0"
     @click="onSelect"
     @keydown.enter.prevent="onSelect"
-    @contextmenu="onContext"
     :aria-selected="props.active"
   >
     <div class="name">{{ props.file.name }}</div>
-    <button class="delete-btn" type="button" title="刪除" @click="onRemove">刪除</button>
+    <button class="delete-btn" type="button" title="刪除" aria-label="刪除" @click="onRemove">刪除</button>
   </div>
 </template>
 
@@ -70,7 +63,9 @@ function onRemove(e: MouseEvent) {
   border-radius: var(--radius-sm, 6px);
   padding: 4px 6px;
   cursor: pointer;
+  opacity: 0; /* hover/active 才顯示，降低噪音 */
 }
+.row:hover .delete-btn, .row.active .delete-btn { opacity: 1; }
 .delete-btn:hover { background: var(--hover, #f9fafb); color: #dc2626; }
 .delete-btn:focus { outline: 2px solid var(--ring, rgba(37,99,235,.5)); outline-offset: 2px; }
 </style>
