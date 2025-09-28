@@ -23,6 +23,12 @@ export type PersistedState = {
     leftWidthPx?: number
     leftCollapsed?: boolean
   }
+  pageHistory?: {
+    [filePath: string]: {
+      currentPage: number
+      lastViewed: number // timestamp
+    }
+  }
 }
 
 const FILE_NAME = 'state.json'

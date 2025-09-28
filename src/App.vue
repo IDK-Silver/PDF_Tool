@@ -8,7 +8,7 @@ import { useModeFiles } from './composables/useModeFiles'
 import type { Mode } from './types/pdf'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { loadAppState, saveAppStateDebounced } from './composables/persistence'
+import { loadAppState, saveAppState, saveAppStateDebounced } from './composables/persistence'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,18 +99,39 @@ onMounted(async () => {
   try {
     const persisted = await loadAppState()
     if (persisted) {
+      console.log('[App.vue] Loading persisted state:', persisted)
       filesView.value = Array.isArray(persisted.files?.view) ? persisted.files.view : []
       filesConvert.value = Array.isArray(persisted.files?.convert) ? persisted.files.convert : []
       filesCompose.value = Array.isArray(persisted.files?.compose) ? persisted.files.compose : []
-      activeViewId.value = persisted.active?.view ?? null
-      activeConvertId.value = persisted.active?.convert ?? null
-      activeComposeId.value = persisted.active?.compose ?? null
+      console.log('[App.vue] Loaded files:', filesView.value.map(f => ({id: f.id, name: f.name})))
+
+      // 直接使用持久化的 activeId，不要覆蓋
+      const persistedViewId = persisted.active?.view
+      const persistedConvertId = persisted.active?.convert
+      const persistedComposeId = persisted.active?.compose
+
+      console.log('[App.vue] Setting activeViewId to:', persistedViewId)
+      activeViewId.value = persistedViewId ?? null
+      activeConvertId.value = persistedConvertId ?? null
+      activeComposeId.value = persistedComposeId ?? null
+      console.log('[App.vue] activeViewId after setting:', activeViewId.value)
+      // 驗證 activeViewId 是否存在於檔案列表中
+      const foundFile = filesView.value.find(f => f.id === activeViewId.value)
+      console.log('[App.vue] Active file found:', foundFile ? foundFile.name : 'NOT FOUND')
+
       qView.value = persisted.queries?.view ?? ''
       qConvert.value = persisted.queries?.convert ?? ''
       qCompose.value = persisted.queries?.compose ?? ''
       if (persisted.lastMode) mode.value = persisted.lastMode
       if (persisted.ui?.leftWidthPx) leftWidth.value = clamp(persisted.ui.leftWidthPx)
       if (typeof persisted.ui?.leftCollapsed === 'boolean') leftCollapsed.value = persisted.ui.leftCollapsed
+
+      // 移除自動選擇第一個檔案的邏輯，保持使用者的選擇
+      // 只有在完全沒有 activeId 時才選擇第一個
+      if (!activeViewId.value && filesView.value.length > 0) {
+        console.log('[App.vue] No active file selected, selecting first file')
+        activeViewId.value = filesView.value[0].id
+      }
     }
 
     window.addEventListener('dragover', prevent)
@@ -154,7 +175,64 @@ onMounted(async () => {
   ], persistNow, { deep: true })
 })
 
+// 在應用關閉前立即儲存狀態（使用同步版本）
+const saveBeforeUnload = (e?: BeforeUnloadEvent) => {
+  const state = {
+    version: 1 as const,
+    lastMode: mode.value,
+    files: {
+      view: filesView.value,
+      convert: filesConvert.value,
+      compose: filesCompose.value,
+    },
+    active: {
+      view: activeViewId.value,
+      convert: activeConvertId.value,
+      compose: activeComposeId.value,
+    },
+    queries: {
+      view: qView.value,
+      convert: qConvert.value,
+      compose: qCompose.value,
+    },
+    ui: { leftWidthPx: leftWidth.value, leftCollapsed: leftCollapsed.value },
+  }
+
+  console.log('[App.vue] Saving state before unload, activeViewId:', activeViewId.value)
+
+  // 嘗試同步儲存
+  try {
+    // 直接呼叫 saveAppState（它是異步的，但我們立即執行）
+    saveAppState(state).then(() => {
+      console.log('[App.vue] State saved successfully before unload')
+    }).catch(err => {
+      console.error('[App.vue] Failed to save state before unload:', err)
+    })
+
+    // 在 Tauri 環境中，給一點時間讓儲存完成
+    if (e) {
+      e.preventDefault()
+      e.returnValue = ''
+      // 延遲一下讓儲存完成
+      setTimeout(() => {
+        window.close()
+      }, 100)
+      return false
+    }
+  } catch (err) {
+    console.error('[App.vue] Error in saveBeforeUnload:', err)
+  }
+}
+
+// 監聽頁面關閉事件
+window.addEventListener('beforeunload', saveBeforeUnload)
+// Tauri 特定的關閉事件
+window.addEventListener('unload', () => saveBeforeUnload())
+
 onBeforeUnmount(() => {
+  saveBeforeUnload() // 確保在組件卸載前儲存
+  window.removeEventListener('beforeunload', saveBeforeUnload)
+  window.removeEventListener('unload', () => saveBeforeUnload())
   window.removeEventListener('dragover', prevent)
   window.removeEventListener('drop', prevent)
   try { unlistenDrag?.() } finally { unlistenDrag = null }
@@ -187,8 +265,9 @@ function onTabNavigate(m: Mode) { mode.value = m }
 
 // Persist on changes (lists, active selections, queries, and mode)
 function persistNow() {
-  saveAppStateDebounced({
-    version: 1,
+  console.log('[App.vue] Persisting state, activeViewId:', activeViewId.value)
+  const state = {
+    version: 1 as const,
     lastMode: mode.value,
     files: {
       view: filesView.value,
@@ -206,7 +285,18 @@ function persistNow() {
       compose: qCompose.value,
     },
     ui: { leftWidthPx: leftWidth.value, leftCollapsed: leftCollapsed.value },
-  }, 1000)
+  }
+
+  // 對於 activeId 的變更，立即儲存；其他變更使用防抖
+  if (activeViewId.value || activeConvertId.value || activeComposeId.value) {
+    // 立即儲存
+    saveAppState(state).then(() => {
+      console.log('[App.vue] State saved immediately, activeViewId:', activeViewId.value)
+    })
+  } else {
+    // 使用防抖儲存
+    saveAppStateDebounced(state, 1000)
+  }
 }
 
 // 拖移調整左欄寬度

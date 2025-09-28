@@ -41,7 +41,10 @@ export function useModeFiles(mode: Ref<Mode>) {
 
   function setActiveId(id: string | null, m?: Mode) {
     const mm = m ?? mode.value
-    if (mm === 'view') activeViewId.value = id
+    if (mm === 'view') {
+      console.log('[useModeFiles] Setting activeViewId from', activeViewId.value, 'to', id)
+      activeViewId.value = id
+    }
     else if (mm === 'convert') activeConvertId.value = id
     else activeComposeId.value = id
   }

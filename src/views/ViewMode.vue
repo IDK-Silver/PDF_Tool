@@ -9,7 +9,7 @@ import type { ContextMenuItem, PagePointerContext } from '../types/viewer'
 import { inject } from 'vue'
 import type { Ref } from 'vue'
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
-import { loadSettings, type AppSettings } from '../composables/persistence'
+import { loadSettings, type AppSettings, loadAppState, saveAppStateDebounced } from '../composables/persistence'
 import { PDFDocument } from 'pdf-lib'
 import { getDocument, type PDFDocumentProxy } from '../lib/pdfjs'
 
@@ -20,7 +20,21 @@ const loading = ref(false)
 const viewerError = ref<string | null>(null)
 const pageCount = ref(0)
 const currentPage = ref(1)
+const pageHistory = ref<Record<string, { currentPage: number; lastViewed: number }>>({})  // 頁數歷史記錄
+const pageHistoryLoaded = ref(false)  // 標記 pageHistory 是否已載入
 const suppressVisibleUpdate = ref(false)
+
+// 立即載入 pageHistory，在任何 watch 執行之前
+loadAppState().then(state => {
+  if (state?.pageHistory) {
+    pageHistory.value = state.pageHistory
+    console.log('[ViewMode] Loaded pageHistory with', Object.keys(pageHistory.value).length, 'entries')
+  }
+  pageHistoryLoaded.value = true
+}).catch(e => {
+  console.error('[ViewMode] Failed to load pageHistory:', e)
+  pageHistoryLoaded.value = true
+})
 
 const exporting = ref(false)
 const exportBanner = ref<{ kind: 'success' | 'error'; text: string } | null>(null)
@@ -124,7 +138,26 @@ watch(
     contextMenuVisible.value = false
     lastPageContext.value = null
     pageCount.value = 0
-    currentPage.value = 1
+
+    // 等待 pageHistory 載入完成
+    if (!pageHistoryLoaded.value) {
+      await new Promise(resolve => {
+        const checkInterval = setInterval(() => {
+          if (pageHistoryLoaded.value) {
+            clearInterval(checkInterval)
+            resolve(undefined)
+          }
+        }, 50)
+      })
+    }
+
+    // 檢查是否有保存的頁數，如果沒有才重置為 1
+    if (path && pageHistory.value[path]) {
+      currentPage.value = pageHistory.value[path].currentPage
+      console.log(`[ViewMode] Restoring page ${pageHistory.value[path].currentPage} for file`)
+    } else {
+      currentPage.value = 1
+    }
     viewerError.value = null
     exportBanner.value = null
     exporting.value = false
@@ -278,6 +311,17 @@ async function exportCurrentPageAsPdf(context: PagePointerContext) {
 
 function onDocLoaded(count: number) {
   pageCount.value = count
+  // 恢復之前瀏覽的頁數
+  if (props.activeFile?.path && pageHistory.value[props.activeFile.path]) {
+    const savedPage = pageHistory.value[props.activeFile.path].currentPage
+    if (savedPage > 1 && savedPage <= count) {
+      // 使用較長延遲確保 PDF 完全渲染
+      setTimeout(() => {
+        goToPage(savedPage)
+        console.log(`[ViewMode] Restored page ${savedPage} after PDF load`)
+      }, 150)
+    }
+  }
 }
 
 function onDocError(error: unknown) {
@@ -296,13 +340,32 @@ const viewerRef = ref<InstanceType<typeof PdfViewer> | null>(null)
 
 function onVisiblePage(pageNumber: number) {
   if (suppressVisibleUpdate.value) return
-  if (pageNumber >= 1 && pageNumber <= pageCount.value) currentPage.value = pageNumber
+  if (pageNumber >= 1 && pageNumber <= pageCount.value) {
+    currentPage.value = pageNumber
+    // 儲存頁數到歷史記錄
+    if (props.activeFile?.path) {
+      pageHistory.value[props.activeFile.path] = {
+        currentPage: pageNumber,
+        lastViewed: Date.now()
+      }
+      savePageHistory()
+    }
+  }
 }
 
 function goToPage(n: number) {
   if (!viewerRef.value) return
   const clamped = Math.max(1, Math.min(pageCount.value || 1, Math.floor(n)))
   viewerRef.value.scrollToPage(clamped)
+  // 手動跳轉頁面時也儲存
+  if (props.activeFile?.path && clamped !== currentPage.value) {
+    currentPage.value = clamped
+    pageHistory.value[props.activeFile.path] = {
+      currentPage: clamped,
+      lastViewed: Date.now()
+    }
+    savePageHistory()
+  }
 }
 
 function prevPage() { goToPage((currentPage.value || 1) - 1) }
@@ -313,7 +376,9 @@ onMounted(async () => {
   try {
     settings.value = await loadSettings()
     if (settings.value.defaultZoomMode) zoomMode.value = settings.value.defaultZoomMode
-  } catch { }
+  } catch (e) {
+    console.error('[ViewMode] Error loading settings:', e)
+  }
   const el = viewerContainerRef.value
   if (el && 'ResizeObserver' in window) {
     resizeObs = new ResizeObserver(() => {
@@ -358,6 +423,36 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
     exportBanner.value = null
     bannerTimer = null
   }, ms)
+}
+
+// 儲存頁數歷史到持久化存儲
+async function savePageHistory() {
+  try {
+    const state = await loadAppState()
+    if (state) {
+      // 合併現有的 pageHistory，避免覆蓋其他檔案的記錄
+      const mergedHistory = {
+        ...(state.pageHistory || {}),
+        ...pageHistory.value
+      }
+      saveAppStateDebounced({
+        ...state,
+        pageHistory: mergedHistory
+      }, 1000) // 增加防抖時間到 1 秒
+    } else {
+      // 如果沒有現有狀態，建立新的
+      saveAppStateDebounced({
+        version: 1,
+        lastMode: 'view' as const,
+        files: { view: [], convert: [], compose: [] },
+        active: { view: null, convert: null, compose: null },
+        queries: { view: '', convert: '', compose: '' },
+        pageHistory: pageHistory.value
+      }, 1000)
+    }
+  } catch (error) {
+    console.warn('[ViewMode] Failed to save page history:', error)
+  }
 }
 </script>
 
