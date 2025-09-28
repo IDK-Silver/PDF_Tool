@@ -53,8 +53,21 @@ export function useModeFiles(mode: Ref<Mode>) {
     const list = getListRef(m)
     if (!hasPath(m, file.path)) {
       const id = Math.random().toString(36).slice(2, 9)
-      list.value.push({ id, path: file.path, name: file.name })
+      // 使用 unshift 將新檔案加到列表開頭
+      list.value.unshift({ id, path: file.path, name: file.name })
+      // 如果是當前模式，自動選擇新增的檔案
+      if (m === mode.value) {
+        setActiveId(id, m)
+      }
+      return id
     }
+    // 如果檔案已存在，找到它的 ID 並選擇它
+    const existingFile = list.value.find(f => f.path === file.path)
+    if (existingFile && m === mode.value) {
+      setActiveId(existingFile.id, m)
+      return existingFile.id
+    }
+    return null
   }
 
   function removeFrom(m: Mode, id: string) {

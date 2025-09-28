@@ -100,9 +100,10 @@ onMounted(async () => {
     const persisted = await loadAppState()
     if (persisted) {
       console.log('[App.vue] Loading persisted state:', persisted)
-      filesView.value = Array.isArray(persisted.files?.view) ? persisted.files.view : []
-      filesConvert.value = Array.isArray(persisted.files?.convert) ? persisted.files.convert : []
-      filesCompose.value = Array.isArray(persisted.files?.compose) ? persisted.files.compose : []
+      // 反轉列表順序，讓最新的檔案在最上面
+      filesView.value = Array.isArray(persisted.files?.view) ? persisted.files.view.reverse() : []
+      filesConvert.value = Array.isArray(persisted.files?.convert) ? persisted.files.convert.reverse() : []
+      filesCompose.value = Array.isArray(persisted.files?.compose) ? persisted.files.compose.reverse() : []
       console.log('[App.vue] Loaded files:', filesView.value.map(f => ({id: f.id, name: f.name})))
 
       // 直接使用持久化的 activeId，不要覆蓋
@@ -150,7 +151,15 @@ onMounted(async () => {
         if (!pdfs.length) {
           console.debug('DragDrop: no PDFs in payload', paths)
         }
-        for (const path of pdfs) addTo(mode.value, { path, name: basename(path) })
+        let lastAddedId = null
+        for (const path of pdfs) {
+          const id = addTo(mode.value, { path, name: basename(path) })
+          if (id) lastAddedId = id
+        }
+        // 自動選擇最後拖入的檔案
+        if (lastAddedId) {
+          setActiveId(lastAddedId)
+        }
       }
     })
   } catch (err) {
@@ -250,8 +259,14 @@ async function onAddFiles() {
     })
     if (!selected) return
     const paths = Array.isArray(selected) ? selected : [selected]
+    let lastAddedId = null
     for (const path of paths) {
-      addTo(mode.value, { path, name: basename(path) })
+      const id = addTo(mode.value, { path, name: basename(path) })
+      if (id) lastAddedId = id
+    }
+    // 自動選擇最後新增的檔案
+    if (lastAddedId) {
+      setActiveId(lastAddedId)
     }
   } catch (e) {
     console.warn('open dialog failed', e)
