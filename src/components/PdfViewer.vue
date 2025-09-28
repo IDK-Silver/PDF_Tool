@@ -232,6 +232,11 @@ async function renderTextLayerForPage(doc: PDFDocumentProxy, pageView: PageView)
         ;(divEl.style as any)['userSelect'] = 'text'
         ;(divEl.style as any)['webkitUserSelect'] = 'text'
         divEl.style.zIndex = '2'
+        // Ensure CSS vars used by pdf_viewer.css reflect current zoom
+        try {
+          divEl.style.setProperty('--scale-factor', String(viewport.scale))
+          divEl.style.setProperty('--total-scale-factor', String(viewport.scale))
+        } catch {}
       }
     } catch {}
   } catch (error: any) {
