@@ -39,6 +39,11 @@ body {
     background: var(--bg);
     color: var(--text);
     font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
+    /* 防止文字被選取，讓應用程式更像原生應用 */
+    user-select: none;
+    -webkit-user-select: none;
+    /* 防止拖曳圖片和連結 */
+    -webkit-user-drag: none;
 }
 
 /* Thin, minimal scrollbars without shadows */
@@ -99,10 +104,28 @@ body {
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 6px 8px;
+    /* 輸入框需要允許選取文字 */
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .input:focus,
 .select:focus {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+}
+
+/* 允許選取文字的特殊類別 */
+.selectable,
+.selectable * {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+/* 確保某些元素可以選取 */
+input,
+textarea,
+[contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
 }

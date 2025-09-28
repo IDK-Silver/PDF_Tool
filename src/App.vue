@@ -173,6 +173,10 @@ onMounted(async () => {
   }
   window.addEventListener('resize', handleWinResize)
   window.addEventListener('keydown', onGlobalKey)
+
+  // 禁用預設的右鍵選單（除了 PDF 檢視器區域）
+  window.addEventListener('contextmenu', handleContextMenu)
+
   // register watchers after initial load
   watch([
     filesView, filesConvert, filesCompose,
@@ -238,12 +242,23 @@ window.addEventListener('beforeunload', saveBeforeUnload)
 // Tauri 特定的關閉事件
 window.addEventListener('unload', () => saveBeforeUnload())
 
+// 儲存右鍵事件處理函數的參考
+const handleContextMenu = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  const isPdfViewer = target.closest('.pdf-viewer') || target.closest('.page-inner')
+  const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA'
+  if (!isPdfViewer && !isInput) {
+    e.preventDefault()
+  }
+}
+
 onBeforeUnmount(() => {
   saveBeforeUnload() // 確保在組件卸載前儲存
   window.removeEventListener('beforeunload', saveBeforeUnload)
   window.removeEventListener('unload', () => saveBeforeUnload())
   window.removeEventListener('dragover', prevent)
   window.removeEventListener('drop', prevent)
+  window.removeEventListener('contextmenu', handleContextMenu)
   try { unlistenDrag?.() } finally { unlistenDrag = null }
   if (handleWinResize) {
     try { window.removeEventListener('resize', handleWinResize) } finally { handleWinResize = null }
