@@ -2,10 +2,10 @@
 import { useRouter } from 'vue-router'
 import { ref, watch, onMounted } from 'vue'
 import { loadSettings, saveSettingsDebounced, type AppSettings } from '../composables/persistence'
+import { ChevronLeftIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 function goBack() {
-  // 若有上一頁則返回，否則導回 /view
   if (history.length > 1) router.back()
   else router.replace('/view')
 }
@@ -13,7 +13,7 @@ function goBack() {
 const exportDpi = ref<number>(300)
 const exportFormat = ref<'png' | 'jpeg'>('png')
 const jpegQuality = ref<number>(0.9)
-const defaultZoomMode = ref<'actual'|'fit'>('fit')
+const defaultZoomMode = ref<'actual' | 'fit'>('fit')
 
 onMounted(async () => {
   const s = await loadSettings()
@@ -41,11 +41,13 @@ watch([exportDpi, exportFormat, jpegQuality, defaultZoomMode], persist, { deep: 
 
 <template>
   <div class="settings-root">
-    <div class="settings-header">
-      <button class="btn-back" type="button" @click="goBack" aria-label="返回">← 返回</button>
-      <h3 class="title">設定</h3>
-    </div>
-    <div class="panel pad">
+    <div class="panel pad settings-panel">
+      <div class="settings-header">
+        <button class="btn-back" type="button" @click="goBack" aria-label="返回" title="返回">
+          <ChevronLeftIcon class="icon" aria-hidden="true" />
+        </button>
+        <h3 class="title">設定</h3>
+      </div>
       <div class="section">
         <h4>匯出圖片</h4>
         <div class="row">
@@ -81,14 +83,16 @@ watch([exportDpi, exportFormat, jpegQuality, defaultZoomMode], persist, { deep: 
 
 <style scoped>
 .settings-root { display: flex; flex-direction: column; gap: 12px; }
-.settings-header { display: flex; align-items: center; gap: 12px; }
-.btn-back { border: 1px solid var(--border, #e5e7eb); background: #fff; color: var(--text, #111827); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.settings-panel { padding-top: 0; }
+.settings-header { display: flex; align-items: center; gap: 8px; padding: 12px 0 10px; border-bottom: 1px solid var(--border, #e5e7eb); }
+.btn-back { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: none; background: transparent; color: var(--text, #111827); border-radius: 6px; cursor: pointer; }
 .btn-back:hover { background: var(--hover, #f3f4f6); }
+.btn-back .icon { width: 16px; height: 16px; }
 .title { margin: 0; font-size: 16px; font-weight: 600; color: var(--text, #111827); }
 .muted { color: var(--text-muted, #6b7280); }
-.section { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.section { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .row { display: flex; align-items: center; gap: 10px; }
-.label { width: 90px; color: var(--text-muted, #6b7280); }
+.label { width: 100px; color: var(--text-muted, #6b7280); }
 .input { height: 28px; padding: 0 8px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; }
 .choice { display: flex; align-items: center; gap: 12px; }
 </style>

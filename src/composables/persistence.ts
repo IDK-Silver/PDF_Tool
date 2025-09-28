@@ -21,6 +21,7 @@ export type PersistedState = {
   }
   ui?: {
     leftWidthPx?: number
+    leftCollapsed?: boolean
   }
 }
 

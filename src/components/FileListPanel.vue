@@ -67,7 +67,7 @@ const emit = defineEmits<{
 
 .panel.list {
   border: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
+  box-shadow: white;
 }
 
 .list-head {
@@ -76,8 +76,9 @@ const emit = defineEmits<{
   grid-template-columns: 7fr auto;
   gap: 8px;
   /* 與項目區塊對齊 */
-  padding: 2px;
-  padding-bottom: 6px;
+  padding: 8px;
+  padding-left: 4px;  /* 對齊 ModeTabs 左內距（10px）*/
+  padding-right: 12px; /* 對齊列表列的 (files 8px + row 8px) */
 }
 
 .head-right {
@@ -90,6 +91,7 @@ const emit = defineEmits<{
   min-height: 0;
   overflow-y: auto;
   padding: 2px;
+  padding-left: 0px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -117,7 +119,7 @@ const emit = defineEmits<{
   color: var(--text-muted, #6b7280);
 }
 
-.icon-btn { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border, #e5e7eb); background: #fff; color: var(--text, #111827); border-radius: 6px; cursor: pointer; }
+.icon-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--text, #111827); border-radius: 6px; cursor: pointer; }
 .icon-btn:hover { background: var(--hover, #f3f4f6); }
 .icon-btn .icon { width: 16px; height: 16px; }
 </style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router'
-import { computed } from 'vue'
-import { Cog6ToothIcon } from '@heroicons/vue/24/outline'
+import { computed, inject } from 'vue'
+import { Cog6ToothIcon, ChevronDoubleLeftIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 const route = useRoute()
@@ -9,16 +9,21 @@ const isSettings = computed(() => route.path.startsWith('/settings'))
 function openSettings() {
   if (!isSettings.value) router.push('/settings')
 }
+const setLeftCollapsed = inject('setLeftCollapsed') as ((v?: boolean) => void) | undefined
+function collapseLeft() { setLeftCollapsed?.(true) }
 </script>
 
 <template>
   <div class="app-header">
     <div class="title" aria-label="App 名稱">PDF Tool</div>
-    <button type="button" class="btn-settings" :class="{ active: isSettings }" @click="openSettings" aria-label="開啟設定"
-      title="設定">
-      <Cog6ToothIcon class="icon" aria-hidden="true" />
-      <span class="label">設定</span>
-    </button>
+    <div class="actions">
+      <button type="button" class="btn-settings" :class="{ active: isSettings }" @click="openSettings" aria-label="開啟設定" title="設定">
+        <Cog6ToothIcon class="icon" aria-hidden="true" />
+      </button>
+      <button type="button" class="btn-collapse" @click="collapseLeft" aria-label="收起側欄" title="收起側欄">
+        <ChevronDoubleLeftIcon class="icon" aria-hidden="true" />
+      </button>
+    </div>
   </div>
 </template>
 
@@ -39,6 +44,8 @@ function openSettings() {
   font-weight: 600;
   color: var(--text, #111827);
 }
+
+.actions { display: inline-flex; align-items: center; gap: 8px; }
 
 .btn-settings {
   display: inline-flex;
@@ -72,4 +79,20 @@ function openSettings() {
 .btn-settings.active .icon {
   color: var(--text, #111827);
 }
+
+.btn-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;            /* 不要邊框 */
+  background: transparent; /* 與標題一致，hover 再給底色 */
+  color: var(--text, #111827);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-collapse:hover { background: var(--hover, #f3f4f6); }
+.btn-collapse .icon { width: 16px; height: 16px; }
 </style>

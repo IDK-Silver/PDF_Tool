@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, markRaw } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, markRaw, nextTick } from 'vue'
 import { readFile, writeFile } from '@tauri-apps/plugin-fs'
 import { save } from '@tauri-apps/plugin-dialog'
 import type { PdfFile } from '../types/pdf'
 import PdfViewer from '../components/PdfViewer.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import type { ContextMenuItem, PagePointerContext } from '../types/viewer'
+import { inject } from 'vue'
+import type { Ref } from 'vue'
+import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
 import { loadSettings, type AppSettings } from '../composables/persistence'
 import { getDocument, type PDFDocumentProxy } from '../lib/pdfjs'
 
@@ -16,6 +19,7 @@ const loading = ref(false)
 const viewerError = ref<string | null>(null)
 const pageCount = ref(0)
 const currentPage = ref(1)
+const suppressVisibleUpdate = ref(false)
 
 const exporting = ref(false)
 const exportBanner = ref<{ kind: 'success' | 'error'; text: string } | null>(null)
@@ -33,6 +37,10 @@ const menuItems = computed<ContextMenuItem[]>(() => {
 })
 
 let loadToken = 0
+
+// injected controls for left column collapse
+const leftCollapsed = inject('leftCollapsed') as Ref<boolean> | undefined
+const setLeftCollapsed = inject('setLeftCollapsed') as ((v?: boolean) => void) | undefined
 
 // Zoom state
 const scale = ref(1)
@@ -58,10 +66,26 @@ async function ensureBasePageWidth() {
     const page = await pdfDoc.value.getPage(1)
     const viewport = page.getViewport({ scale: 1 })
     basePageWidth.value = viewport.width
-  } catch {}
+  } catch { }
 }
-function setZoomActual() { zoomMode.value = 'actual'; scale.value = 1 }
-function setZoomFit() { zoomMode.value = 'fit'; scale.value = computeFitScale() }
+const lastAppliedScale = ref(1)
+function setZoomFit() { applyScaleWithAnchor(computeFitScale(), 'fit') }
+async function applyScaleWithAnchor(newScale: number, mode: 'actual'|'fit'|'custom' = 'custom') {
+  const viewer: any = viewerRef.value
+  const page = currentPage.value || 1
+  const before = viewer?.getPageMetrics?.(page)
+  const oldOffset = before ? Math.max(0, before.scrollTop - before.pageTop) : 0
+  const ratio = lastAppliedScale.value ? (newScale / lastAppliedScale.value) : 1
+  zoomMode.value = mode
+  scale.value = newScale
+  suppressVisibleUpdate.value = true
+  await nextTick(); await nextTick()
+  if (viewer?.scrollToPageOffset) viewer.scrollToPageOffset(page, Math.max(0, oldOffset * ratio))
+  lastAppliedScale.value = newScale
+  currentPage.value = page
+  await nextTick()
+  suppressVisibleUpdate.value = false
+}
 function zoomIn(step = 0.1) { zoomMode.value = 'custom'; scale.value = clampScale(scale.value + step) }
 function zoomOut(step = 0.1) { zoomMode.value = 'custom'; scale.value = clampScale(scale.value - step) }
 
@@ -92,10 +116,10 @@ watch(
   async (path, _old, onCleanup) => {
     loadToken += 1
     const token = loadToken
-  contextMenuVisible.value = false
-  lastPageContext.value = null
-  pageCount.value = 0
-  currentPage.value = 1
+    contextMenuVisible.value = false
+    lastPageContext.value = null
+    pageCount.value = 0
+    currentPage.value = 1
     viewerError.value = null
     exportBanner.value = null
     exporting.value = false
@@ -141,9 +165,9 @@ watch(
 
 onBeforeUnmount(async () => {
   await destroyCurrentDoc()
-  if (resizeObs) { try { resizeObs.disconnect() } catch {} resizeObs = null }
+  if (resizeObs) { try { resizeObs.disconnect() } catch { } resizeObs = null }
   window.removeEventListener('keydown', onKeydown)
-  if (bannerTimer) { try { clearTimeout(bannerTimer) } catch {} bannerTimer = null }
+  if (bannerTimer) { try { clearTimeout(bannerTimer) } catch { } bannerTimer = null }
 })
 
 function closeContextMenu() {
@@ -202,7 +226,7 @@ async function exportCurrentPage(context: PagePointerContext) {
 
     const targetPath = await save({
       defaultPath: defaultName,
-      filters: [ settings.value.exportFormat === 'jpeg' ? { name: 'JPEG', extensions: ['jpg','jpeg'] } : { name: 'PNG', extensions: ['png'] } ],
+      filters: [settings.value.exportFormat === 'jpeg' ? { name: 'JPEG', extensions: ['jpg', 'jpeg'] } : { name: 'PNG', extensions: ['png'] }],
     })
     if (!targetPath) return
 
@@ -235,6 +259,7 @@ watch(
 const viewerRef = ref<InstanceType<typeof PdfViewer> | null>(null)
 
 function onVisiblePage(pageNumber: number) {
+  if (suppressVisibleUpdate.value) return
   if (pageNumber >= 1 && pageNumber <= pageCount.value) currentPage.value = pageNumber
 }
 
@@ -252,7 +277,7 @@ onMounted(async () => {
   try {
     settings.value = await loadSettings()
     if (settings.value.defaultZoomMode) zoomMode.value = settings.value.defaultZoomMode
-  } catch {}
+  } catch { }
   const el = viewerContainerRef.value
   if (el && 'ResizeObserver' in window) {
     resizeObs = new ResizeObserver(() => {
@@ -277,12 +302,12 @@ function onKeydown(e: KeyboardEvent) {
   if (!meta) return
   if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomIn() }
   else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomOut() }
-  else if (e.key === '0') { e.preventDefault(); setZoomActual() }
+  else if (e.key === '0') { e.preventDefault(); setZoomFit() }
 }
 
 function onWindowResize() {
-  if (zoomMode.value === 'fit') {
-    scale.value = computeFitScale()
+  if (zoomMode.value === 'fit' && pdfDoc.value) {
+    applyScaleWithAnchor(computeFitScale(), 'fit')
   }
 }
 
@@ -291,7 +316,7 @@ onBeforeUnmount(() => {
 })
 
 function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
-  if (bannerTimer) { try { clearTimeout(bannerTimer) } catch {} bannerTimer = null }
+  if (bannerTimer) { try { clearTimeout(bannerTimer) } catch { } bannerTimer = null }
   exportBanner.value = { kind, text }
   bannerTimer = setTimeout(() => {
     exportBanner.value = null
@@ -303,10 +328,15 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
 <template>
   <div class="view-mode-root">
     <header class="view-header" v-if="props.activeFile">
-      <div class="title"><h2 :title="props.activeFile.name">{{ props.activeFile.name }}</h2></div>
+      <div class="title">
+        <button v-if="leftCollapsed" class="btn-expand" type="button" @click="setLeftCollapsed?.(false)"
+          aria-label="展開側欄" title="展開側欄">
+          <ChevronDoubleRightIcon class="icon" aria-hidden="true" />
+        </button>
+        <h2 :title="props.activeFile.name">{{ props.activeFile.name }}</h2>
+      </div>
       <div class="header-right">
         <div class="zoom-controls">
-          <button type="button" class="btn" :class="{ active: zoomMode === 'actual' }" @click="setZoomActual">實際大小</button>
           <button type="button" class="btn" :class="{ active: zoomMode === 'fit' }" @click="setZoomFit">縮放到適當大小</button>
         </div>
         <div class="page-controls" v-if="pageCount">
@@ -315,17 +345,9 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <input
-            class="page-input"
-            type="number"
-            :min="1"
-            :max="pageCount"
-            v-model.number="currentPage"
-            @keydown.enter.prevent="goToPage(currentPage)"
-            @blur="goToPage(currentPage)"
-            :style="{ width: (String(pageCount).length + 1) + 'ch' }"
-            aria-label="目前頁碼"
-          />
+          <input class="page-input" type="number" :min="1" :max="pageCount" v-model.number="currentPage"
+            @keydown.enter.prevent="goToPage(currentPage)" @blur="goToPage(currentPage)"
+            :style="{ width: (String(pageCount).length + 1) + 'ch' }" aria-label="目前頁碼" />
           <span class="meta sep">/</span>
           <span class="meta total">{{ pageCount }}</span>
           <button class="btn nav" type="button" :disabled="currentPage >= pageCount" @click="nextPage" aria-label="下一頁">
@@ -343,16 +365,8 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
     <div v-else class="viewer-panel" ref="viewerContainerRef">
       <div v-if="viewerError" class="alert error">{{ viewerError }}</div>
       <div v-else-if="loading" class="loading-state">正在載入 PDF…</div>
-      <PdfViewer
-        v-else-if="pdfDoc"
-        :doc="pdfDoc"
-        :scale="scale"
-        ref="viewerRef"
-        @doc-loaded="onDocLoaded"
-        @doc-error="onDocError"
-        @visible-page="onVisiblePage"
-        @page-contextmenu="onPageContextMenu"
-      />
+      <PdfViewer v-else-if="pdfDoc" :doc="pdfDoc" :scale="scale" ref="viewerRef" @doc-loaded="onDocLoaded"
+        @doc-error="onDocError" @visible-page="onVisiblePage" @page-contextmenu="onPageContextMenu" />
       <div v-else class="empty-state">尚未載入 PDF 內容</div>
 
       <transition name="fade">
@@ -363,14 +377,8 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
     </div>
   </div>
 
-  <ContextMenu
-    :visible="contextMenuVisible"
-    :x="contextMenuPosition.x"
-    :y="contextMenuPosition.y"
-    :items="menuItems"
-    @close="closeContextMenu"
-    @select="onMenuSelect"
-  />
+  <ContextMenu :visible="contextMenuVisible" :x="contextMenuPosition.x" :y="contextMenuPosition.y" :items="menuItems"
+    @close="closeContextMenu" @select="onMenuSelect" />
 </template>
 
 <style scoped>
@@ -408,25 +416,100 @@ function showBanner(kind: 'success' | 'error', text: string, ms = 2000) {
 
 .view-header .title {
   flex: 1 1 auto;
-  min-width: 0; /* 允許收縮以觸發 ellipsis */
+  min-width: 0;
+  /* 允許收縮以觸發 ellipsis */
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.header-right { display: flex; align-items: center; gap: 12px; }
-.header-right { flex-shrink: 0; }
-.zoom-controls { display: flex; gap: 6px; }
-.zoom-controls .btn { border: 1px solid var(--border, #e5e7eb); background: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
-.zoom-controls .btn.active { background: var(--hover, #f3f4f6); }
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
-.page-controls { display: flex; align-items: center; gap: 6px; }
-.page-controls .btn.nav { display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; line-height: 1; }
-.page-controls .btn.nav .icon { width: 16px; height: 16px; display: block; }
-.page-input { height: 28px; text-align: center; border: none; border-radius: 0; padding: 0; background: transparent; outline: none; }
-.page-input:focus { outline: none; box-shadow: none; }
+.header-right {
+  flex-shrink: 0;
+}
+
+.zoom-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.zoom-controls .btn {
+  border: 1px solid var(--border, #e5e7eb);
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.zoom-controls .btn.active {
+  background: var(--hover, #f3f4f6);
+}
+
+.btn-expand { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: none; background: transparent; color: var(--text, #111827); border-radius: 6px; cursor: pointer; margin-right: 6px; }
+
+.btn-expand:hover {
+  background: var(--hover, #f3f4f6);
+}
+
+.btn-expand .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.page-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-controls .btn.nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  line-height: 1;
+}
+
+.page-controls .btn.nav .icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.page-input {
+  height: 28px;
+  text-align: center;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  outline: none;
+}
+
+.page-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 /* hide number input arrows */
 .page-input::-webkit-outer-spin-button,
-.page-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.page-input[type=number] { -moz-appearance: textfield; }
-.page-controls .sep { margin: 0 2px; }
+.page-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.page-input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.page-controls .sep {
+  margin: 0 2px;
+}
 
 .viewer-panel {
   position: relative;

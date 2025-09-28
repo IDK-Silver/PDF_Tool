@@ -87,35 +87,56 @@ async function renderPage(doc: PDFDocumentProxy, pageView: PageView) {
   }
 }
 
+let lastDoc: PDFDocumentProxy | null = null
+let lastScale = 1
+
 watch(
   () => [props.doc as PDFDocumentProxy | null, displayScale.value] as const,
-  async ([doc]) => {
-    await resetPages()
-    if (!doc) return
-
-    emit('doc-loading')
-    const total = doc.numPages
-    pages.value = Array.from({ length: total }, (_, index) =>
-      reactive<PageView>({
-        pageNumber: index + 1,
-        width: 0,
-        height: 0,
-        scale: displayScale.value,
-        canvas: null,
-        renderTask: null,
-        container: null,
-      }),
-    )
-    await nextTick()
-    for (const pageView of pages.value) {
-      const currentDoc = toRaw(props.doc) as PDFDocumentProxy | null
-      if (!currentDoc || doc !== currentDoc) break
-      pageView.scale = displayScale.value
-      await renderPage(currentDoc, pageView)
+  async ([doc, scale]) => {
+    const currentDoc = toRaw(props.doc) as PDFDocumentProxy | null
+    if (!doc || !currentDoc) {
+      await resetPages()
+      lastDoc = null
+      return
     }
-    const finalDoc = toRaw(props.doc) as PDFDocumentProxy | null
-    if (finalDoc && doc === finalDoc) {
-      emit('doc-loaded', total)
+
+    // If document changed, rebuild DOM
+    if (doc !== lastDoc) {
+      await resetPages()
+      emit('doc-loading')
+      const total = doc.numPages
+      pages.value = Array.from({ length: total }, (_, index) =>
+        reactive<PageView>({
+          pageNumber: index + 1,
+          width: 0,
+          height: 0,
+          scale,
+          canvas: null,
+          renderTask: null,
+          container: null,
+        }),
+      )
+      await nextTick()
+      for (const pageView of pages.value) {
+        if (toRaw(props.doc) !== doc) break
+        pageView.scale = scale
+        await renderPage(doc, pageView)
+      }
+      lastDoc = doc
+      lastScale = scale
+      if (toRaw(props.doc) === doc) emit('doc-loaded', total)
+      return
+    }
+
+    // Same document, only scale changed: do not rebuild DOM, just re-render pages
+    if (scale !== lastScale) {
+      emit('doc-loading')
+      for (const pageView of pages.value) {
+        pageView.scale = scale
+        await renderPage(doc, pageView)
+      }
+      lastScale = scale
+      emit('doc-loaded', pages.value.length)
     }
   },
   { immediate: true },
@@ -134,37 +155,43 @@ function setCanvasRef(
 
 function setContainerRef(el: HTMLDivElement | Element | ComponentPublicInstance | null, page: PageView) {
   page.container = (el as HTMLDivElement | null) ?? null
-  if (page.container && io) io.observe(page.container)
 }
 
-// IntersectionObserver to detect most visible page
-let io: IntersectionObserver | null = null
-let visibleRatios = new Map<Element, number>()
-function ensureIO() {
-  if (io) return
-  const root = containerRef.value || undefined
-  io = new IntersectionObserver((entries) => {
-    for (const e of entries) visibleRatios.set(e.target, e.intersectionRatio)
-    let bestEl: Element | null = null
-    let best = 0
-    for (const [el, ratio] of visibleRatios.entries()) {
-      if (ratio > best) { best = ratio; bestEl = el }
-    }
-    if (bestEl) {
-      const pv = pages.value.find(p => p.container === bestEl)
-      if (pv) emit('visible-page', pv.pageNumber)
-    }
-  }, { root, threshold: [0, 0.25, 0.5, 0.75, 1] })
+// Compute current page on scroll using container center heuristic
+let rafId: number | null = null
+function updateCurrentPage() {
+  const container = containerRef.value
+  if (!container || !pages.value.length) return
+  const root = container.getBoundingClientRect()
+  const mid = container.scrollTop + container.clientHeight / 2
+  let bestNum = 1
+  let bestDist = Infinity
+  for (const pv of pages.value) {
+    if (!pv.container) continue
+    const rect = pv.container.getBoundingClientRect()
+    const top = container.scrollTop + (rect.top - root.top)
+    const height = pv.container.offsetHeight || pv.height || 0
+    const center = top + height / 2
+    const dist = Math.abs(center - mid)
+    if (dist < bestDist) { bestDist = dist; bestNum = pv.pageNumber }
+  }
+  emit('visible-page', bestNum)
 }
-
-watch(containerRef, () => { ensureIO() })
-
+function onScroll() {
+  if (rafId) cancelAnimationFrame(rafId)
+  rafId = requestAnimationFrame(() => { rafId = null; updateCurrentPage() })
+}
+watch(containerRef, (el, prev) => {
+  try { prev?.removeEventListener('scroll', onScroll) } catch {}
+  el?.addEventListener('scroll', onScroll, { passive: true })
+})
 onBeforeUnmount(() => {
-  try { io?.disconnect() } catch {}
-  io = null
+  const el = containerRef.value
+  try { el?.removeEventListener('scroll', onScroll) } catch {}
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
 })
 
-function scrollToPage(pageNumber: number) {
+function scrollToPage(pageNumber: number, _opts?: { smooth?: boolean }) {
   const container = containerRef.value
   if (!container) return
   const clamped = Math.max(1, Math.min(pages.value.length || 1, pageNumber))
@@ -172,11 +199,36 @@ function scrollToPage(pageNumber: number) {
   if (!pv || !pv.container) return
   const rect = pv.container.getBoundingClientRect()
   const root = container.getBoundingClientRect()
-  const top = container.scrollTop + (rect.top - root.top)
-  container.scrollTo({ top, behavior: 'smooth' })
+  const targetTop = container.scrollTop + (rect.top - root.top)
+  // All jumps are instant (no smooth scroll)
+  container.scrollTo({ top: targetTop, behavior: 'auto' })
 }
 
-defineExpose({ scrollToPage })
+function getPageMetrics(pageNumber: number) {
+  const container = containerRef.value
+  if (!container) return null
+  const pv = pages.value.find(p => p.pageNumber === pageNumber)
+  if (!pv || !pv.container) return null
+  const rect = pv.container.getBoundingClientRect()
+  const root = container.getBoundingClientRect()
+  const pageTop = container.scrollTop + (rect.top - root.top)
+  const pageHeight = pv.container.offsetHeight || pv.height || 0
+  return { pageTop, pageHeight, scrollTop: container.scrollTop }
+}
+
+function scrollToPageOffset(pageNumber: number, offsetPx: number) {
+  const container = containerRef.value
+  if (!container) return
+  const pv = pages.value.find(p => p.pageNumber === pageNumber)
+  if (!pv || !pv.container) return
+  const rect = pv.container.getBoundingClientRect()
+  const root = container.getBoundingClientRect()
+  const pageTop = container.scrollTop + (rect.top - root.top)
+  const target = pageTop + Math.max(0, offsetPx)
+  container.scrollTo({ top: target, behavior: 'auto' })
+}
+
+defineExpose({ scrollToPage, getPageMetrics, scrollToPageOffset })
 
 function onPageContextMenu(event: MouseEvent, page: PageView) {
   event.preventDefault()

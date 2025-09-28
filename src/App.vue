@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch, provide } from "vue";
 import { useRoute, useRouter } from "vue-router"
 import ModeTabs from './components/ModeTabs.vue'
 import AppHeader from './components/AppHeader.vue'
@@ -50,6 +50,19 @@ const leftWidth = ref(320)
 const minLeft = 240
 const maxLeft = ref(Math.max(minLeft, window.innerWidth * 0.7))
 const clamp = (v: number) => Math.min(Math.max(v, minLeft), maxLeft.value)
+// 左欄收合
+const leftCollapsed = ref(false)
+provide('leftCollapsed', leftCollapsed)
+provide('setLeftCollapsed', (v?: boolean) => { leftCollapsed.value = typeof v === 'boolean' ? v : !leftCollapsed.value })
+
+function onGlobalKey(e: KeyboardEvent) {
+  const meta = e.metaKey || e.ctrlKey
+  if (!meta) return
+  const t = e.target as HTMLElement | null
+  const tag = (t?.tagName || '').toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || t?.isContentEditable) return
+  if (e.key.toLowerCase() === 'b') { e.preventDefault(); leftCollapsed.value = !leftCollapsed.value }
+}
 
 // 每個模式的搜尋字串與過濾結果
 const qView = ref('')
@@ -97,6 +110,7 @@ onMounted(async () => {
       qCompose.value = persisted.queries?.compose ?? ''
       if (persisted.lastMode) mode.value = persisted.lastMode
       if (persisted.ui?.leftWidthPx) leftWidth.value = clamp(persisted.ui.leftWidthPx)
+      if (typeof persisted.ui?.leftCollapsed === 'boolean') leftCollapsed.value = persisted.ui.leftCollapsed
     }
 
     window.addEventListener('dragover', prevent)
@@ -128,6 +142,7 @@ onMounted(async () => {
     leftWidth.value = clamp(leftWidth.value)
   }
   window.addEventListener('resize', handleWinResize)
+  window.addEventListener('keydown', onGlobalKey)
   // register watchers after initial load
   watch([
     filesView, filesConvert, filesCompose,
@@ -135,6 +150,7 @@ onMounted(async () => {
     () => qView.value, () => qConvert.value, () => qCompose.value,
     () => mode.value,
     () => leftWidth.value,
+    () => leftCollapsed.value,
   ], persistNow, { deep: true })
 })
 
@@ -145,6 +161,7 @@ onBeforeUnmount(() => {
   if (handleWinResize) {
     try { window.removeEventListener('resize', handleWinResize) } finally { handleWinResize = null }
   }
+  window.removeEventListener('keydown', onGlobalKey)
 })
 
 async function onAddFiles() {
@@ -188,7 +205,7 @@ function persistNow() {
       convert: qConvert.value,
       compose: qCompose.value,
     },
-    ui: { leftWidthPx: leftWidth.value },
+    ui: { leftWidthPx: leftWidth.value, leftCollapsed: leftCollapsed.value },
   }, 1000)
 }
 
@@ -220,20 +237,20 @@ function onResizeStart(e: PointerEvent) {
 </script>
 
 <template>
-  <main class="app-grid" :style="{ gridTemplateColumns: (isSettings ? '0px 0px 1fr' : leftWidth + 'px 6px 1fr') }">
+  <main class="app-grid" :style="{ gridTemplateColumns: ((isSettings || leftCollapsed) ? '0px 0px 1fr' : leftWidth + 'px 6px 1fr') }">
     <div v-if="isDragging" class="drop-overlay" aria-hidden="true">
       PDF 匯入
     </div>
     <section class="left-col">
       <header class="menu">
         <AppHeader />
-        <ModeTabs v-if="!isSettings" v-model="mode" @navigate="onTabNavigate" />
+        <ModeTabs v-if="!isSettings && !leftCollapsed" v-model="mode" @navigate="onTabNavigate" />
       </header>
-      <FileListPanel v-if="!isSettings" :key="mode" :files="filteredFiles" :active-id="currentActiveId" v-model:query="currentQuery"
+      <FileListPanel v-if="!isSettings && !leftCollapsed" :key="mode" :files="filteredFiles" :active-id="currentActiveId" v-model:query="currentQuery"
         @add="onAddFiles" @select="onSelect" @remove="onRemove">
       </FileListPanel>
     </section>
-    <div v-show="!isSettings"
+    <div v-show="!isSettings && !leftCollapsed"
       class="col-resizer"
       role="separator"
       aria-orientation="vertical"
