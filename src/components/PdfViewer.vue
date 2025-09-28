@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch, markRaw, toRaw, onMounted } from 'vue'
+// @ts-ignore: provided by pdfjs-dist web bundle, no TS types here
+import { renderTextLayer } from 'pdfjs-dist/web/pdf_viewer'
 import type { ComponentPublicInstance } from 'vue'
 import type { PDFDocumentProxy } from '../lib/pdfjs'
 import type { PagePointerContext } from '../types/viewer'
@@ -29,6 +31,10 @@ interface PageView {
   renderToken?: number
   queued?: boolean
   lastRenderedScale?: number
+  // text selection layer
+  textLayer?: HTMLDivElement | null
+  textTask?: any
+  textToken?: number
 }
 
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -84,6 +90,8 @@ async function startRender(pv: PageView) {
     // If token changed during render (superseded), ignore
     if (pv.renderToken !== token) return
     pv.lastRenderedScale = pv.scale
+    // Render text layer after canvas if container exists
+    await renderTextLayerForPage(doc, pv)
   } finally {
     pv.queued = false
     inFlight--
@@ -107,6 +115,8 @@ function updateRenderWindow() {
     } else {
       // cancel out-of-range render to free resources
       if (pv.renderTask) void cancelTask(pv.renderTask)
+      if (pv.textTask) void cancelTextTask(pv.textTask)
+      if (pv.textLayer) pv.textLayer.textContent = ''
       pv.queued = false
     }
   }
@@ -122,6 +132,8 @@ async function resetPages() {
   for (const view of pages.value) {
     await cancelTask(view.renderTask)
     view.renderTask = null
+    try { await cancelTask(view.textTask) } catch {}
+    view.textTask = null
   }
   pages.value = []
   baseHeights.value = []
@@ -169,6 +181,38 @@ async function renderPage(doc: PDFDocumentProxy, pageView: PageView) {
       // Ignore expected cancellations during re-render (e.g., scale/resize changes)
       return
     }
+    emit('doc-error', error)
+  }
+}
+
+async function cancelTextTask(task: any) {
+  if (!task) return
+  try { task.cancel?.() } catch {}
+  try { await task.promise } catch {}
+}
+
+async function renderTextLayerForPage(doc: PDFDocumentProxy, pageView: PageView) {
+  try {
+    const container = pageView.textLayer
+    if (!container) return
+    await cancelTextTask(pageView.textTask)
+    const pdfPage = await doc.getPage(pageView.pageNumber)
+    const viewport = pdfPage.getViewport({ scale: pageView.scale })
+    const textContent = await pdfPage.getTextContent()
+    container.textContent = ''
+    const task = renderTextLayer({
+      textContentSource: textContent,
+      container,
+      viewport,
+      textDivs: [],
+      enhanceTextSelection: true,
+    } as any)
+    pageView.textTask = markRaw(task)
+    await task.promise
+  } catch (error: any) {
+    const name = error?.name || ''
+    const msg = (error?.message || '').toString()
+    if (name === 'RenderingCancelledException' || msg.includes('Rendering cancelled')) return
     emit('doc-error', error)
   }
 }
@@ -342,6 +386,10 @@ function setContainerRef(el: HTMLDivElement | Element | ComponentPublicInstance 
   page.container = (el as HTMLDivElement | null) ?? null
 }
 
+function setTextLayerRef(el: HTMLDivElement | Element | ComponentPublicInstance | null, page: PageView) {
+  page.textLayer = (el as HTMLDivElement | null) ?? null
+}
+
 // Compute current page using container center + binary search (no DOM reads)
 let rafId: number | null = null
 function updateCurrentPage() {
@@ -458,9 +506,10 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
         :style="{ width: `${page.width || 600}px` }"
         :ref="(el) => setContainerRef(el, page)"
       >
-        <div class="page-inner" :style="{ width: `${page.width || 600}px`, height: `${page.height || 0}px` }">
+        <div class="page-inner" :style="{ width: `${page.width || 600}px`, height: `${page.height || 0}px` }" @contextmenu="(e) => onPageContextMenu(e, page)">
           <canvas :ref="(el) => setCanvasRef(el, page)" class="page-canvas" />
-          <div class="page-overlay" @contextmenu="(e) => onPageContextMenu(e, page)"></div>
+          <div class="text-layer textLayer" :ref="(el) => setTextLayerRef(el, page)"></div>
+          <div class="page-overlay"></div>
         </div>
         <div class="page-number">第 {{ page.pageNumber }} 頁</div>
       </div>
@@ -516,10 +565,26 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
 .page-overlay {
   position: absolute;
   inset: 0;
+  pointer-events: none; /* 不阻擋文字選取/點擊 */
 }
 
 .page-number {
   font-size: 12px;
   color: var(--text-muted, #6b7280);
+}
+
+/* PDF.js 文字層 */
+.text-layer, .textLayer {
+  position: absolute;
+  inset: 0;
+  color: transparent; /* 避免與底圖顏色混干擾 */
+  user-select: text;
+  -webkit-user-select: text;
+  pointer-events: auto;
+}
+.text-layer span, .textLayer span {
+  position: absolute;
+  transform-origin: 0 0;
+  white-space: pre;
 }
 </style>
