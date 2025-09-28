@@ -10,6 +10,7 @@ import { inject } from 'vue'
 import type { Ref } from 'vue'
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
 import { loadSettings, type AppSettings } from '../composables/persistence'
+import { PDFDocument } from 'pdf-lib'
 import { getDocument, type PDFDocumentProxy } from '../lib/pdfjs'
 
 const props = defineProps<{ activeFile: PdfFile | null }>()
@@ -33,7 +34,10 @@ const settings = ref<AppSettings>({ exportDpi: 300, exportFormat: 'png', jpegQua
 const menuItems = computed<ContextMenuItem[]>(() => {
   if (!lastPageContext.value) return []
   const fmtLabel = settings.value.exportFormat === 'jpeg' ? 'JPEG' : 'PNG'
-  return [{ id: 'export-page', label: `匯出本頁為圖片 (${fmtLabel})`, disabled: exporting.value }]
+  return [
+    { id: 'export-page', label: `匯出本頁為圖片 (${fmtLabel})`, disabled: exporting.value },
+    { id: 'export-page-pdf', label: '匯出本頁為 PDF 檔案', disabled: exporting.value },
+  ]
 })
 
 let loadToken = 0
@@ -188,6 +192,8 @@ async function onMenuSelect(id: string) {
   if (!context) return
   if (id === 'export-page') {
     await exportCurrentPage(context)
+  } else if (id === 'export-page-pdf') {
+    await exportCurrentPageAsPdf(context)
   }
 }
 
@@ -232,6 +238,35 @@ async function exportCurrentPage(context: PagePointerContext) {
     if (!targetPath) return
 
     await writeFile(targetPath, bytes)
+    showBanner('success', `已匯出 ${defaultName}`)
+  } catch (error) {
+    const message = normalizeError(error)
+    showBanner('error', message)
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function exportCurrentPageAsPdf(context: PagePointerContext) {
+  if (!props.activeFile) return
+  exporting.value = true
+  exportBanner.value = null
+  try {
+    // 讀取原始 PDF 位元組
+    const srcBytes = await readFile(props.activeFile.path)
+    const srcPdf = await PDFDocument.load(srcBytes as ArrayBuffer | Uint8Array)
+    const dstPdf = await PDFDocument.create()
+    const pageIndex = Math.max(0, context.pageNumber - 1)
+    const [copied] = await dstPdf.copyPages(srcPdf, [pageIndex])
+    dstPdf.addPage(copied)
+    const outBytes = await dstPdf.save()
+
+    const base = stripExtension(props.activeFile.name)
+    const defaultName = `${base}-page${String(context.pageNumber).padStart(3, '0')}.pdf`
+    const targetPath = await save({ defaultPath: defaultName, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    if (!targetPath) return
+
+    await writeFile(targetPath, new Uint8Array(outBytes))
     showBanner('success', `已匯出 ${defaultName}`)
   } catch (error) {
     const message = normalizeError(error)
