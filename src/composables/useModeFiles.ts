@@ -63,12 +63,6 @@ export function useModeFiles(mode: Ref<Mode>) {
 
   function removeFromCurrent(id: string) { removeFrom(mode.value, id) }
 
-  function addExampleToCurrent() {
-    const list = getListRef()
-    const id = Math.random().toString(36).slice(2, 9)
-    list.value.push({ id, path: `/tmp/${id}.pdf`, name: `Example-${list.value.length + 1}.pdf` })
-  }
-
   return {
     // per-mode lists and active ids (exposed for persistence if needed)
     filesView, filesConvert, filesCompose,
@@ -76,7 +70,6 @@ export function useModeFiles(mode: Ref<Mode>) {
     // current derived states
     currentFiles, currentActiveId, activeFile,
     // helpers
-    getListRef, setActiveId, hasPath, addTo, removeFrom, removeFromCurrent, addExampleToCurrent,
+    getListRef, setActiveId, hasPath, addTo, removeFrom, removeFromCurrent,
   }
 }
-

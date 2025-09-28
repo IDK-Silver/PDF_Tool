@@ -19,6 +19,7 @@ const emit = defineEmits<{
 <template>
   <section class="list-wrap">
     <div class="panel list">
+      
       <div class="list-head">
         <input class="input search" v-model.trim="query" type="text" placeholder="搜尋檔名..." />
         <div class="head-right">
@@ -45,8 +46,9 @@ const emit = defineEmits<{
 
 <style scoped>
 .list-wrap { padding: 12px; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-.list { flex: 1 1 0; min-height: 0; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+.list { position: relative; flex: 1 1 0; min-height: 0; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
 .panel.list { border: none; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+
 .list-head {
   display: grid;
   /* 左：搜尋欄，右：新增按鈕 */
@@ -56,7 +58,7 @@ const emit = defineEmits<{
   padding: 8px;
 }
 .head-right { display: flex; align-items: center; gap: 8px; }
-.files { min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.files { min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px;}
 .search {
   /* 讓搜尋欄與列表項目的內距一致 */
   height: 32px;
