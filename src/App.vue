@@ -281,17 +281,25 @@ onMounted(async () => {
   // Tauri 關閉事件處理
   try {
     const appWindow = getCurrentWindow()
-    await appWindow.onCloseRequested(async () => {
-      console.log('[App.vue] Close requested, saving state')
+    let isClosing = false
+    const unlistenClose = await appWindow.onCloseRequested(async (e) => {
+      if (isClosing) {
+        // 第二次調用：允許預設關閉
+        return
+      }
+      e.preventDefault() // 暫停立即關閉
+      isClosing = true
       try {
         await persistImmediately()
-        console.log('[App.vue] State saved before close')
       } catch (err) {
+        // 吞掉錯誤，仍然要關閉
         console.error('[App.vue] Failed to save state before close:', err)
-        // 不阻止關閉，但記錄錯誤
+      } finally {
+        // 確保這個處理器不會再次攔截
+        unlistenClose()
+        await appWindow.close()
       }
     })
-    console.log('[App.vue] Close event handler registered')
   } catch (err) {
     console.warn('[App.vue] Could not register close handler (not in Tauri?):', err)
   }
@@ -307,39 +315,7 @@ onMounted(async () => {
   ], persistNow, { deep: true })
 })
 
-// 在應用關閉前立即儲存狀態（使用同步版本）
-const saveBeforeUnload = (e?: BeforeUnloadEvent) => {
-  const state = buildState()
-  console.log('[App.vue] Saving state before unload, activeViewId:', activeViewId.value)
 
-  // 嘗試同步儲存
-  try {
-    // 直接呼叫 saveAppState（它是異步的，但我們立即執行）
-    saveAppState(state).then(() => {
-      console.log('[App.vue] State saved successfully before unload')
-    }).catch(err => {
-      console.error('[App.vue] Failed to save state before unload:', err)
-    })
-
-    // 在 Tauri 環境中，給一點時間讓儲存完成
-    if (e) {
-      e.preventDefault()
-      e.returnValue = ''
-      // 延遲一下讓儲存完成
-      setTimeout(() => {
-        window.close()
-      }, 100)
-      return false
-    }
-  } catch (err) {
-    console.error('[App.vue] Error in saveBeforeUnload:', err)
-  }
-}
-
-// 監聽頁面關閉事件
-window.addEventListener('beforeunload', saveBeforeUnload)
-// Tauri 特定的關閉事件
-window.addEventListener('unload', () => saveBeforeUnload())
 
 // 儲存右鍵事件處理函數的參考
 const handleContextMenu = (e: MouseEvent) => {
@@ -352,9 +328,6 @@ const handleContextMenu = (e: MouseEvent) => {
 }
 
 onBeforeUnmount(() => {
-  saveBeforeUnload() // 確保在組件卸載前儲存
-  window.removeEventListener('beforeunload', saveBeforeUnload)
-  window.removeEventListener('unload', () => saveBeforeUnload())
   window.removeEventListener('dragover', prevent)
   window.removeEventListener('drop', prevent)
   window.removeEventListener('contextmenu', handleContextMenu)
