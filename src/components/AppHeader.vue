@@ -15,7 +15,7 @@ function collapseLeft() { setLeftCollapsed?.(true) }
 
 <template>
   <div class="app-header">
-    <div class="title" aria-label="App 名稱">PDF Tool</div>
+    <div class="title" aria-label="App 名稱">Kano PDF</div>
     <div class="actions">
       <button type="button" class="btn-settings" :class="{ active: isSettings }" @click="openSettings" aria-label="開啟設定" title="設定">
         <Cog6ToothIcon class="icon" aria-hidden="true" />
