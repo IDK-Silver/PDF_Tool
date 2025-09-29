@@ -47,12 +47,38 @@ async function getStore(): Promise<Store | null> {
 
 export async function saveAppState(state: PersistedState): Promise<void> {
   const store = await getStore()
-  if (!store) return
+  if (!store) {
+    console.warn('[persistence] Store not available, cannot save state')
+    return
+  }
+
+  const stateInfo = {
+    mode: state.lastMode,
+    viewFiles: state.files.view.length,
+    convertFiles: state.files.convert.length,
+    composeFiles: state.files.compose.length,
+    activeView: state.active.view,
+    activeConvert: state.active.convert,
+    activeCompose: state.active.compose
+  }
+
+  console.log('[persistence] Saving state:', stateInfo)
+
   try {
     await store.set(KEY, state)
     await store.save()
+    console.log('[persistence] State saved successfully')
+
+    // 驗證儲存：立即讀回來檢查
+    const verified = await store.get(KEY) as PersistedState | undefined
+    if (verified && verified.active.view === state.active.view) {
+      console.log('[persistence] Save verification successful')
+    } else {
+      console.error('[persistence] Save verification failed!')
+    }
   } catch (e) {
-    console.warn('Failed to save state', e)
+    console.error('[persistence] Failed to save state:', e)
+    throw e // 重新拋出錯誤以便呼叫者處理
   }
 }
 
@@ -61,28 +87,67 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let pendingState: PersistedState | null = null
 export function saveAppStateDebounced(state: PersistedState, delayMs = 1000) {
   pendingState = state
-  if (debounceTimer) clearTimeout(debounceTimer)
+  console.log(`[persistence] Scheduling debounced save in ${delayMs}ms`)
+
+  if (debounceTimer) {
+    console.log('[persistence] Clearing previous debounce timer')
+    clearTimeout(debounceTimer)
+  }
+
   debounceTimer = setTimeout(async () => {
     debounceTimer = null
     if (pendingState) {
+      console.log('[persistence] Executing debounced save')
       try {
         await saveAppState(pendingState)
+        console.log('[persistence] Debounced save completed')
+      } catch (e) {
+        console.error('[persistence] Debounced save failed:', e)
       } finally {
         pendingState = null
       }
+    } else {
+      console.log('[persistence] No pending state for debounced save')
     }
   }, delayMs)
 }
 
 export async function loadAppState(): Promise<PersistedState | null> {
   const store = await getStore()
-  if (!store) return null
-  try {
-    const data = (await store.get(KEY)) as PersistedState | undefined
-    if (data && data.version === 1) return data
+  if (!store) {
+    console.warn('[persistence] Store not available, cannot load state')
     return null
+  }
+
+  try {
+    console.log('[persistence] Loading state from store')
+    const data = (await store.get(KEY)) as PersistedState | undefined
+
+    if (!data) {
+      console.log('[persistence] No saved state found')
+      return null
+    }
+
+    if (data.version !== 1) {
+      console.warn('[persistence] Incompatible state version:', data.version)
+      return null
+    }
+
+    const stateInfo = {
+      mode: data.lastMode,
+      viewFiles: data.files.view.length,
+      convertFiles: data.files.convert.length,
+      composeFiles: data.files.compose.length,
+      activeView: data.active.view,
+      activeConvert: data.active.convert,
+      activeCompose: data.active.compose,
+      viewFileNames: data.files.view.map(f => f.name)
+    }
+
+    console.log('[persistence] Loaded state:', stateInfo)
+    return data
   } catch (e) {
-    console.warn('Failed to load state', e)
+    console.error('[persistence] Failed to load state:', e)
     return null
   }
 }

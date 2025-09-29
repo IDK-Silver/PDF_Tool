@@ -5,9 +5,10 @@ import ModeTabs from './components/ModeTabs.vue'
 import AppHeader from './components/AppHeader.vue'
 import FileListPanel from './components/FileListPanel.vue'
 import { useModeFiles } from './composables/useModeFiles'
-import type { Mode } from './types/pdf'
+import type { Mode, PdfFile } from './types/pdf'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { loadAppState, saveAppState, saveAppStateDebounced } from './composables/persistence'
@@ -15,6 +16,24 @@ import { loadAppState, saveAppState, saveAppStateDebounced } from './composables
 const route = useRoute()
 const router = useRouter()
 const isSettings = computed(() => route.path.startsWith('/settings'))
+
+// 檔案列表合併函數 - 優先保留內存中的檔案（冷啟動開檔）
+function mergeListsByPath(current: PdfFile[], persisted: PdfFile[]): PdfFile[] {
+  const pathMap = new Map<string, PdfFile>()
+
+  // 優先處理當前檔案（來自冷啟動開檔），保持在列表頂部
+  for (const file of current) {
+    pathMap.set(file.path, file)
+  }
+
+  // 只添加不重複的持久化檔案
+  for (const file of persisted) {
+    if (!pathMap.has(file.path)) {
+      pathMap.set(file.path, file)
+    }
+  }
+  return Array.from(pathMap.values())
+}
 
 // 將模式與路由同步（雙向）
 const mode = computed<Mode>({
@@ -103,11 +122,17 @@ onMounted(async () => {
     const persisted = await loadAppState()
     if (persisted) {
       console.log('[App.vue] Loading persisted state:', persisted)
-      // 反轉列表順序，讓最新的檔案在最上面
-      filesView.value = Array.isArray(persisted.files?.view) ? persisted.files.view.reverse() : []
-      filesConvert.value = Array.isArray(persisted.files?.convert) ? persisted.files.convert.reverse() : []
-      filesCompose.value = Array.isArray(persisted.files?.compose) ? persisted.files.compose.reverse() : []
-      console.log('[App.vue] Loaded files:', filesView.value.map(f => ({id: f.id, name: f.name})))
+
+      // 使用合併邏輯而不是直接覆蓋
+      const persistedView = Array.isArray(persisted.files?.view) ? persisted.files.view : []
+      const persistedConvert = Array.isArray(persisted.files?.convert) ? persisted.files.convert : []
+      const persistedCompose = Array.isArray(persisted.files?.compose) ? persisted.files.compose : []
+
+      filesView.value = mergeListsByPath(filesView.value, persistedView)
+      filesConvert.value = mergeListsByPath(filesConvert.value, persistedConvert)
+      filesCompose.value = mergeListsByPath(filesCompose.value, persistedCompose)
+
+      console.log('[App.vue] Merged files:', filesView.value.map(f => ({id: f.id, name: f.name})))
 
       // 直接使用持久化的 activeId，不要覆蓋
       const persistedViewId = persisted.active?.view
@@ -136,6 +161,10 @@ onMounted(async () => {
         console.log('[App.vue] No active file selected, selecting first file')
         activeViewId.value = filesView.value[0].id
       }
+
+      // 狀態水合後立即保存
+      console.log('[App.vue] State hydration complete, saving immediately')
+      await persistImmediately()
     }
 
     window.addEventListener('dragover', prevent)
@@ -167,6 +196,14 @@ onMounted(async () => {
           })
         }
         console.log('[App.vue] Files after adding:', currentFiles.value.map(f => ({id: f.id, name: f.name, path: f.path})))
+
+        // 檔案添加後立即保存狀態
+        if (lastAddedId) {
+          console.log('[App.vue] File added, saving state immediately')
+          persistImmediately().catch(err => {
+            console.error('[App.vue] Failed to save state after file add:', err)
+          })
+        }
       }
     }
 
@@ -241,6 +278,24 @@ onMounted(async () => {
   // 禁用預設的右鍵選單（除了 PDF 檢視器區域）
   window.addEventListener('contextmenu', handleContextMenu)
 
+  // Tauri 關閉事件處理
+  try {
+    const appWindow = getCurrentWindow()
+    await appWindow.onCloseRequested(async () => {
+      console.log('[App.vue] Close requested, saving state')
+      try {
+        await persistImmediately()
+        console.log('[App.vue] State saved before close')
+      } catch (err) {
+        console.error('[App.vue] Failed to save state before close:', err)
+        // 不阻止關閉，但記錄錯誤
+      }
+    })
+    console.log('[App.vue] Close event handler registered')
+  } catch (err) {
+    console.warn('[App.vue] Could not register close handler (not in Tauri?):', err)
+  }
+
   // register watchers after initial load
   watch([
     filesView, filesConvert, filesCompose,
@@ -254,27 +309,7 @@ onMounted(async () => {
 
 // 在應用關閉前立即儲存狀態（使用同步版本）
 const saveBeforeUnload = (e?: BeforeUnloadEvent) => {
-  const state = {
-    version: 1 as const,
-    lastMode: mode.value,
-    files: {
-      view: filesView.value,
-      convert: filesConvert.value,
-      compose: filesCompose.value,
-    },
-    active: {
-      view: activeViewId.value,
-      convert: activeConvertId.value,
-      compose: activeComposeId.value,
-    },
-    queries: {
-      view: qView.value,
-      convert: qConvert.value,
-      compose: qCompose.value,
-    },
-    ui: { leftWidthPx: leftWidth.value, leftCollapsed: leftCollapsed.value },
-  }
-
+  const state = buildState()
   console.log('[App.vue] Saving state before unload, activeViewId:', activeViewId.value)
 
   // 嘗試同步儲存
@@ -358,10 +393,9 @@ function onRemove(id: string) {
 function onSelect(id: string | null) { setActiveId(id) }
 function onTabNavigate(m: Mode) { mode.value = m }
 
-// Persist on changes (lists, active selections, queries, and mode)
-function persistNow() {
-  console.log('[App.vue] Persisting state, activeViewId:', activeViewId.value)
-  const state = {
+// 集中狀態構建器
+function buildState() {
+  return {
     version: 1 as const,
     lastMode: mode.value,
     files: {
@@ -381,17 +415,37 @@ function persistNow() {
     },
     ui: { leftWidthPx: leftWidth.value, leftCollapsed: leftCollapsed.value },
   }
+}
 
-  // 對於 activeId 的變更，立即儲存；其他變更使用防抖
+// Persist on changes (lists, active selections, queries, and mode)
+function persistNow() {
+  console.log('[App.vue] Persisting state, activeViewId:', activeViewId.value)
+  const state = buildState()
+
+  // 有 activeId 時立即儲存，否則使用防抖
   if (activeViewId.value || activeConvertId.value || activeComposeId.value) {
-    // 立即儲存
+    console.log('[App.vue] Immediate save due to active file')
     saveAppState(state).then(() => {
       console.log('[App.vue] State saved immediately, activeViewId:', activeViewId.value)
+    }).catch(err => {
+      console.error('[App.vue] Failed to save state:', err)
     })
   } else {
-    // 使用防抖儲存
+    console.log('[App.vue] Using debounced save')
     saveAppStateDebounced(state, 1000)
   }
+}
+
+// 立即儲存狀態（用於關鍵事件後）
+function persistImmediately() {
+  const state = buildState()
+  console.log('[App.vue] Force immediate save')
+  return saveAppState(state).then(() => {
+    console.log('[App.vue] Immediate save completed')
+  }).catch(err => {
+    console.error('[App.vue] Immediate save failed:', err)
+    throw err
+  })
 }
 
 // 拖移調整左欄寬度
