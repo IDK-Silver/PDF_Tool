@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, markRaw, nextTick } from 'vue'
 import { readFile, writeFile } from '@tauri-apps/plugin-fs'
 import { save } from '@tauri-apps/plugin-dialog'
+import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import type { PdfFile } from '../types/pdf'
 import PdfViewer from '../components/PdfViewer.vue'
 import ContextMenu from '../components/ContextMenu.vue'
@@ -51,6 +52,7 @@ const menuItems = computed<ContextMenuItem[]>(() => {
   if (!lastPageContext.value) return []
   const fmtLabel = settings.value.exportFormat === 'jpeg' ? 'JPEG' : 'PNG'
   return [
+    { id: 'open-folder', label: '開啟於資料夾', disabled: !props.activeFile?.path },
     { id: 'export-page', label: `匯出本頁為圖片 (${fmtLabel})`, disabled: exporting.value },
     { id: 'export-page-pdf', label: '匯出本頁為 PDF 檔案', disabled: exporting.value },
   ]
@@ -230,11 +232,26 @@ function onPageContextMenu(context: PagePointerContext) {
 async function onMenuSelect(id: string) {
   const context = lastPageContext.value
   closeContextMenu()
+  if (id === 'open-folder') {
+    await openActiveFileInFolder()
+    return
+  }
   if (!context) return
   if (id === 'export-page') {
     await exportCurrentPage(context)
   } else if (id === 'export-page-pdf') {
     await exportCurrentPageAsPdf(context)
+  }
+}
+
+async function openActiveFileInFolder() {
+  const path = props.activeFile?.path
+  if (!path) return
+  try {
+    await revealItemInDir(path)
+  } catch (error) {
+    console.error('[ViewMode] Failed to reveal file in folder:', error)
+    showBanner('error', '無法開啟資料夾，請稍後再試')
   }
 }
 
