@@ -1,5 +1,5 @@
 <template>
-  <div class="image-viewer" ref="containerRef" @contextmenu.prevent="onContextMenu">
+  <div class="image-viewer" :class="{ hcenter: hCenter, vcenter: vCenter }" ref="containerRef" @contextmenu.prevent="onContextMenu">
     <img
       v-if="imageSrc"
       ref="imgRef"
@@ -14,7 +14,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onBeforeUnmount, defineExpose } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount, defineExpose } from 'vue'
 import { readFile } from '@tauri-apps/plugin-fs'
 
 const props = defineProps<{ path: string; alt?: string; scale?: number }>()
@@ -34,13 +34,39 @@ const imgRef = ref<HTMLImageElement | null>(null)
 const naturalWidth = ref(0)
 const naturalHeight = ref(0)
 const displayScale = computed(() => props.scale ?? 1)
+const scaledWidth = computed(() => Math.max(1, Math.round((naturalWidth.value || 0) * (displayScale.value || 1))))
+const scaledHeight = computed(() => Math.max(1, Math.round((naturalHeight.value || 0) * (displayScale.value || 1))))
 const imgStyle = computed(() => {
   if (!naturalWidth.value || !naturalHeight.value) return {}
   return {
-    width: `${Math.max(1, Math.round(naturalWidth.value * displayScale.value))}px`,
+    width: `${scaledWidth.value}px`,
     height: 'auto'
   } as any
 })
+
+// Container size for smart centering
+const containerW = ref(0)
+const containerH = ref(0)
+let resizeObs: ResizeObserver | null = null
+onMounted(() => {
+  const el = containerRef.value
+  if (el && 'ResizeObserver' in window) {
+    const update = () => {
+      containerW.value = el.clientWidth
+      containerH.value = el.clientHeight
+    }
+    resizeObs = new ResizeObserver(update)
+    resizeObs.observe(el)
+    update()
+  }
+})
+onBeforeUnmount(() => { try { resizeObs?.disconnect() } catch {} })
+
+// Center only when the scaled image fits on that axis
+const hCenter = computed(() => !!scaledWidth.value && scaledWidth.value <= containerW.value)
+const vCenter = computed(() => !!scaledHeight.value && scaledHeight.value <= containerH.value)
+
+// 永遠垂直置中：純 CSS flex；此處不需量測容器
 
 function revokeUrl() {
   if (objectUrl) {
@@ -151,12 +177,17 @@ defineExpose({ getPageMetrics, scrollToPageOffset })
 .image-viewer {
   width: 100%;
   height: 100%;
-  overflow: auto;            /* 讓大圖被容器裁切並可滾動 */
-  display: block;            /* 取消 flex 置中，確保裁切從左上角開始 */
+  overflow: auto;            /* 大圖可滾動 */
+  display: flex;             /* 彈性容器 */
+  justify-content: flex-start;/* 預設靠左 */
+  align-items: flex-start;    /* 預設靠上 */
   padding: 0;
   box-sizing: border-box;
   background: var(--hover, #f3f4f6);
 }
+
+.image-viewer.hcenter { justify-content: center; }
+.image-viewer.vcenter { align-items: center; }
 
 .image-viewer img {
   display: block;

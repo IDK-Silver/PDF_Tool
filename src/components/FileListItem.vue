@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { DocumentTextIcon } from '@heroicons/vue/24/outline'
-interface PdfFile { id: string; name: string; path: string; pages?: number }
+import { computed } from 'vue'
+import { DocumentTextIcon, PhotoIcon } from '@heroicons/vue/24/outline'
+import type { PdfFile } from '../types/pdf'
 
 const props = defineProps<{ file: PdfFile; active?: boolean; disabled?: boolean }>()
 
@@ -18,13 +19,16 @@ function onRemove(e: MouseEvent) {
   if (props.disabled) return
   emit('remove', props.file.id)
 }
+
+const isImage = computed(() => (props.file as any).kind === 'image')
 </script>
 
 <template>
   <div class="row" :class="{ active: props.active, disabled: props.disabled }" role="button" tabindex="0"
     @click="onSelect" @keydown.enter.prevent="onSelect" :aria-selected="props.active">
     <div class="leading-icon" aria-hidden="true">
-      <DocumentTextIcon class="icon" />
+      <PhotoIcon v-if="isImage" class="icon" />
+      <DocumentTextIcon v-else class="icon" />
     </div>
     <div class="name">{{ props.file.name }}</div>
     <button class="delete-btn" type="button" title="刪除" aria-label="刪除" @click="onRemove">
