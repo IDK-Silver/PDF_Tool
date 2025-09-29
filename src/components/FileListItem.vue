@@ -43,18 +43,16 @@ const isImage = computed(() => (props.file as any).kind === 'image')
 <style scoped>
 .row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  /* 圖示 | 名稱 | 刪除 */
+  grid-template-columns: auto 1fr auto; /* 圖示 | 名稱 | 刪除 */
   gap: 6px;
   align-items: center;
   padding: 4px 10px;
-  min-height: 28px;
+  height: 32px;                 /* 固定列高，避免因內容或數量擠壓 */
   background: #fff;
   border: none;
   border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   user-select: none;
-
 }
 
 .row:hover {
