@@ -114,6 +114,7 @@ function basename(p: string) {
 const isDragging = ref(false)
 let unlistenDrag: (() => void) | null = null
 let unlistenFileOpen: (() => void) | null = null
+let unlistenClose: (() => void) | null = null
 const prevent = (e: Event) => { e.preventDefault() }
 let handleWinResize: (() => void) | null = null
 
@@ -282,22 +283,29 @@ onMounted(async () => {
   try {
     const appWindow = getCurrentWindow()
     let isClosing = false
-    const unlistenClose = await appWindow.onCloseRequested(async (e) => {
+    const CLOSE_SAVE_TIMEOUT_MS = 2000
+
+    unlistenClose = await appWindow.onCloseRequested(async (e) => {
       if (isClosing) {
-        // 第二次調用：允許預設關閉
+        // 第二次調用：不阻止預設關閉，讓 OS 正常關閉
         return
       }
-      e.preventDefault() // 暫停立即關閉
+
+      e.preventDefault()
       isClosing = true
+
+      // 帶超時的狀態儲存，確保應用程式能關閉
+      const save = persistImmediately()
+      await Promise.race([
+        save.catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, CLOSE_SAVE_TIMEOUT_MS)),
+      ])
+
+      // 重新觸發關閉，這次會通過 isClosing 守衛允許關閉
       try {
-        await persistImmediately()
-      } catch (err) {
-        // 吞掉錯誤，仍然要關閉
-        console.error('[App.vue] Failed to save state before close:', err)
-      } finally {
-        // 確保這個處理器不會再次攔截
-        unlistenClose()
         await appWindow.close()
+      } catch (err) {
+        console.error('[App.vue] Failed to close window:', err)
       }
     })
   } catch (err) {
@@ -333,11 +341,19 @@ onBeforeUnmount(() => {
   window.removeEventListener('contextmenu', handleContextMenu)
   try { unlistenDrag?.() } finally { unlistenDrag = null }
   try { unlistenFileOpen?.() } finally { unlistenFileOpen = null }
+  try { unlistenClose?.() } finally { unlistenClose = null }
   if (handleWinResize) {
     try { window.removeEventListener('resize', handleWinResize) } finally { handleWinResize = null }
   }
   window.removeEventListener('keydown', onGlobalKey)
 })
+
+// HMR 清理，防止熱重載時重複監聽器
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    try { unlistenClose?.() } finally { unlistenClose = null }
+  })
+}
 
 async function onAddFiles() {
   try {
