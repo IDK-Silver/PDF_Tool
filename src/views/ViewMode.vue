@@ -5,6 +5,7 @@ import { save } from '@tauri-apps/plugin-dialog'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import type { PdfFile } from '../types/pdf'
 import PdfViewer from '../components/PdfViewer.vue'
+import ImageViewer from '../components/ImageViewer.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import type { ContextMenuItem, PagePointerContext } from '../types/viewer'
 import { inject } from 'vue'
@@ -49,16 +50,22 @@ const lastPageContext = ref<PagePointerContext | null>(null)
 
 const settings = ref<AppSettings>({ exportDpi: 300, exportFormat: 'png', jpegQuality: 0.9, defaultZoomMode: 'fit' })
 const menuItems = computed<ContextMenuItem[]>(() => {
-  if (!lastPageContext.value) return []
-  const fmtLabel = settings.value.exportFormat === 'jpeg' ? 'JPEG' : 'PNG'
-  return [
-    { id: 'open-folder', label: '開啟於資料夾', disabled: !props.activeFile?.path },
-    { id: 'export-page', label: `匯出本頁為圖片 (${fmtLabel})`, disabled: exporting.value },
-    { id: 'export-page-pdf', label: '匯出本頁為 PDF 檔案', disabled: exporting.value },
-  ]
+  if (!props.activeFile) return []
+  const items: ContextMenuItem[] = []
+  items.push({ id: 'open-folder', label: '開啟於資料夾', disabled: !props.activeFile?.path })
+  if (lastPageContext.value) {
+    // 對 PDF 與圖片都提供一致的功能
+    const fmtLabel = 'PNG'
+    items.push({ id: 'export-page', label: `匯出本頁為圖片 (${fmtLabel})`, disabled: exporting.value })
+    items.push({ id: 'export-page-pdf', label: '匯出本頁為 PDF 檔案', disabled: exporting.value })
+  }
+  return items
 })
 
 let loadToken = 0
+const isImageFile = computed(() => props.activeFile?.kind === 'image')
+const isPdfFile = computed(() => props.activeFile?.kind !== 'image')
+const loadingLabel = computed(() => isImageFile.value ? '正在載入圖片…' : '正在載入 PDF…')
 
 // injected controls for left column collapse
 const leftCollapsed = inject('leftCollapsed') as Ref<boolean> | undefined
@@ -78,7 +85,8 @@ function clampScale(v: number) { return Math.min(maxScale, Math.max(minScale, v)
 function computeFitScale(): number {
   const container = viewerContainerRef.value
   if (!container || !basePageWidth.value) return scale.value
-  const inner = Math.max(0, container.clientWidth - 32)
+  const margin = isImageFile.value ? 0 : 32
+  const inner = Math.max(0, container.clientWidth - margin)
   if (inner <= 0) return scale.value
   return clampScale(inner / basePageWidth.value)
 }
@@ -93,6 +101,9 @@ async function ensureBasePageWidth() {
 const lastAppliedScale = ref(1)
 function setZoomFit() { applyScaleWithAnchor(computeFitScale(), 'fit') }
 function setZoomActual() { applyScaleWithAnchor(1, 'actual') }
+
+const labelActual = computed(() => isImageFile.value ? '1:1（實際像素）' : '實際大小')
+const labelFit = computed(() => isImageFile.value ? '填滿寬度' : '縮放到適當大小')
 async function applyScaleWithAnchor(newScale: number, mode: 'actual'|'fit'|'custom' = 'custom') {
   const viewer: any = viewerRef.value
   const page = currentPage.value || 1
@@ -158,9 +169,11 @@ watch(
 
     // 立即開始載入，不阻塞於 pageHistory
     loading.value = true
+    pageCount.value = 0
+    currentPage.value = 1
 
     // 嘗試恢復頁數（如果 pageHistory 已載入）
-    if (pageHistoryLoaded.value && path && pageHistory.value[path]) {
+    if (pageHistoryLoaded.value && path && pageHistory.value[path] && props.activeFile?.kind !== 'image') {
       currentPage.value = pageHistory.value[path].currentPage
       console.log(`[ViewMode] Restoring page ${pageHistory.value[path].currentPage} for file`)
     } else {
@@ -171,6 +184,11 @@ watch(
     onCleanup(() => {
       cancelled = true
     })
+
+    if (props.activeFile?.kind === 'image') {
+      // Image loading handled by ImageViewer component
+      return
+    }
 
     try {
       console.log('[ViewMode] Reading file:', path)
@@ -238,9 +256,96 @@ async function onMenuSelect(id: string) {
   }
   if (!context) return
   if (id === 'export-page') {
-    await exportCurrentPage(context)
+    if (isPdfFile.value) await exportCurrentPage(context)
+    else await exportCurrentImageAsPng(context)
   } else if (id === 'export-page-pdf') {
-    await exportCurrentPageAsPdf(context)
+    if (isPdfFile.value) await exportCurrentPageAsPdf(context)
+    else await exportCurrentImageAsPdf(context)
+  }
+}
+
+async function getImageAsCanvas(path: string): Promise<HTMLCanvasElement> {
+  const bytes = await readFile(path)
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as ArrayBuffer)
+  const blob = new Blob([data])
+  const url = URL.createObjectURL(blob)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = () => reject(new Error('圖片載入失敗'))
+      el.src = url
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = img.naturalWidth || img.width
+    canvas.height = img.naturalHeight || img.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('無法建立 Canvas')
+    ctx.drawImage(img, 0, 0)
+    return canvas
+  } finally {
+    try { URL.revokeObjectURL(url) } catch {}
+  }
+}
+
+async function exportCurrentImageAsPng(_context: PagePointerContext) {
+  if (!props.activeFile?.path) return
+  exporting.value = true
+  exportBanner.value = null
+  try {
+    const canvas = await getImageAsCanvas(props.activeFile.path)
+    const blob: Blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((b) => b ? resolve(b) : reject(new Error('PNG 轉換失敗')), 'image/png')
+    })
+    const array = new Uint8Array(await blob.arrayBuffer())
+    const base = stripExtension(props.activeFile.name)
+    const defaultName = `${base}-page001.png`
+    const targetPath = await save({ defaultPath: defaultName, filters: [{ name: 'PNG', extensions: ['png'] }] })
+    if (!targetPath) return
+    await writeFile(targetPath, array)
+    showBanner('success', `已匯出 ${defaultName}`)
+  } catch (error) {
+    showBanner('error', normalizeError(error))
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function exportCurrentImageAsPdf(_context: PagePointerContext) {
+  if (!props.activeFile?.path) return
+  exporting.value = true
+  exportBanner.value = null
+  try {
+    const ext = (props.activeFile.name.split('.').pop() || '').toLowerCase()
+    const bytes = await readFile(props.activeFile.path)
+    const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as ArrayBuffer)
+    const pdf = await PDFDocument.create()
+    let img
+    if (ext === 'jpg' || ext === 'jpeg') img = await pdf.embedJpg(data)
+    else if (ext === 'png') img = await pdf.embedPng(data)
+    else {
+      const canvas = await getImageAsCanvas(props.activeFile.path)
+      const blob: Blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('PNG 轉換失敗')), 'image/png')
+      })
+      const pngBytes = new Uint8Array(await blob.arrayBuffer())
+      img = await pdf.embedPng(pngBytes)
+    }
+    const width = img.width
+    const height = img.height
+    const page = pdf.addPage([width, height])
+    page.drawImage(img, { x: 0, y: 0, width, height })
+    const pdfBytes = await pdf.save()
+    const base = stripExtension(props.activeFile.name)
+    const defaultName = `${base}-page001.pdf`
+    const targetPath = await save({ defaultPath: defaultName, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    if (!targetPath) return
+    await writeFile(targetPath, new Uint8Array(pdfBytes))
+    showBanner('success', `已匯出 ${defaultName}`)
+  } catch (error) {
+    showBanner('error', normalizeError(error))
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -335,6 +440,7 @@ async function exportCurrentPageAsPdf(context: PagePointerContext) {
 }
 
 function onDocLoaded(count: number) {
+  if (!isPdfFile.value) return
   pageCount.value = count
   // 恢復之前瀏覽的頁數
   if (props.activeFile?.path && pageHistory.value[props.activeFile.path]) {
@@ -364,6 +470,7 @@ watch(
 const viewerRef = ref<InstanceType<typeof PdfViewer> | null>(null)
 
 function onVisiblePage(pageNumber: number) {
+  if (!isPdfFile.value) return
   if (suppressVisibleUpdate.value) return
   if (pageNumber >= 1 && pageNumber <= pageCount.value) {
     currentPage.value = pageNumber
@@ -379,6 +486,7 @@ function onVisiblePage(pageNumber: number) {
 }
 
 function goToPage(n: number) {
+  if (!isPdfFile.value) return
   if (!viewerRef.value) return
   const clamped = Math.max(1, Math.min(pageCount.value || 1, Math.floor(n)))
   viewerRef.value.scrollToPage(clamped)
@@ -395,6 +503,30 @@ function goToPage(n: number) {
 
 function prevPage() { goToPage((currentPage.value || 1) - 1) }
 function nextPage() { goToPage((currentPage.value || 1) + 1) }
+
+function onImageLoading() {
+  loading.value = true
+  viewerError.value = null
+}
+
+function onImageLoaded(payload?: { width?: number; height?: number }) {
+  // 圖片固定單頁
+  pageCount.value = 1
+  // 設定 fit 所需的基準寬度
+  if (payload?.width && payload.width > 0) {
+    basePageWidth.value = payload.width
+  }
+  if (zoomMode.value === 'fit') {
+    scale.value = computeFitScale()
+    lastAppliedScale.value = scale.value
+  }
+  loading.value = false
+}
+
+function onImageError(message: string) {
+  loading.value = false
+  viewerError.value = message || '無法載入圖片'
+}
 
 onMounted(async () => {
   // Load settings and page history
@@ -504,9 +636,8 @@ async function savePageHistory() {
       <div class="header-right" v-if="props.activeFile">
         <div class="zoom-controls">
           <span class="zoom-indicator">{{ Math.round(scale * 100) }}%</span>
-          <button type="button" class="btn" :class="{ active: zoomMode === 'actual' }"
-            @click="setZoomActual">實際大小</button>
-          <button type="button" class="btn" :class="{ active: zoomMode === 'fit' }" @click="setZoomFit">縮放到適當大小</button>
+          <button type="button" class="btn" :class="{ active: zoomMode === 'actual' }" @click="setZoomActual">{{ labelActual }}</button>
+          <button type="button" class="btn" :class="{ active: zoomMode === 'fit' }" @click="setZoomFit">{{ labelFit }}</button>
 
         </div>
         <div class="page-controls" v-if="pageCount">
@@ -530,14 +661,16 @@ async function savePageHistory() {
     </header>
 
     <div v-if="!props.activeFile" class="empty-state">
-      <p>請在左側選擇一個 PDF 檔案</p>
+      <p>請在左側選擇一個檔案</p>
     </div>
     <div v-else class="viewer-panel" ref="viewerContainerRef">
       <div v-if="viewerError" class="alert error">{{ viewerError }}</div>
-      <div v-else-if="loading" class="loading-state">正在載入 PDF…</div>
-      <PdfViewer v-else-if="pdfDoc" :doc="pdfDoc" :scale="scale" ref="viewerRef" @doc-loaded="onDocLoaded"
+      <PdfViewer v-else-if="pdfDoc && isPdfFile" :doc="pdfDoc" :scale="scale" ref="viewerRef" @doc-loaded="onDocLoaded"
         @doc-error="onDocError" @visible-page="onVisiblePage" @page-contextmenu="onPageContextMenu" />
-      <div v-else class="empty-state">尚未載入 PDF 內容</div>
+      <ImageViewer v-else-if="isImageFile && props.activeFile?.path" ref="viewerRef" :path="props.activeFile.path" :scale="scale"
+        @loading="onImageLoading" @loaded="onImageLoaded" @error="onImageError" @page-contextmenu="onPageContextMenu" />
+      <div v-else-if="loading" class="loading-state">{{ loadingLabel }}</div>
+      <div v-else class="empty-state">尚未載入內容</div>
 
       <transition name="fade">
         <div v-if="exportBanner" :class="['banner', exportBanner.kind]">

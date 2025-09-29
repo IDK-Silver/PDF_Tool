@@ -5,7 +5,7 @@ import ModeTabs from './components/ModeTabs.vue'
 import AppHeader from './components/AppHeader.vue'
 import FileListPanel from './components/FileListPanel.vue'
 import { useModeFiles } from './composables/useModeFiles'
-import type { Mode, PdfFile } from './types/pdf'
+import type { Mode, PdfFile, FileKind } from './types/pdf'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow, type Window as TauriWindow } from '@tauri-apps/api/window'
@@ -19,21 +19,38 @@ const router = useRouter()
 const isSettings = computed(() => route.path.startsWith('/settings'))
 
 // 檔案列表合併函數 - 優先保留內存中的檔案（冷啟動開檔）
+function ensureFileKind(file: PdfFile | (PdfFile & { kind?: FileKind })): PdfFile {
+  return {
+    ...file,
+    kind: file.kind ?? 'pdf'
+  }
+}
+
 function mergeListsByPath(current: PdfFile[], persisted: PdfFile[]): PdfFile[] {
   const pathMap = new Map<string, PdfFile>()
 
   // 優先處理當前檔案（來自冷啟動開檔），保持在列表頂部
   for (const file of current) {
-    pathMap.set(file.path, file)
+    pathMap.set(file.path, ensureFileKind(file))
   }
 
   // 只添加不重複的持久化檔案
   for (const file of persisted) {
-    if (!pathMap.has(file.path)) {
-      pathMap.set(file.path, file)
+    const normalized = ensureFileKind(file)
+    if (!pathMap.has(normalized.path)) {
+      pathMap.set(normalized.path, normalized)
     }
   }
   return Array.from(pathMap.values())
+}
+
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.svg']
+
+function detectFileKind(path: string): FileKind | null {
+  const lower = path.toLowerCase()
+  if (lower.endsWith('.pdf')) return 'pdf'
+  if (IMAGE_EXTENSIONS.some(ext => lower.endsWith(ext))) return 'image'
+  return null
 }
 
 // 將模式與路由同步（雙向）
@@ -193,12 +210,20 @@ onMounted(async () => {
         let lastAddedId = null
         for (const path of paths) {
           // 檔案路徑已在後端處理完成，直接使用
-          if (path.toLowerCase().endsWith('.pdf')) {
-            console.log('[App.vue] Adding file:', path)
-            const id = addTo(mode.value, { path, name: basename(path) })
-            console.log('[App.vue] Added file with id:', id)
-            if (id) lastAddedId = id
+          const kind = detectFileKind(path)
+          const isView = mode.value === 'view'
+          if (!kind) {
+            console.debug('[App.vue] Unsupported file type, skipping:', path)
+            continue
           }
+          if (kind !== 'pdf' && !isView) {
+            console.debug('[App.vue] Non-PDF ignored for mode', mode.value, path)
+            continue
+          }
+          console.log('[App.vue] Adding file:', { path, kind })
+          const id = addTo(mode.value, { path, name: basename(path), kind })
+          console.log('[App.vue] Added file with id:', id)
+          if (id) lastAddedId = id
         }
         // 自動選擇並顯示最後開啟的檔案
         if (lastAddedId) {
@@ -262,13 +287,13 @@ onMounted(async () => {
       } else if (payload.type === 'drop') {
         isDragging.value = false
         const paths = payload.paths || []
-        const pdfs = paths.filter((p) => p.toLowerCase().endsWith('.pdf'))
-        if (!pdfs.length) {
-          console.debug('DragDrop: no PDFs in payload', paths)
-        }
+        const isView = mode.value === 'view'
         let lastAddedId = null
-        for (const path of pdfs) {
-          const id = addTo(mode.value, { path, name: basename(path) })
+        for (const path of paths) {
+          const kind = detectFileKind(path)
+          if (!kind) continue
+          if (kind !== 'pdf' && !isView) continue
+          const id = addTo(mode.value, { path, name: basename(path), kind })
           if (id) lastAddedId = id
         }
         // 自動選擇最後拖入的檔案
@@ -406,15 +431,24 @@ if (import.meta.hot) {
 
 async function onAddFiles() {
   try {
+    const isView = mode.value === 'view'
+    const filters = isView
+      ? [
+          { name: '支援的檔案', extensions: ['pdf', 'PDF', 'png', 'PNG', 'jpg', 'JPG', 'jpeg', 'JPEG', 'gif', 'GIF', 'bmp', 'BMP', 'webp', 'WEBP', 'tiff', 'TIFF', 'svg', 'SVG'] }
+        ]
+      : [{ name: 'PDF', extensions: ['pdf', 'PDF'] }]
     const selected = await open({
       multiple: true,
-      filters: [{ name: 'PDF', extensions: ['pdf', 'PDF'] }]
+      filters
     })
     if (!selected) return
     const paths = Array.isArray(selected) ? selected : [selected]
     let lastAddedId = null
     for (const path of paths) {
-      const id = addTo(mode.value, { path, name: basename(path) })
+      const kind = detectFileKind(path)
+      if (!kind) continue
+      if (kind !== 'pdf' && !isView) continue
+      const id = addTo(mode.value, { path, name: basename(path), kind })
       if (id) lastAddedId = id
     }
     // 自動選擇最後新增的檔案

@@ -57,13 +57,13 @@ export function useModeFiles(mode: Ref<Mode>) {
     else activeComposeId.value = id
   }
 
-  function addTo(m: Mode, file: Pick<PdfFile, 'path' | 'name'>) {
+  function addTo(m: Mode, file: Pick<PdfFile, 'path' | 'name' | 'kind'>) {
     const list = getListRef(m)
     console.log('[useModeFiles] addTo called:', { mode: m, currentMode: mode.value, path: file.path })
 
     if (!hasPath(m, file.path)) {
       const id = Math.random().toString(36).slice(2, 9)
-      const newFile = { id, path: file.path, name: file.name }
+      const newFile: PdfFile = { id, path: file.path, name: file.name, kind: file.kind }
       // 使用 unshift 將新檔案加到列表開頭
       list.value.unshift(newFile)
       console.log('[useModeFiles] Added new file:', newFile)

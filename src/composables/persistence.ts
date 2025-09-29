@@ -1,6 +1,8 @@
 import type { Mode, PdfFile } from '../types/pdf'
 import { Store } from '@tauri-apps/plugin-store'
 
+type StoredFile = Omit<PdfFile, 'kind'> & { kind?: PdfFile['kind'] }
+
 export type PersistedState = {
   version: 1
   lastMode: Mode
@@ -30,6 +32,14 @@ export type PersistedState = {
       currentPage: number
       lastViewed: number // timestamp
     }
+  }
+}
+
+type PersistedStateRaw = Omit<PersistedState, 'files'> & {
+  files: {
+    view: StoredFile[]
+    convert: StoredFile[]
+    compose: StoredFile[]
   }
 }
 
@@ -74,7 +84,8 @@ export async function saveAppState(state: PersistedState): Promise<void> {
     console.log('[persistence] State saved successfully')
 
     // 驗證儲存：立即讀回來檢查
-    const verified = await store.get(KEY) as PersistedState | undefined
+    const verifiedRaw = await store.get(KEY) as PersistedStateRaw | undefined
+    const verified = verifiedRaw ? normalizeState(verifiedRaw) : undefined
     if (verified && verified.active.view === state.active.view) {
       console.log('[persistence] Save verification successful')
     } else {
@@ -125,17 +136,19 @@ export async function loadAppState(): Promise<PersistedState | null> {
 
   try {
     console.log('[persistence] Loading state from store')
-    const data = (await store.get(KEY)) as PersistedState | undefined
+    const raw = (await store.get(KEY)) as PersistedStateRaw | undefined
 
-    if (!data) {
+    if (!raw) {
       console.log('[persistence] No saved state found')
       return null
     }
 
-    if (data.version !== 1) {
-      console.warn('[persistence] Incompatible state version:', data.version)
+    if (raw.version !== 1) {
+      console.warn('[persistence] Incompatible state version:', raw.version)
       return null
     }
+
+    const data = normalizeState(raw)
 
     const stateInfo = {
       mode: data.lastMode,
@@ -154,6 +167,27 @@ export async function loadAppState(): Promise<PersistedState | null> {
     console.error('[persistence] Failed to load state:', e)
     return null
   }
+}
+
+function normalizeState(raw: PersistedStateRaw): PersistedState {
+  return {
+    ...raw,
+    files: {
+      view: normalizeFileList(raw.files.view),
+      convert: normalizeFileList(raw.files.convert),
+      compose: normalizeFileList(raw.files.compose),
+    }
+  }
+}
+
+function normalizeFileList(list: StoredFile[] | undefined): PdfFile[] {
+  if (!Array.isArray(list)) return []
+  return list
+    .filter((file): file is StoredFile => !!file)
+    .map((file) => ({
+      ...file,
+      kind: file.kind ?? 'pdf'
+    }))
 }
 
 export async function clearAppState(): Promise<void> {

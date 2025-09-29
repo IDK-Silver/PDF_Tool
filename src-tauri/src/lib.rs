@@ -79,7 +79,13 @@ pub fn run() {
         .filter(|path| {
             path.extension()
                 .and_then(|ext| ext.to_str())
-                .map(|ext| ext.eq_ignore_ascii_case("pdf"))
+                .map(|ext| {
+                    let e = ext.to_ascii_lowercase();
+                    matches!(
+                        e.as_str(),
+                        "pdf" | "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tiff" | "tif" | "svg"
+                    )
+                })
                 .unwrap_or(false)
         })
         .collect();
@@ -188,18 +194,24 @@ pub fn run() {
                 .filter(|path| {
                     path.extension()
                         .and_then(|ext| ext.to_str())
-                        .map(|ext| ext.eq_ignore_ascii_case("pdf"))
+                        .map(|ext| {
+                            let e = ext.to_ascii_lowercase();
+                            matches!(
+                                e.as_str(),
+                                "pdf" | "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tiff" | "tif" | "svg"
+                            )
+                        })
                         .unwrap_or(false)
                 })
                 .collect();
 
             if !paths.is_empty() {
-                info!("Processing {} PDF files from Opened event: {:?}", paths.len(), paths);
+                info!("Processing {} files from Opened event: {:?}", paths.len(), paths);
                 push_pending(paths);
                 // 若前端已經 ready，這裡會立即 emit；否則佇列暫存，等前端呼叫 frontend_ready 再交付
                 try_emit_pending_files(app_handle);
             } else {
-                debug!("No PDF files found in Opened event URLs");
+                debug!("No supported files found in Opened event URLs");
             }
         }
         _ => {}
