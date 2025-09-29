@@ -90,11 +90,11 @@ const emit = defineEmits<{
 .files {
   min-height: 0;
   overflow-y: auto;
-  padding: 2px;
+  padding: 4px;          /* 與固定列高搭配，留出一致邊距 */
   padding-left: 0px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;              /* 列間距固定，不會隨數量改變視覺密度 */
 }
 
 .search {

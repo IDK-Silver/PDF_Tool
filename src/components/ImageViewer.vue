@@ -170,7 +170,11 @@ function scrollToPageOffset(_pageNumber: number, offsetPx: number) {
   if (!container) return
   container.scrollTo({ top: Math.max(0, offsetPx), behavior: 'auto' })
 }
-defineExpose({ getPageMetrics, scrollToPageOffset })
+function getContainerWidth() {
+  const el = containerRef.value
+  return el ? el.clientWidth : 0
+}
+defineExpose({ getPageMetrics, scrollToPageOffset, getContainerWidth })
 </script>
 
 <style scoped>

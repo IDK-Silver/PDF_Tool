@@ -84,9 +84,16 @@ let resizeObs: ResizeObserver | null = null
 function clampScale(v: number) { return Math.min(maxScale, Math.max(minScale, v)) }
 function computeFitScale(): number {
   const container = viewerContainerRef.value
-  if (!container || !basePageWidth.value) return scale.value
-  const margin = isImageFile.value ? 0 : 32
-  const inner = Math.max(0, container.clientWidth - margin)
+  if (!basePageWidth.value) return scale.value
+  // 對圖片：優先使用 ImageViewer 的實際容器寬度（考慮到垂直捲軸佔用寬度）
+  let inner = 0
+  if (isImageFile.value) {
+    const viewer: any = viewerRef.value
+    const w = viewer?.getContainerWidth?.()
+    inner = typeof w === 'number' && w > 0 ? w : (container ? container.clientWidth : 0)
+  } else {
+    inner = container ? Math.max(0, container.clientWidth - 32) : 0
+  }
   if (inner <= 0) return scale.value
   return clampScale(inner / basePageWidth.value)
 }
