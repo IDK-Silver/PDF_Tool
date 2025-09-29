@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, provide } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch, provide, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router"
 import ModeTabs from './components/ModeTabs.vue'
 import AppHeader from './components/AppHeader.vue'
@@ -144,37 +144,61 @@ onMounted(async () => {
     // 處理檔案開啟的函數
     const handleFileOpen = (paths: string[]) => {
       console.log('[App.vue] Handling file open:', paths)
+      console.log('[App.vue] Current mode:', mode.value)
+      console.log('[App.vue] Current files count:', currentFiles.value.length)
       if (paths && Array.isArray(paths)) {
         let lastAddedId = null
         for (const path of paths) {
           // 檔案路徑已在後端處理完成，直接使用
           if (path.toLowerCase().endsWith('.pdf')) {
+            console.log('[App.vue] Adding file:', path)
             const id = addTo(mode.value, { path, name: basename(path) })
+            console.log('[App.vue] Added file with id:', id)
             if (id) lastAddedId = id
           }
         }
         // 自動選擇並顯示最後開啟的檔案
         if (lastAddedId) {
+          console.log('[App.vue] Setting active id to:', lastAddedId)
           setActiveId(lastAddedId)
+          // 使用 nextTick 確保響應式更新完成
+          nextTick(() => {
+            console.log('[App.vue] Active file after nextTick:', activeFile.value)
+          })
         }
+        console.log('[App.vue] Files after adding:', currentFiles.value.map(f => ({id: f.id, name: f.name, path: f.path})))
       }
     }
 
     // 監聽檔案開啟事件（統一事件）
     unlistenFileOpen = await listen('open-file', (event) => {
       console.log('[App.vue] Open-file event received:', event)
+      console.log('[App.vue] Event payload:', event.payload)
+      console.log('[App.vue] Event payload type:', typeof event.payload, Array.isArray(event.payload))
+      console.log('[App.vue] Current mode before handling:', mode.value)
+      console.log('[App.vue] Current activeFile before handling:', activeFile.value)
       handleFileOpen(event.payload as string[])
+      console.log('[App.vue] Current activeFile after handling:', activeFile.value)
     })
 
-    // 主動獲取初始檔案（處理冷啟動的情況）
-    try {
-      const initialFiles = await invoke<string[]>('frontend_ready')
-      if (initialFiles && initialFiles.length > 0) {
-        console.log('[App.vue] Got initial files from frontend_ready:', initialFiles)
-        handleFileOpen(initialFiles)
+    // 主動獲取初始檔案（處理冷啟動的情況）- 添加重試機制
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 100 // ms
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`[App.vue] Calling frontend_ready (attempt ${attempt}/${MAX_RETRIES})...`)
+        // frontend_ready 現在只是一個觸發器，不期待返回檔案
+        await invoke('frontend_ready')
+        console.log('[App.vue] frontend_ready signal sent successfully')
+        // 成功發送信號後退出重試循環，檔案將通過 open-file 事件到達
+        break
+      } catch (err) {
+        console.error(`[App.vue] Failed to call frontend_ready (attempt ${attempt}):`, err)
+        if (attempt < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+        }
       }
-    } catch (err) {
-      console.warn('[App.vue] Failed to call frontend_ready:', err)
     }
 
     // Preferred v2 API: Webview onDragDropEvent

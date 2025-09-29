@@ -28,7 +28,15 @@ export function useModeFiles(mode: Ref<Mode>) {
     }
   })
 
-  const activeFile = computed(() => currentFiles.value.find(f => f.id === currentActiveId.value) || null)
+  const activeFile = computed(() => {
+    const file = currentFiles.value.find(f => f.id === currentActiveId.value) || null
+    console.log('[useModeFiles] Computing activeFile:', {
+      currentActiveId: currentActiveId.value,
+      currentFiles: currentFiles.value.map(f => ({id: f.id, name: f.name})),
+      result: file ? {id: file.id, name: file.name, path: file.path} : null
+    })
+    return file
+  })
 
   function getListRef(m?: Mode) {
     const mm = m ?? mode.value
@@ -51,20 +59,33 @@ export function useModeFiles(mode: Ref<Mode>) {
 
   function addTo(m: Mode, file: Pick<PdfFile, 'path' | 'name'>) {
     const list = getListRef(m)
+    console.log('[useModeFiles] addTo called:', { mode: m, currentMode: mode.value, path: file.path })
+
     if (!hasPath(m, file.path)) {
       const id = Math.random().toString(36).slice(2, 9)
+      const newFile = { id, path: file.path, name: file.name }
       // 使用 unshift 將新檔案加到列表開頭
-      list.value.unshift({ id, path: file.path, name: file.name })
+      list.value.unshift(newFile)
+      console.log('[useModeFiles] Added new file:', newFile)
+      console.log('[useModeFiles] List after adding:', list.value.map(f => ({id: f.id, name: f.name})))
+
       // 如果是當前模式，自動選擇新增的檔案
       if (m === mode.value) {
+        console.log('[useModeFiles] Setting active id for current mode:', id)
         setActiveId(id, m)
+        console.log('[useModeFiles] Active ID set, current activeFile:', activeFile.value)
       }
       return id
     }
     // 如果檔案已存在，找到它的 ID 並選擇它
     const existingFile = list.value.find(f => f.path === file.path)
-    if (existingFile && m === mode.value) {
-      setActiveId(existingFile.id, m)
+    if (existingFile) {
+      console.log('[useModeFiles] File already exists:', existingFile)
+      if (m === mode.value) {
+        console.log('[useModeFiles] Setting active id for existing file:', existingFile.id)
+        setActiveId(existingFile.id, m)
+        console.log('[useModeFiles] Active ID set, current activeFile:', activeFile.value)
+      }
       return existingFile.id
     }
     return null

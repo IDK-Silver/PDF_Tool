@@ -15,6 +15,18 @@ import { getDocument, type PDFDocumentProxy } from '../lib/pdfjs'
 
 const props = defineProps<{ activeFile: PdfFile | null }>()
 
+// 添加對 activeFile prop 變化的監控
+watch(
+  () => props.activeFile,
+  (newFile, oldFile) => {
+    console.log('[ViewMode] activeFile prop changed:', {
+      old: oldFile ? {id: oldFile.id, name: oldFile.name, path: oldFile.path} : null,
+      new: newFile ? {id: newFile.id, name: newFile.name, path: newFile.path} : null
+    })
+  },
+  { immediate: true, deep: true }
+)
+
 const pdfDoc = ref<PDFDocumentProxy | null>(null)
 const loading = ref(false)
 const viewerError = ref<string | null>(null)
@@ -24,17 +36,7 @@ const pageHistory = ref<Record<string, { currentPage: number; lastViewed: number
 const pageHistoryLoaded = ref(false)  // 標記 pageHistory 是否已載入
 const suppressVisibleUpdate = ref(false)
 
-// 立即載入 pageHistory，在任何 watch 執行之前
-loadAppState().then(state => {
-  if (state?.pageHistory) {
-    pageHistory.value = state.pageHistory
-    console.log('[ViewMode] Loaded pageHistory with', Object.keys(pageHistory.value).length, 'entries')
-  }
-  pageHistoryLoaded.value = true
-}).catch(e => {
-  console.error('[ViewMode] Failed to load pageHistory:', e)
-  pageHistoryLoaded.value = true
-})
+// pageHistory 將在 onMounted 中載入
 
 const exporting = ref(false)
 const exportBanner = ref<{ kind: 'success' | 'error'; text: string } | null>(null)
@@ -133,31 +135,14 @@ async function destroyCurrentDoc() {
 watch(
   () => props.activeFile?.path ?? null,
   async (path, _old, onCleanup) => {
+    console.log('[ViewMode] activeFile changed:', props.activeFile)
+    console.log('[ViewMode] path:', path);
     loadToken += 1
     const token = loadToken
     contextMenuVisible.value = false
     lastPageContext.value = null
     pageCount.value = 0
 
-    // 等待 pageHistory 載入完成
-    if (!pageHistoryLoaded.value) {
-      await new Promise(resolve => {
-        const checkInterval = setInterval(() => {
-          if (pageHistoryLoaded.value) {
-            clearInterval(checkInterval)
-            resolve(undefined)
-          }
-        }, 50)
-      })
-    }
-
-    // 檢查是否有保存的頁數，如果沒有才重置為 1
-    if (path && pageHistory.value[path]) {
-      currentPage.value = pageHistory.value[path].currentPage
-      console.log(`[ViewMode] Restoring page ${pageHistory.value[path].currentPage} for file`)
-    } else {
-      currentPage.value = 1
-    }
     viewerError.value = null
     exportBanner.value = null
     exporting.value = false
@@ -169,7 +154,16 @@ watch(
       return
     }
 
+    // 立即開始載入，不阻塞於 pageHistory
     loading.value = true
+
+    // 嘗試恢復頁數（如果 pageHistory 已載入）
+    if (pageHistoryLoaded.value && path && pageHistory.value[path]) {
+      currentPage.value = pageHistory.value[path].currentPage
+      console.log(`[ViewMode] Restoring page ${pageHistory.value[path].currentPage} for file`)
+    } else {
+      currentPage.value = 1
+    }
 
     let cancelled = false
     onCleanup(() => {
@@ -177,25 +171,39 @@ watch(
     })
 
     try {
+      console.log('[ViewMode] Reading file:', path)
       const bytes = await readFile(path)
+      console.log('[ViewMode] File read successfully, bytes length:', bytes.length)
+
       if (cancelled || token !== loadToken) return
 
       const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as ArrayBuffer)
+      console.log('[ViewMode] Creating PDF document from bytes, data length:', data.length)
+
       const loadingTask = getDocument({ data })
+      console.log('[ViewMode] Loading task created, awaiting PDF document...')
+
       const doc = (await loadingTask.promise) as unknown as PDFDocumentProxy
+      console.log('[ViewMode] PDF document loaded successfully, pages:', doc.numPages)
 
       if (cancelled || token !== loadToken) {
+        console.log('[ViewMode] Load cancelled or token changed, destroying doc')
         await doc.destroy().catch(() => undefined)
         return
       }
 
       pdfDoc.value = markRaw(doc) as unknown as PDFDocumentProxy
+      console.log('[ViewMode] PDF document set to reactive state')
     } catch (error) {
       if (token !== loadToken) return
+      console.error('[ViewMode] Error loading PDF:', error)
       viewerError.value = normalizeError(error)
       await destroyCurrentDoc()
     } finally {
-      if (token === loadToken) loading.value = false
+      if (token === loadToken) {
+        console.log('[ViewMode] Setting loading to false')
+        loading.value = false
+      }
     }
   },
   { immediate: true },
@@ -372,13 +380,24 @@ function prevPage() { goToPage((currentPage.value || 1) - 1) }
 function nextPage() { goToPage((currentPage.value || 1) + 1) }
 
 onMounted(async () => {
-  // Load settings and apply default zoom mode
+  // Load settings and page history
   try {
-    settings.value = await loadSettings()
-    if (settings.value.defaultZoomMode) zoomMode.value = settings.value.defaultZoomMode
+    const [appSettings, appState] = await Promise.all([loadSettings(), loadAppState()])
+    settings.value = appSettings
+    if (appSettings.defaultZoomMode) zoomMode.value = appSettings.defaultZoomMode
+
+    if (appState?.pageHistory) {
+      pageHistory.value = appState.pageHistory
+      console.log('[ViewMode] Loaded pageHistory from onMounted with', Object.keys(pageHistory.value).length, 'entries')
+    }
   } catch (e) {
-    console.error('[ViewMode] Error loading settings:', e)
+    console.error('[ViewMode] Error loading settings or app state:', e)
+  } finally {
+    // 總是標記為已載入，即使出錯也不阻塞 PDF 載入
+    pageHistoryLoaded.value = true
+    console.log('[ViewMode] pageHistoryLoaded set to true')
   }
+
   const el = viewerContainerRef.value
   if (el && 'ResizeObserver' in window) {
     resizeObs = new ResizeObserver(() => {
