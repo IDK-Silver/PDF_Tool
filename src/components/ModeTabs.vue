@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { EyeIcon, ArrowPathIcon, Squares2X2Icon } from '@heroicons/vue/24/outline'
+import { EyeIcon } from '@heroicons/vue/24/outline'
 
 type Mode = 'view' | 'convert' | 'compose'
 
@@ -8,8 +8,8 @@ const emit = defineEmits<{ (e: 'navigate', key: Mode): void }>()
 
 const tabs: Array<{ key: Mode, label: string, icon: any }> = [
   { key: 'view', label: 'View', icon: EyeIcon },
-  { key: 'convert', label: 'Convert', icon: ArrowPathIcon },
-  { key: 'compose', label: 'Compose', icon: Squares2X2Icon },
+  // { key: 'convert', label: 'Convert', icon: ArrowPathIcon },
+  // { key: 'compose', label: 'Compose', icon: Squares2X2Icon },
 ]
 
 </script>

@@ -1,8 +1,12 @@
 use tauri::{Emitter, Manager};
+#[cfg(all(desktop, not(target_os = "macos")))]
+use tauri::menu::{MenuBuilder, SubmenuBuilder};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::path::PathBuf;
 use log::{info, debug, warn, error};
+#[cfg(target_os = "macos")]
+use muda::{Menu as NativeMenu, PredefinedMenuItem, Submenu as NativeSubmenu, AboutMetadata};
 
 // 改用隊列來儲存待處理的檔案
 static PENDING_FILES: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
@@ -87,7 +91,6 @@ pub fn run() {
     }
 
     let app = tauri::Builder::default()
-        .enable_macos_default_menu(true)
         .plugin(tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Info)
             .build())
@@ -96,7 +99,58 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![greet, frontend_ready])
-        .setup(|_app| {
+        .setup(|app| {
+            #[cfg(target_os = "macos")]
+            {
+                let app_name = app.package_info().name.clone();
+                let version = app.package_info().version.to_string();
+                let copyright = app.config().bundle.copyright.clone();
+                let publisher = app.config().bundle.publisher.clone();
+                let handle = app.app_handle().clone();
+
+                handle.run_on_main_thread(move || {
+                    if let Err(err) = init_macos_menu(app_name, version, copyright, publisher) {
+                        error!("[macOS] Failed to initialize menu: {err:?}");
+                    }
+                })?;
+            }
+
+            #[cfg(all(desktop, not(target_os = "macos")))]
+            {
+                let app_name = app.package_info().name.clone();
+
+                let app_menu = SubmenuBuilder::new(app, &app_name)
+                    .about(None)
+                    .separator()
+                    .quit()
+                    .build()?;
+
+                let edit_menu = SubmenuBuilder::new(app, "Edit")
+                    .undo()
+                    .redo()
+                    .separator()
+                    .cut()
+                    .copy()
+                    .paste()
+                    .select_all()
+                    .build()?;
+
+                let window_menu = SubmenuBuilder::new(app, "Window")
+                    .minimize()
+                    .maximize()
+                    .close_window()
+                    .build()?;
+
+                let help_menu = SubmenuBuilder::new(app, "Help")
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .items(&[&app_menu, &edit_menu, &window_menu, &help_menu])
+                    .build()?;
+
+                app.set_menu(menu)?;
+            }
+
             // setup 階段不需要處理檔案，讓 RunEvent 處理即可
             Ok(())
         })
@@ -150,4 +204,83 @@ pub fn run() {
         }
         _ => {}
     });
+}
+
+#[cfg(target_os = "macos")]
+fn init_macos_menu(
+    app_name: String,
+    version: String,
+    copyright: Option<String>,
+    publisher: Option<String>,
+) -> muda::Result<()> {
+    let mut metadata = AboutMetadata::default();
+    metadata.name = Some(app_name.clone());
+    metadata.version = Some(version);
+    metadata.copyright = copyright;
+    if let Some(publisher) = publisher {
+        metadata.authors = Some(vec![publisher]);
+    }
+    let metadata = Some(metadata);
+
+    let app_menu = {
+        let submenu = NativeSubmenu::new(&app_name, true);
+        let items = [
+            PredefinedMenuItem::about(None, metadata.clone()),
+            PredefinedMenuItem::separator(),
+            PredefinedMenuItem::services(None),
+            PredefinedMenuItem::separator(),
+            PredefinedMenuItem::hide(None),
+            PredefinedMenuItem::hide_others(None),
+            PredefinedMenuItem::show_all(None),
+            PredefinedMenuItem::separator(),
+            PredefinedMenuItem::quit(None),
+        ];
+        for item in &items {
+            submenu.append(item)?;
+        }
+        submenu
+    };
+
+    let edit_menu = {
+        let submenu = NativeSubmenu::new("Edit", true);
+        let items = [
+            PredefinedMenuItem::undo(None),
+            PredefinedMenuItem::redo(None),
+            PredefinedMenuItem::separator(),
+            PredefinedMenuItem::cut(None),
+            PredefinedMenuItem::copy(None),
+            PredefinedMenuItem::paste(None),
+            PredefinedMenuItem::select_all(None),
+        ];
+        for item in &items {
+            submenu.append(item)?;
+        }
+        submenu
+    };
+
+    let window_menu = {
+        let submenu = NativeSubmenu::new("Window", true);
+        let items = [
+            PredefinedMenuItem::minimize(None),
+            PredefinedMenuItem::maximize(None),
+            PredefinedMenuItem::fullscreen(None),
+            PredefinedMenuItem::separator(),
+            PredefinedMenuItem::close_window(None),
+            PredefinedMenuItem::bring_all_to_front(None),
+        ];
+        for item in &items {
+            submenu.append(item)?;
+        }
+        submenu
+    };
+
+    let help_menu = NativeSubmenu::new("Help", true);
+
+    let menu = NativeMenu::new();
+    menu.append(&app_menu)?;
+    menu.append(&edit_menu)?;
+    menu.append(&window_menu)?;
+    menu.append(&help_menu)?;
+    menu.init_for_nsapp();
+    Ok(())
 }
