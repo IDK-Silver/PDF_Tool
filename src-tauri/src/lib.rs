@@ -100,6 +100,35 @@ pub fn run() {
         .plugin(tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Info)
             .build())
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // When a second instance is launched (e.g. by opening a file),
+            // forward supported file paths to the main instance.
+            let supported = [
+                "pdf", "png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "tif", "svg",
+            ];
+
+            let mut paths: Vec<PathBuf> = Vec::new();
+            for a in args {
+                // Ignore flags; only consider arguments that look like paths
+                if a.starts_with('-') { continue; }
+                let p = PathBuf::from(&a);
+                if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
+                    if supported.iter().any(|s| ext.eq_ignore_ascii_case(s)) {
+                        paths.push(p);
+                    }
+                }
+            }
+
+            if !paths.is_empty() {
+                info!("Single-instance: received {} paths: {:?}", paths.len(), paths);
+                push_pending(paths);
+                try_emit_pending_files(app);
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
