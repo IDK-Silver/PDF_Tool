@@ -8,7 +8,8 @@ import { useModeFiles } from './composables/useModeFiles'
 import type { Mode, PdfFile } from './types/pdf'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { getCurrentWindow } from '@tauri-apps/api/window'
+import { getCurrentWindow, type Window as TauriWindow } from '@tauri-apps/api/window'
+import { LogicalSize } from '@tauri-apps/api/dpi'
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { loadAppState, saveAppState, saveAppStateDebounced } from './composables/persistence'
@@ -76,6 +77,9 @@ const leftCollapsed = ref(false)
 provide('leftCollapsed', leftCollapsed)
 provide('setLeftCollapsed', (v?: boolean) => { leftCollapsed.value = typeof v === 'boolean' ? v : !leftCollapsed.value })
 
+const windowWidth = ref(Math.round(window.innerWidth))
+const windowHeight = ref(Math.round(window.innerHeight))
+
 function onGlobalKey(e: KeyboardEvent) {
   const meta = e.metaKey || e.ctrlKey
   if (!meta) return
@@ -115,10 +119,13 @@ const isDragging = ref(false)
 let unlistenDrag: (() => void) | null = null
 let unlistenFileOpen: (() => void) | null = null
 let unlistenClose: (() => void) | null = null
+let unlistenWindowResized: (() => void) | null = null
+let appWindowHandle: TauriWindow | null = null
 const prevent = (e: Event) => { e.preventDefault() }
 let handleWinResize: (() => void) | null = null
 
 onMounted(async () => {
+  let pendingRestoreSize: { width: number; height: number } | null = null
   try {
     const persisted = await loadAppState()
     if (persisted) {
@@ -155,6 +162,12 @@ onMounted(async () => {
       if (persisted.lastMode) mode.value = persisted.lastMode
       if (persisted.ui?.leftWidthPx) leftWidth.value = clamp(persisted.ui.leftWidthPx)
       if (typeof persisted.ui?.leftCollapsed === 'boolean') leftCollapsed.value = persisted.ui.leftCollapsed
+      if (persisted.ui?.windowWidthPx && persisted.ui?.windowHeightPx) {
+        const width = Math.max(200, Math.round(persisted.ui.windowWidthPx))
+        const height = Math.max(200, Math.round(persisted.ui.windowHeightPx))
+        pendingRestoreSize = { width, height }
+        updateWindowSize(width, height)
+      }
 
       // 移除自動選擇第一個檔案的邏輯，保持使用者的選擇
       // 只有在完全沒有 activeId 時才選擇第一個
@@ -272,6 +285,7 @@ onMounted(async () => {
   handleWinResize = () => {
     maxLeft.value = Math.max(minLeft, window.innerWidth * 0.7)
     leftWidth.value = clamp(leftWidth.value)
+    updateWindowSize(window.innerWidth, window.innerHeight, true)
   }
   window.addEventListener('resize', handleWinResize)
   window.addEventListener('keydown', onGlobalKey)
@@ -279,9 +293,32 @@ onMounted(async () => {
   // 禁用預設的右鍵選單（除了 PDF 檢視器區域）
   window.addEventListener('contextmenu', handleContextMenu)
 
-  // Tauri 關閉事件處理
+  // Tauri 視窗狀態處理
   try {
     const appWindow = getCurrentWindow()
+    appWindowHandle = appWindow
+    if (pendingRestoreSize) {
+      try {
+        await appWindow.setSize(new LogicalSize(pendingRestoreSize.width, pendingRestoreSize.height))
+      } catch (err) {
+        console.warn('[App.vue] Failed to restore window size:', err)
+      } finally {
+        pendingRestoreSize = null
+      }
+    }
+
+    await syncWindowSizeFromAppWindow(appWindow)
+
+    unlistenWindowResized = await appWindow.onResized(async ({ payload }) => {
+      try {
+        const factor = await appWindow.scaleFactor()
+        const logical = payload.toLogical(factor)
+        updateWindowSize(Math.round(logical.width), Math.round(logical.height), true)
+      } catch (resizeErr) {
+        console.warn('[App.vue] Failed to handle window resize event:', resizeErr)
+      }
+    })
+
     let isClosing = false
     const CLOSE_SAVE_TIMEOUT_MS = 2000
 
@@ -293,6 +330,8 @@ onMounted(async () => {
 
       e.preventDefault()
       isClosing = true
+
+      await syncWindowSizeFromAppWindow(appWindow, true)
 
       // 帶超時的狀態儲存，確保應用程式能關閉
       const save = persistImmediately()
@@ -309,7 +348,15 @@ onMounted(async () => {
       }
     })
   } catch (err) {
-    console.warn('[App.vue] Could not register close handler (not in Tauri?):', err)
+    console.warn('[App.vue] Could not register window handlers (not in Tauri?):', err)
+  } finally {
+    if (appWindowHandle) {
+      try {
+        await appWindowHandle.show()
+      } catch (err) {
+        console.warn('[App.vue] Failed to show window:', err)
+      }
+    }
   }
 
   // register watchers after initial load
@@ -342,6 +389,7 @@ onBeforeUnmount(() => {
   try { unlistenDrag?.() } finally { unlistenDrag = null }
   try { unlistenFileOpen?.() } finally { unlistenFileOpen = null }
   try { unlistenClose?.() } finally { unlistenClose = null }
+  try { unlistenWindowResized?.() } finally { unlistenWindowResized = null }
   if (handleWinResize) {
     try { window.removeEventListener('resize', handleWinResize) } finally { handleWinResize = null }
   }
@@ -352,6 +400,7 @@ onBeforeUnmount(() => {
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     try { unlistenClose?.() } finally { unlistenClose = null }
+    try { unlistenWindowResized?.() } finally { unlistenWindowResized = null }
   })
 }
 
@@ -402,7 +451,36 @@ function buildState() {
       convert: qConvert.value,
       compose: qCompose.value,
     },
-    ui: { leftWidthPx: leftWidth.value, leftCollapsed: leftCollapsed.value },
+    ui: {
+      leftWidthPx: leftWidth.value,
+      leftCollapsed: leftCollapsed.value,
+      windowWidthPx: windowWidth.value,
+      windowHeightPx: windowHeight.value,
+    },
+  }
+}
+
+function persistWindowSizeDebounced(delayMs = 800) {
+  const state = buildState()
+  saveAppStateDebounced(state, delayMs)
+}
+
+function updateWindowSize(width: number, height: number, persist = false) {
+  const nextWidth = Math.round(width)
+  const nextHeight = Math.round(height)
+  if (Number.isFinite(nextWidth) && nextWidth > 0) windowWidth.value = nextWidth
+  if (Number.isFinite(nextHeight) && nextHeight > 0) windowHeight.value = nextHeight
+  if (persist) persistWindowSizeDebounced()
+}
+
+async function syncWindowSizeFromAppWindow(appWindow: TauriWindow, persist = false) {
+  try {
+    const size = await appWindow.innerSize()
+    const factor = await appWindow.scaleFactor()
+    const logical = size.toLogical(factor)
+    updateWindowSize(Math.round(logical.width), Math.round(logical.height), persist)
+  } catch (err) {
+    console.warn('[App.vue] Could not determine current window size:', err)
   }
 }
 

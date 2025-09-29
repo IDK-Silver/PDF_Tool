@@ -87,6 +87,7 @@ pub fn run() {
     }
 
     let app = tauri::Builder::default()
+        .enable_macos_default_menu(true)
         .plugin(tauri_plugin_log::Builder::default()
             .level(log::LevelFilter::Info)
             .build())

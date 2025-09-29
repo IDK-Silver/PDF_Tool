@@ -22,6 +22,8 @@ export type PersistedState = {
   ui?: {
     leftWidthPx?: number
     leftCollapsed?: boolean
+    windowWidthPx?: number
+    windowHeightPx?: number
   }
   pageHistory?: {
     [filePath: string]: {
@@ -59,7 +61,9 @@ export async function saveAppState(state: PersistedState): Promise<void> {
     composeFiles: state.files.compose.length,
     activeView: state.active.view,
     activeConvert: state.active.convert,
-    activeCompose: state.active.compose
+    activeCompose: state.active.compose,
+    windowWidth: state.ui?.windowWidthPx ?? null,
+    windowHeight: state.ui?.windowHeightPx ?? null
   }
 
   console.log('[persistence] Saving state:', stateInfo)
