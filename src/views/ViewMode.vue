@@ -79,9 +79,15 @@ const maxScale = 4
 const viewerContainerRef = ref<HTMLDivElement | null>(null)
 const containerWidth = ref(0)
 const basePageWidth = ref(0)
+const lastAppliedScale = ref(1)
 let resizeObs: ResizeObserver | null = null
 
-function clampScale(v: number) { return Math.min(maxScale, Math.max(minScale, v)) }
+function clampScale(v: number) {
+  const upper = scale.value > maxScale
+    ? Math.max(lastAppliedScale.value, scale.value)
+    : maxScale
+  return Math.min(upper, Math.max(minScale, v))
+}
 function computeFitScale(): number {
   const container = viewerContainerRef.value
   if (!basePageWidth.value) return scale.value
@@ -95,7 +101,8 @@ function computeFitScale(): number {
     inner = container ? Math.max(0, container.clientWidth - 32) : 0
   }
   if (inner <= 0) return scale.value
-  return clampScale(inner / basePageWidth.value)
+  const rawScale = inner / basePageWidth.value
+  return Number.isFinite(rawScale) && rawScale > 0 ? rawScale : scale.value
 }
 async function ensureBasePageWidth() {
   try {
@@ -105,7 +112,6 @@ async function ensureBasePageWidth() {
     basePageWidth.value = viewport.width
   } catch { }
 }
-const lastAppliedScale = ref(1)
 function setZoomFit() { applyScaleWithAnchor(computeFitScale(), 'fit') }
 function setZoomActual() { applyScaleWithAnchor(1, 'actual') }
 
