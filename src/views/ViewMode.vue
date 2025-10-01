@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { readFile } from '@tauri-apps/plugin-fs'
-import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
+import { ChevronDoubleRightIcon, MagnifyingGlassIcon, ChevronUpIcon, ChevronDownIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import PdfViewer from '../components/PdfViewer.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import ContextMenu from '../components/ContextMenu.vue'
@@ -60,6 +60,209 @@ const basePageWidth = ref(0)
 const lastAppliedScale = ref(1)
 const viewerRef = ref<any>(null)
 let pinchChain: Promise<void> = Promise.resolve()
+
+type SearchStateSnapshot = {
+  open: boolean
+  query: string
+  index: number
+}
+
+// Search state
+const searchOpen = ref(false)
+const searchQuery = ref('')
+const searchTotal = ref<number | null>(null)
+const searchIndex = ref(0)
+const searchPageMatches = ref<Array<{ pageIndex: number; count: number }>>([])
+const searchInputRef = ref<HTMLInputElement | null>(null)
+const pageTextCache = new Map<number, string>()
+const searchStateByPath = ref(new Map<string, SearchStateSnapshot>())
+let searchComputeToken = 0
+
+function resetSearchRuntime() {
+  searchComputeToken += 1
+  searchPageMatches.value = []
+  searchTotal.value = null
+  try { viewerRef.value?.clearFindHighlights?.() } catch {}
+}
+
+function persistSearchStateFor(path: string | null | undefined) {
+  if (!path) return
+  const snapshot: SearchStateSnapshot = {
+    open: searchOpen.value,
+    query: searchQuery.value,
+    index: searchIndex.value,
+  }
+  searchStateByPath.value.set(path, snapshot)
+}
+
+function persistCurrentSearchState() {
+  if (!isPdfFile.value) return
+  persistSearchStateFor(activeFileRef.value?.path ?? null)
+}
+
+function applySearchStateFor(path: string | null, isPdf: boolean) {
+  resetSearchRuntime()
+  if (!path || !isPdf) {
+    searchOpen.value = false
+    searchQuery.value = ''
+    searchIndex.value = 0
+    return
+  }
+  const stored = searchStateByPath.value.get(path) || null
+  searchOpen.value = stored?.open ?? false
+  searchQuery.value = stored?.query ?? ''
+  searchIndex.value = stored?.index ?? 0
+  persistCurrentSearchState()
+}
+
+function toggleSearch(open?: boolean) {
+  if (!isPdfFile.value && (open ?? true)) return
+  const next = open ?? !searchOpen.value
+  searchOpen.value = next
+  if (next) {
+    nextTick(() => searchInputRef.value?.focus())
+    if (searchQuery.value.trim()) void updateSearchMatches({ keepIndex: true })
+  } else {
+    resetSearchRuntime()
+  }
+  persistCurrentSearchState()
+}
+
+async function getPageText(idx: number): Promise<string> {
+  if (pageTextCache.has(idx)) return pageTextCache.get(idx) as string
+  const doc = pdfDoc.value
+  if (!doc) return ''
+  try {
+    const page = await doc.getPage(idx + 1)
+    const tc = await page.getTextContent()
+    const text = tc.items.map((it: any) => (it?.str ?? '')).join(' ')
+    pageTextCache.set(idx, text)
+    return text
+  } catch {
+    return ''
+  }
+}
+
+function countOccurrences(hay: string, needle: string): number {
+  if (!needle) return 0
+  const h = hay.toLowerCase()
+  const n = needle.toLowerCase()
+  let c = 0, pos = 0
+  while (true) {
+    const i = h.indexOf(n, pos)
+    if (i < 0) break
+    c += 1
+    pos = i + n.length
+  }
+  return c
+}
+
+function mapGlobalIndex(index: number) {
+  if (!searchPageMatches.value.length) return null
+  let offset = 0
+  for (const entry of searchPageMatches.value) {
+    if (index < offset + entry.count) {
+      return { pageIndex: entry.pageIndex, matchIndex: index - offset }
+    }
+    offset += entry.count
+  }
+  return null
+}
+
+async function highlightCurrentMatch(expectedToken?: number) {
+  const viewer = viewerRef.value
+  if (!viewer?.highlightInPage) return
+  const q = searchQuery.value.trim()
+  const total = searchTotal.value ?? 0
+  if (!q || !total) {
+    try { viewer.clearFindHighlights?.() } catch {}
+    return
+  }
+  if (expectedToken != null && expectedToken !== searchComputeToken) return
+  const mapping = mapGlobalIndex(Math.min(searchIndex.value, Math.max(0, total - 1)))
+  if (!mapping) return
+  viewer.scrollToPage?.(mapping.pageIndex + 1)
+  await nextTick(); await nextTick()
+  if (expectedToken != null && expectedToken !== searchComputeToken) return
+  try {
+    await viewer.highlightInPage(mapping.pageIndex, q, { activeIndex: mapping.matchIndex })
+  } catch (error) {
+    console.error('[ViewMode] highlight failed', error)
+  }
+}
+
+async function updateSearchMatches(options: { keepIndex?: boolean } = {}) {
+  const keepIndex = !!options.keepIndex
+  const q = searchQuery.value.trim()
+  const totalPages = pageCount.value
+  const viewer = viewerRef.value
+  const token = ++searchComputeToken
+
+  if (!q || !totalPages || !isPdfFile.value) {
+    searchPageMatches.value = []
+    searchTotal.value = q ? 0 : null
+    if (!keepIndex) searchIndex.value = 0
+    try { viewer?.clearFindHighlights?.() } catch {}
+    persistCurrentSearchState()
+    return
+  }
+
+  const entries: Array<{ pageIndex: number; count: number }> = []
+  let total = 0
+  for (let i = 0; i < totalPages; i++) {
+    const txt = await getPageText(i)
+    if (token !== searchComputeToken) return
+    const count = countOccurrences(txt, q)
+    if (count > 0) {
+      entries.push({ pageIndex: i, count })
+      total += count
+    }
+  }
+  if (token !== searchComputeToken) return
+
+  searchPageMatches.value = entries
+  searchTotal.value = total
+
+  if (!total) {
+    if (!keepIndex) searchIndex.value = 0
+    try { viewer?.clearFindHighlights?.() } catch {}
+    persistCurrentSearchState()
+    return
+  }
+
+  if (!keepIndex || searchIndex.value >= total) searchIndex.value = 0
+  await highlightCurrentMatch(token)
+  persistCurrentSearchState()
+}
+
+function onSearchInput() {
+  searchIndex.value = 0
+  void updateSearchMatches()
+}
+
+async function findInDirection(dir: 1 | -1) {
+  if (!isPdfFile.value) return
+  const q = searchQuery.value.trim()
+  if (!q) return
+  if (searchTotal.value == null) await updateSearchMatches({ keepIndex: false })
+  const total = searchTotal.value ?? 0
+  if (!total) return
+  searchIndex.value = (searchIndex.value + (dir === 1 ? 1 : -1) + total) % total
+  await highlightCurrentMatch()
+  persistCurrentSearchState()
+}
+
+async function onSearchEnter(event: KeyboardEvent) {
+  await findInDirection(event.shiftKey ? -1 : 1)
+}
+
+function goToPrevMatch() {
+  void findInDirection(-1)
+}
+
+function goToNextMatch() {
+  void findInDirection(1)
+}
 
 let loadToken = 0
 let resizeObs: ResizeObserver | null = null
@@ -126,7 +329,8 @@ async function destroyCurrentDoc() {
 
 watch(
   () => activeFileRef.value?.path ?? null,
-  async (path, _old, onCleanup) => {
+  async (path, oldPath, onCleanup) => {
+    persistSearchStateFor(oldPath)
     loadToken += 1
     const token = loadToken
     contextMenu.reset()
@@ -134,6 +338,9 @@ watch(
     pageCount.value = 0
     viewerError.value = null
     pendingRestorePage.value = null
+    pageTextCache.clear()
+    const nextIsPdf = activeFileRef.value?.kind !== 'image'
+    applySearchStateFor(path, nextIsPdf)
 
     await destroyCurrentDoc()
 
@@ -230,6 +437,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(async () => {
+  persistSearchStateFor(activeFileRef.value?.path ?? null)
   await destroyCurrentDoc()
   if (resizeObs) {
     try { resizeObs.disconnect() } catch { /* ignore */ }
@@ -386,12 +594,18 @@ watch([pdfDoc, () => zoomMode.value], async ([doc, mode]) => {
 function onKeydown(event: KeyboardEvent) {
   const meta = event.metaKey || event.ctrlKey
   if (!meta) return
+  const key = String(event.key || '')
+  if (key.toLowerCase() === 'f') {
+    event.preventDefault()
+    if (isPdfFile.value) toggleSearch(true)
+    return
+  }
   const viewerAny: any = viewerRef.value
   // 禁用一次 tween，讓鍵盤縮放即時、不疊加動畫
   try { viewerAny?.disableTweenOnce?.(0) } catch {}
-  if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomIn() }
-  else if (event.key === '-' || event.key === '_') { event.preventDefault(); zoomOut() }
-  else if (event.key === '0') { event.preventDefault(); setZoomFit() }
+  if (key === '+' || key === '=') { event.preventDefault(); zoomIn() }
+  else if (key === '-' || key === '_') { event.preventDefault(); zoomOut() }
+  else if (key === '0') { event.preventDefault(); setZoomFit() }
 }
 
 function onWindowResize() {
@@ -434,6 +648,9 @@ function onDocLoaded(count: number) {
       goToPage(savedPage)
       console.log(`[ViewMode] Restored page ${savedPage} after PDF load`)
     }, 150)
+  }
+  if (searchOpen.value && searchQuery.value.trim()) {
+    void updateSearchMatches({ keepIndex: true })
   }
 }
 
@@ -482,6 +699,17 @@ function onPageContextMenu(context: PagePointerContext) {
   <div class="view-mode-root">
     <header class="view-header">
       <div class="header-left">
+        <button
+          v-if="isPdfFile"
+          class="search-btn"
+          type="button"
+          :class="{ active: searchOpen }"
+          @click="toggleSearch()"
+          aria-label="搜尋文件"
+          title="搜尋 (⌘/Ctrl+F)"
+        >
+          <MagnifyingGlassIcon class="icon" aria-hidden="true" />
+        </button>
         <button v-if="leftCollapsed" class="btn-expand" type="button" @click="setLeftCollapsed?.(false)"
           aria-label="展開側欄" title="展開側欄">
           <ChevronDoubleRightIcon class="icon" aria-hidden="true" />
@@ -517,6 +745,25 @@ function onPageContextMenu(context: PagePointerContext) {
       <p>請在左側選擇一個檔案</p>
     </div>
     <div v-else class="viewer-panel" ref="viewerContainerRef">
+      <!-- Search overlay at top-left -->
+      <div v-if="isPdfFile && searchOpen" class="search-overlay">
+        <div class="search-box">
+          <MagnifyingGlassIcon class="icon leading" aria-hidden="true" />
+          <input
+            ref="searchInputRef"
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜尋文件…"
+            @keydown.enter.prevent="onSearchEnter"
+            @keydown.esc.stop.prevent="toggleSearch(false)"
+            @input="onSearchInput"
+          />
+          <div class="meta" v-if="searchTotal != null">{{ searchTotal ? (searchIndex + 1) : 0 }}/{{ searchTotal }}</div>
+          <button class="icon-btn" type="button" :disabled="!(searchTotal ?? 0)" @click="goToPrevMatch" title="上一個"><ChevronUpIcon class="icon" /></button>
+          <button class="icon-btn" type="button" :disabled="!(searchTotal ?? 0)" @click="goToNextMatch" title="下一個"><ChevronDownIcon class="icon" /></button>
+          <button class="icon-btn" type="button" @click="toggleSearch(false)" title="關閉"><XMarkIcon class="icon" /></button>
+        </div>
+      </div>
       <div v-if="viewerError" class="alert error">{{ viewerError }}</div>
       <PdfViewer v-else-if="pdfDoc && isPdfFile" :doc="pdfDoc" :scale="scale" :textIdleMs="settings.viewerTextIdleMs" :renderIdleMs="settings.viewerRenderIdleMs" :zoomTweenMs="settings.viewerZoomTweenMs" ref="viewerRef" @doc-loaded="onDocLoaded"
         @doc-error="onDocError" @visible-page="onVisiblePage" @page-contextmenu="onPageContextMenu" @pinch-zoom="onPinchZoom" />
@@ -559,6 +806,29 @@ function onPageContextMenu(context: PagePointerContext) {
 
 .header-left { display: flex; align-items: center; gap: 6px; }
 .header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+.search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text, #111827);
+  cursor: pointer;
+}
+
+.search-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.search-btn:hover,
+.search-btn.active {
+  background: var(--hover, #f3f4f6);
+}
 
 .meta {
   color: var(--text-muted, #6b7280);
@@ -678,6 +948,50 @@ function onPageContextMenu(context: PagePointerContext) {
   border: none;
   overflow: hidden;
 }
+
+.search-overlay {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(1.2) blur(4px);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+}
+
+.search-box .icon.leading { width: 16px; height: 16px; color: #6b7280; }
+.search-box input {
+  width: 220px;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+  color: var(--text, #111827);
+}
+.search-box .meta { font-size: 12px; color: #6b7280; margin-left: 4px; }
+.search-box .icon-btn {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: #fff;
+  cursor: pointer;
+}
+.search-box .icon-btn:disabled { opacity: 0.4; cursor: default; }
+.search-box .icon-btn:not(:disabled):hover { background: var(--hover, #f3f4f6); }
+.search-box .icon-btn .icon { width: 16px; height: 16px; }
 
 .loading-state,
 .empty-state {

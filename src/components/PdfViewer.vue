@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick } from 'vue'
 import type { PDFDocumentProxy } from '../lib/pdfjs'
 import type { PagePointerContext } from '../types/viewer'
 import { usePdfViewerEngine } from '../composables/pdfViewer/usePdfViewerEngine'
@@ -56,6 +56,135 @@ const {
   scrollToPosition,
 } = engine
 
+// --- Simple find/highlight helpers (per page) ---
+function clearFindHighlights(pageIndex?: number) {
+  try {
+    const indices = Array.isArray(pages.value) ? pages.value.map((_, i) => i) : []
+    const targets = pageIndex != null ? [pageIndex] : indices
+    for (const idx of targets) {
+      const page = pages.value[idx]
+      const host = page?.inner || page?.container
+      const overlay = host?.querySelector('.page-overlay') as HTMLElement | null
+      if (!overlay) continue
+      const existing = overlay.querySelectorAll('.find-highlight, .find-highlight-current')
+      existing.forEach((el) => el.parentElement?.removeChild(el))
+    }
+  } catch {}
+}
+
+async function waitForTextLayer(idx: number, tries = 8, delayMs = 50): Promise<HTMLElement | null> {
+  for (let i = 0; i < tries; i++) {
+    const page = pages.value[idx]
+    const host = page?.inner || page?.container
+    const tl = host?.querySelector('.textLayer') as HTMLElement | null
+    if (tl) return tl
+    await new Promise((r) => setTimeout(r, delayMs))
+  }
+  return null
+}
+
+function walkTextNodes(root: Node, cb: (node: Text) => void) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let n: Node | null
+  // eslint-disable-next-line no-cond-assign
+  while ((n = walker.nextNode())) {
+    const t = n as Text
+    if (t.nodeValue && t.nodeValue.trim().length) cb(t)
+  }
+}
+
+function indexOfAll(hay: string, needle: string, caseSensitive = false): number[] {
+  const h = caseSensitive ? hay : hay.toLowerCase()
+  const n = caseSensitive ? needle : needle.toLowerCase()
+  const res: number[] = []
+  let pos = 0
+  if (!n) return res
+  while (true) {
+    const i = h.indexOf(n, pos)
+    if (i < 0) break
+    res.push(i)
+    pos = i + n.length
+  }
+  return res
+}
+
+function makeHighlightDiv(x: number, y: number, w: number, h: number, current = false): HTMLDivElement {
+  const div = document.createElement('div')
+  div.className = current ? 'find-highlight-current' : 'find-highlight'
+  Object.assign(div.style, {
+    position: 'absolute',
+    left: `${x}px`,
+    top: `${y}px`,
+    width: `${Math.max(1, w)}px`,
+    height: `${Math.max(1, h)}px`,
+    background: current ? 'rgba(255, 196, 0, 0.45)' : 'rgba(255, 235, 59, 0.25)',
+    pointerEvents: 'none',
+    borderRadius: '2px',
+    boxShadow: current ? '0 0 0 1px rgba(255, 196, 0, 0.6) inset' : '',
+  } as Partial<CSSStyleDeclaration>)
+  return div
+}
+
+async function highlightInPage(
+  pageIndex: number,
+  query: string,
+  opts?: { caseSensitive?: boolean; activeIndex?: number },
+): Promise<{ total: number; active: number | null }> {
+  clearFindHighlights(pageIndex)
+  const trimmed = (query || '').trim()
+  if (!trimmed) return { total: 0, active: null }
+  const pageView = pages.value[pageIndex]
+  if (!pageView) return { total: 0, active: null }
+  const host = pageView.inner || pageView.container
+  const overlay = host?.querySelector('.page-overlay') as HTMLElement | null
+  if (!host || !overlay) return { total: 0, active: null }
+  const textLayer = await waitForTextLayer(pageIndex)
+  if (!textLayer) return { total: 0, active: null }
+  await nextTick()
+
+  const caseSensitive = !!opts?.caseSensitive
+  const matches: Array<{ rects: Array<{ x: number; y: number; w: number; h: number }> }> = []
+  const pageRect = (host as HTMLElement).getBoundingClientRect()
+
+  walkTextNodes(textLayer, (textNode) => {
+    const value = textNode.nodeValue || ''
+    const hits = indexOfAll(value, trimmed, caseSensitive)
+    for (const start of hits) {
+      const range = document.createRange()
+      try {
+        range.setStart(textNode, start)
+        range.setEnd(textNode, start + trimmed.length)
+      } catch { continue }
+      const rects: Array<{ x: number; y: number; w: number; h: number }> = []
+      const rectList = range.getClientRects()
+      for (const r of Array.from(rectList)) {
+        rects.push({
+          x: r.left - pageRect.left,
+          y: r.top - pageRect.top,
+          w: r.width,
+          h: r.height,
+        })
+      }
+      if (rects.length) matches.push({ rects })
+    }
+  })
+
+  if (!matches.length) return { total: 0, active: null }
+
+  const activeIndex = Math.max(0, Math.min(matches.length - 1, opts?.activeIndex ?? 0))
+  matches.forEach((match, matchIndex) => {
+    match.rects.forEach((rect) => {
+      overlay.appendChild(makeHighlightDiv(rect.x, rect.y, rect.w, rect.h, matchIndex === activeIndex))
+    })
+  })
+
+  const focusRect = matches[activeIndex]?.rects?.[0]
+  if (focusRect) {
+    try { scrollToPageOffset(pageIndex + 1, Math.max(0, focusRect.y - 60)) } catch {}
+  }
+  return { total: matches.length, active: activeIndex }
+}
+
 defineExpose({
   scrollToPage,
   getPageMetrics,
@@ -64,6 +193,8 @@ defineExpose({
   scrollToPosition,
   prepareZoomAnchor,
   disableTweenOnce: (engine as any).disableTweenOnce,
+  highlightInPage,
+  clearFindHighlights,
 })
 </script>
 
@@ -163,6 +294,11 @@ defineExpose({
   inset: 0;
   pointer-events: none; /* 不阻擋文字選取/點擊 */
   z-index: 1;
+}
+
+:deep(.find-highlight),
+:deep(.find-highlight-current) {
+  mix-blend-mode: multiply;
 }
 
 .page-number {
