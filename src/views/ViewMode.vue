@@ -58,7 +58,8 @@ const viewerContainerRef = ref<HTMLDivElement | null>(null)
 const containerWidth = ref(0)
 const basePageWidth = ref(0)
 const lastAppliedScale = ref(1)
-const viewerRef = ref<InstanceType<typeof PdfViewer> | null>(null)
+const viewerRef = ref<any>(null)
+let pinchChain: Promise<void> = Promise.resolve()
 
 let loadToken = 0
 let resizeObs: ResizeObserver | null = null
@@ -286,27 +287,41 @@ async function applyScaleWithAnchor(
   const oldOffset = before ? Math.max(0, before.scrollTop - before.pageTop) : 0
   const ratio = lastAppliedScale.value ? newScale / lastAppliedScale.value : 1
   const scrollStateBefore = viewer?.getScrollState?.()
-  const viewportWidth = scrollStateBefore?.clientWidth ?? 0
-  const viewportHeight = scrollStateBefore?.clientHeight ?? 0
-  const pointerViewportX = anchor?.viewportX ?? (viewportWidth / 2)
-  const pointerViewportY = anchor?.viewportY ?? (viewportHeight / 2)
+  const fallbackContainer = viewerContainerRef.value
+  const viewportWidth = scrollStateBefore?.clientWidth ?? fallbackContainer?.clientWidth ?? 0
+  const viewportHeight = scrollStateBefore?.clientHeight ?? fallbackContainer?.clientHeight ?? 0
+  const pointerViewportX = anchor?.viewportX ?? (viewportWidth ? viewportWidth / 2 : 0)
+  const pointerViewportY = anchor?.viewportY ?? (viewportHeight ? viewportHeight / 2 : 0)
 
   const contentWidthBefore = Math.max(scrollStateBefore?.scrollWidth ?? 0, 1)
   const contentHeightBefore = Math.max(scrollStateBefore?.scrollHeight ?? 0, 1)
   const anchorX = Math.min(1, Math.max(0, anchor?.x ?? (scrollStateBefore ? (scrollStateBefore.scrollLeft + pointerViewportX) / contentWidthBefore : 0.5)))
   const anchorY = Math.min(1, Math.max(0, anchor?.y ?? (scrollStateBefore ? (scrollStateBefore.scrollTop + pointerViewportY) / contentHeightBefore : 0.5)))
 
+  if (viewer?.prepareZoomAnchor) {
+    viewer.prepareZoomAnchor({
+      x: anchorX,
+      y: anchorY,
+      viewportX: pointerViewportX,
+      viewportY: pointerViewportY,
+    })
+  }
+
   zoomMode.value = mode
   scale.value = newScale
   suppressVisibleUpdate.value = true
   await nextTick(); await nextTick()
-  if (viewer?.scrollToPageOffset) viewer.scrollToPageOffset(page, Math.max(0, oldOffset * ratio))
+  // For PDF, its own engine re-anchors vertically; avoid double-adjust.
+  if (isImageFile.value && viewer?.scrollToPageOffset) {
+    viewer.scrollToPageOffset(page, Math.max(0, oldOffset * ratio))
+  }
   lastAppliedScale.value = newScale
   currentPage.value = page
   await nextTick()
 
   const scrollStateAfter = viewer?.getScrollState?.()
-  if (viewer?.scrollToPosition && scrollStateAfter) {
+  const shouldAdjustImage = isImageFile.value && viewer?.scrollToPosition && scrollStateAfter
+  if (shouldAdjustImage) {
     const contentWidthAfter = Math.max(scrollStateAfter.scrollWidth ?? 0, 1)
     const contentHeightAfter = Math.max(scrollStateAfter.scrollHeight ?? 0, 1)
     const leftRaw = anchorX * contentWidthAfter - pointerViewportX
@@ -314,7 +329,7 @@ async function applyScaleWithAnchor(
     const targetLeft = Math.max(0, Math.min(leftRaw, maxLeft))
 
     let targetTop: number | undefined
-    if (isImageFile.value && (anchor?.y != null)) {
+    if (anchor?.y != null) {
       const topRaw = anchorY * contentHeightAfter - pointerViewportY
       const maxTop = Math.max(0, contentHeightAfter - scrollStateAfter.clientHeight)
       targetTop = Math.max(0, Math.min(topRaw, maxTop))
@@ -327,21 +342,21 @@ async function applyScaleWithAnchor(
 }
 
 function setZoomFit() {
-  applyScaleWithAnchor(computeFitScale(), 'fit')
+  void applyScaleWithAnchor(computeFitScale(), 'fit')
 }
 
 function setZoomActual() {
-  applyScaleWithAnchor(1, 'actual')
+  void applyScaleWithAnchor(1, 'actual')
 }
 
 function zoomIn(step = 0.1) {
-  zoomMode.value = 'custom'
-  scale.value = clampScale(scale.value + step)
+  const target = clampScale(scale.value + step)
+  void applyScaleWithAnchor(target, 'custom')
 }
 
 function zoomOut(step = 0.1) {
-  zoomMode.value = 'custom'
-  scale.value = clampScale(scale.value - step)
+  const target = clampScale(scale.value - step)
+  void applyScaleWithAnchor(target, 'custom')
 }
 
 function onPinchZoom(payload: PinchZoomPayload) {
@@ -349,12 +364,17 @@ function onPinchZoom(payload: PinchZoomPayload) {
   const factor = Math.exp(-payload.deltaY / 600)
   const target = clampScale(scale.value * factor)
   if (Math.abs(target - scale.value) < 0.0001) return
-  applyScaleWithAnchor(target, 'custom', {
+  const anchor = {
     x: payload.anchorX,
     y: payload.anchorY,
     viewportX: payload.viewportX,
     viewportY: payload.viewportY,
-  })
+  }
+  pinchChain = pinchChain
+    .then(() => applyScaleWithAnchor(target, 'custom', anchor))
+    .catch((error) => {
+      console.error('[ViewMode] Pinch zoom failed:', error)
+    })
 }
 
 watch([pdfDoc, () => zoomMode.value], async ([doc, mode]) => {
@@ -366,6 +386,9 @@ watch([pdfDoc, () => zoomMode.value], async ([doc, mode]) => {
 function onKeydown(event: KeyboardEvent) {
   const meta = event.metaKey || event.ctrlKey
   if (!meta) return
+  const viewerAny: any = viewerRef.value
+  // 禁用一次 tween，讓鍵盤縮放即時、不疊加動畫
+  try { viewerAny?.disableTweenOnce?.(0) } catch {}
   if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomIn() }
   else if (event.key === '-' || event.key === '_') { event.preventDefault(); zoomOut() }
   else if (event.key === '0') { event.preventDefault(); setZoomFit() }
@@ -495,7 +518,7 @@ function onPageContextMenu(context: PagePointerContext) {
     </div>
     <div v-else class="viewer-panel" ref="viewerContainerRef">
       <div v-if="viewerError" class="alert error">{{ viewerError }}</div>
-      <PdfViewer v-else-if="pdfDoc && isPdfFile" :doc="pdfDoc" :scale="scale" ref="viewerRef" @doc-loaded="onDocLoaded"
+      <PdfViewer v-else-if="pdfDoc && isPdfFile" :doc="pdfDoc" :scale="scale" :textIdleMs="settings.viewerTextIdleMs" :renderIdleMs="settings.viewerRenderIdleMs" :zoomTweenMs="settings.viewerZoomTweenMs" ref="viewerRef" @doc-loaded="onDocLoaded"
         @doc-error="onDocError" @visible-page="onVisiblePage" @page-contextmenu="onPageContextMenu" @pinch-zoom="onPinchZoom" />
       <ImageViewer v-else-if="isImageFile && props.activeFile?.path" ref="viewerRef" :path="props.activeFile.path" :scale="scale"
         @loading="onImageLoading" @loaded="onImageLoaded" @error="onImageError" @page-contextmenu="onPageContextMenu"

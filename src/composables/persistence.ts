@@ -234,12 +234,24 @@ export type AppSettings = {
   exportFormat: 'png' | 'jpeg'
   jpegQuality?: number
   defaultZoomMode?: 'actual' | 'fit'
+  // Viewer performance tuning
+  viewerTextIdleMs?: number
+  viewerRenderIdleMs?: number
+  viewerZoomTweenMs?: number
 }
 
 const SETTINGS_KEY = 'appSettings'
 
 function defaultSettings(): AppSettings {
-  return { exportDpi: 300, exportFormat: 'png', jpegQuality: 0.9, defaultZoomMode: 'fit' }
+  return {
+    exportDpi: 300,
+    exportFormat: 'png',
+    jpegQuality: 0.9,
+    defaultZoomMode: 'fit',
+    viewerTextIdleMs: 100,
+    viewerRenderIdleMs: 20,
+    viewerZoomTweenMs: 120,
+  }
 }
 
 export async function loadSettings(): Promise<AppSettings> {

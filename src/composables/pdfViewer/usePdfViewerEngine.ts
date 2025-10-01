@@ -23,14 +23,22 @@ export interface PageView {
   textBuilder?: any
 }
 
-export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>; scale: Ref<number>; emit: EmitFn }) {
+export function usePdfViewerEngine(options: {
+  doc: Ref<PDFDocumentProxy | null>
+  scale: Ref<number>
+  emit: EmitFn
+  textIdleMs?: number
+  renderIdleMs?: number
+  zoomTweenMs?: number
+  zoomBridge?: 'host' | 'canvas' | 'none'
+}) {
   const emit = options.emit
 
   const containerRef = ref<HTMLDivElement | null>(null)
   const pages = ref<PageView[]>([])
 
   const baseHeights = ref<number[]>([])
-  const baseWidth = ref<number>(0)
+  const baseWidths = ref<number[]>([])
   const containerPaddingTop = ref<number>(16)
   const pageListGap = ref<number>(24)
   const pageLabelExtra = ref<number>(20)
@@ -47,13 +55,22 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
 
   let inFlight = 0
   const renderQueue: PageView[] = []
-  const TEXT_IDLE_MS = 120
-  const RENDER_IDLE_MS = 160
+  const TEXT_IDLE_MS = Number.isFinite(options.textIdleMs) ? (options.textIdleMs as number) : 100
+  const RENDER_IDLE_MS = Number.isFinite(options.renderIdleMs) ? (options.renderIdleMs as number) : 20
+  const ZOOM_TWEEN_MS = Number.isFinite(options.zoomTweenMs) ? (options.zoomTweenMs as number) : 120
+  const ZOOM_BRIDGE: "host" | "canvas" | "none" =
+    (options.zoomBridge as any) ?? "none";
   let textIdleTimer: number | null = null
   let renderIdleTimer: number | null = null
   let renderPaused = false
   let cssZoomTargetScale: number | null = null
   let cssZoomBaseScale: number | null = null
+  let zoomTweenProgress = 1
+  let zoomTweenActive = false
+  let zoomTweenRaf: number | null = null
+  let zoomFinalizeAnchor: { x: number; y: number; viewportX: number; viewportY: number; pageIndex?: number; pdfLocalY?: number; pdfLocalX?: number } | null = null
+  let pendingZoomAnchor: { x?: number; y?: number; viewportX?: number; viewportY?: number } | null = null
+  let tweenOverrideMs: number | null = null
   let lastDoc: PDFDocumentProxy | null = null
   let lastScale = 1
   let suppressVisibleUpdate = false
@@ -167,22 +184,36 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
       pageView.textBuilder = markRaw(builder)
       const promise = builder.render({ viewport })
       pageView.textTask = markRaw({ promise, cancel: () => builder.cancel() })
-      await promise
-      try {
-        const divEl = (builder as any).div as HTMLDivElement
-        if (divEl) {
-          divEl.style.width = `${viewport.width}px`
-          divEl.style.height = `${viewport.height}px`
-          divEl.style.pointerEvents = 'auto'
-          ;(divEl.style as any)['userSelect'] = 'text'
-          ;(divEl.style as any)['webkitUserSelect'] = 'text'
-          divEl.style.zIndex = '2'
+    await promise
+    try {
+      const divEl = (builder as any).div as HTMLDivElement
+      if (divEl) {
+        divEl.style.width = `${viewport.width}px`
+        divEl.style.height = `${viewport.height}px`
+        divEl.style.pointerEvents = 'auto'
+        ;(divEl.style as any)['userSelect'] = 'text'
+        ;(divEl.style as any)['webkitUserSelect'] = 'text'
+        divEl.style.zIndex = '2'
+        try {
+          divEl.style.setProperty('--scale-factor', String(viewport.scale))
+          divEl.style.setProperty('--total-scale-factor', String(viewport.scale))
+        } catch {}
+      }
+      // If a zoom bridge is active, ensure text layer follows the same transform
+      if (cssZoomTargetScale != null) {
+        const fromScale = pageView.lastRenderedScale ?? cssZoomBaseScale ?? lastScale
+        const host = pageView.inner || pageView.container
+        const ratio = fromScale ? (cssZoomTargetScale / fromScale) : 1
+        if (divEl && Number.isFinite(ratio) && ratio > 0 && fromScale && fromScale !== cssZoomTargetScale) {
           try {
-            divEl.style.setProperty('--scale-factor', String(viewport.scale))
-            divEl.style.setProperty('--total-scale-factor', String(viewport.scale))
+            divEl.style.transformOrigin = '0 0'
+            divEl.style.transform = `scale(${ratio})`
+            divEl.style.willChange = 'transform'
+            if (host) host.style.overflow = 'visible'
           } catch {}
         }
-      } catch {}
+      }
+    } catch {}
     } catch (error: any) {
       const name = error?.name || ''
       const msg = (error?.message || '').toString().toLowerCase()
@@ -206,18 +237,23 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
     }
     pages.value = []
     baseHeights.value = []
-    baseWidth.value = 0
+    baseWidths.value = []
     scaledHeights.value = []
     tops.value = []
     cssZoomTargetScale = null
     cssZoomBaseScale = null
+    pendingZoomAnchor = null
   }
 
   function recomputeLayout(scale: number) {
     const n = baseHeights.value.length
     const h = new Array<number>(n)
     const t = new Array<number>(n)
-    for (let i = 0; i < n; i++) h[i] = baseHeights.value[i] * scale
+    const w = new Array<number>(n)
+    for (let i = 0; i < n; i++) {
+      h[i] = (baseHeights.value[i] || 0) * scale
+      w[i] = (baseWidths.value[i] || 0) * scale
+    }
     let acc = containerPaddingTop.value
     for (let i = 0; i < n; i++) {
       t[i] = acc
@@ -225,10 +261,10 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
     }
     scaledHeights.value = h
     tops.value = t
-    const w = baseWidth.value * scale
     for (const pv of pages.value) {
-      pv.width = w
-      pv.height = h[pv.pageNumber - 1] || 0
+      const idx = pv.pageNumber - 1
+      pv.width = w[idx] || 0
+      pv.height = h[idx] || 0
     }
   }
 
@@ -251,22 +287,7 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
     return Math.max(0, Math.min(n - 1, lo))
   }
 
-  function reanchorToCenter(_oldScale: number, newScale: number) {
-    const container = containerRef.value
-    if (!container || !pages.value.length) return
-    const oldHeights = scaledHeights.value
-    const oldTops = tops.value
-    const anchor = container.scrollTop + container.clientHeight / 2
-    const idx = binarySearchIndex(anchor)
-    const within = Math.max(0, anchor - oldTops[idx])
-    const ratio = oldHeights[idx] > 0 ? Math.min(1, within / oldHeights[idx]) : 0
-    recomputeLayout(newScale)
-    const newAnchorTop = (tops.value[idx] || 0) + (scaledHeights.value[idx] || 0) * ratio - container.clientHeight / 2
-    suppressVisibleUpdate = true
-    container.scrollTo({ top: Math.max(0, newAnchorTop), behavior: 'auto' })
-    currentIndex.value = idx
-    requestAnimationFrame(() => { suppressVisibleUpdate = false })
-  }
+  // reanchorToCenter was replaced by finalizeZoom() that uses a normalized anchor.
 
   function updateRenderWindow() {
     const n = pages.value.length
@@ -294,6 +315,11 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
 
   function scheduleRenderPass() {
     if (renderIdleTimer) { try { clearTimeout(renderIdleTimer) } catch {} }
+    if (RENDER_IDLE_MS <= 0) {
+      renderPaused = false
+      updateRenderWindow()
+      return
+    }
     renderPaused = true
     renderIdleTimer = window.setTimeout(() => {
       renderIdleTimer = null
@@ -304,6 +330,11 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
 
   function scheduleTextLayerPass() {
     if (textIdleTimer) { try { clearTimeout(textIdleTimer) } catch {} }
+    if (TEXT_IDLE_MS <= 0) {
+      textIdleTimer = null
+      void renderTextLayersForWindow()
+      return
+    }
     textIdleTimer = window.setTimeout(() => {
       textIdleTimer = null
       void renderTextLayersForWindow()
@@ -322,24 +353,9 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
     }
   }
 
-  function fillCanvasToContainer() {
-    const n = pages.value.length
-    if (!n) return
-    const idx = currentIndex.value
-    const start = Math.max(0, idx - bufferPages.value)
-    const end = Math.min(n - 1, idx + bufferPages.value)
-    for (let i = start; i <= end; i++) {
-      const pv = pages.value[i]
-      const canvas = pv.canvas
-      if (!canvas) continue
-      try {
-        canvas.style.width = '100%'
-        canvas.style.height = 'auto'
-      } catch {}
-    }
-  }
+  // Removed width:100% bridging to avoid double-scaling visual overshoot during zoom
 
-  function applyCanvasTransformForZoom() {
+  function applyHostTransformForZoom() {
     const n = pages.value.length
     if (!n || cssZoomTargetScale == null) return
     const idx = currentIndex.value
@@ -347,21 +363,152 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
     const end = Math.min(n - 1, idx + bufferPages.value)
     for (let i = start; i <= end; i++) {
       const pv = pages.value[i]
+      const host = pv.inner || pv.container
       const canvas = pv.canvas
-      if (!canvas) continue
+      if (!host) continue
       const fromScale = pv.lastRenderedScale ?? cssZoomBaseScale ?? lastScale
       if (!fromScale || fromScale === cssZoomTargetScale) {
-        try { canvas.style.transform = 'none'; canvas.style.willChange = '' } catch {}
+        // clear transforms regardless of bridge
+        if (ZOOM_BRIDGE === 'host') {
+          try { host.style.transform = 'none'; host.style.willChange = '' } catch {}
+        } else if (ZOOM_BRIDGE === 'canvas') {
+          if (canvas) { try { canvas.style.transform = 'none'; canvas.style.willChange = '' } catch {} }
+          try { host.querySelector('.textLayer')?.setAttribute('style','') } catch {}
+        } else {
+          // none: make sure styles are reset
+          try { host.style.transform = 'none'; host.style.willChange = '' } catch {}
+          if (canvas) { try { canvas.style.transform = 'none'; canvas.style.willChange = '' } catch {} }
+          try { host.querySelector('.textLayer')?.setAttribute('style','') } catch {}
+        }
+        try { host.style.overflow = '' } catch {}
         continue
       }
-      const ratio = cssZoomTargetScale / fromScale
+      let ratio = cssZoomTargetScale / fromScale
+      if (zoomTweenActive) {
+        const r0 = 1
+        ratio = r0 + (ratio - r0) * zoomTweenProgress
+      }
       if (!Number.isFinite(ratio) || ratio <= 0) continue
       try {
-        canvas.style.transformOrigin = '0 0'
-        canvas.style.transform = `scale(${ratio})`
-        canvas.style.willChange = 'transform'
+        if (ZOOM_BRIDGE === 'host') {
+          host.style.transformOrigin = '0 0'
+          host.style.transform = `scale(${ratio})`
+          host.style.willChange = 'transform'
+        } else if (ZOOM_BRIDGE === 'canvas') {
+          if (canvas) {
+            canvas.style.transformOrigin = '0 0'
+            canvas.style.transform = `scale(${ratio})`
+            canvas.style.willChange = 'transform'
+          }
+          const textLayer = host.querySelector<HTMLElement>('.textLayer') || null
+          if (textLayer) {
+            textLayer.style.transformOrigin = '0 0'
+            textLayer.style.transform = `scale(${ratio})`
+            textLayer.style.willChange = 'transform'
+          }
+        }
+        // Zoom-in -> avoid clipping; Zoom-out -> avoid overlap
+        host.style.overflow = ratio > 1 ? 'visible' : ''
       } catch {}
     }
+  }
+
+  function startZoomTween() {
+    const dur = Number.isFinite(tweenOverrideMs) && tweenOverrideMs !== null ? (tweenOverrideMs as number) : ZOOM_TWEEN_MS!
+    tweenOverrideMs = null
+    if (!Number.isFinite(dur) || dur <= 0) {
+      zoomTweenActive = false
+      zoomTweenProgress = 1
+      applyHostTransformForZoom()
+      // No tween: finalize immediately
+      finalizeZoom()
+      return
+    }
+    if (zoomTweenRaf) cancelAnimationFrame(zoomTweenRaf)
+    zoomTweenActive = true
+    zoomTweenProgress = 0
+    const start = performance.now()
+    const ease = (t: number) => 1 - Math.cos((t * Math.PI) / 2) // easeOutSine
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / dur)
+      zoomTweenProgress = ease(p)
+      applyHostTransformForZoom()
+      if (p < 1) zoomTweenRaf = requestAnimationFrame(step)
+      else {
+        zoomTweenActive = false
+        zoomTweenRaf = null
+        applyHostTransformForZoom()
+        finalizeZoom()
+      }
+    }
+    zoomTweenRaf = requestAnimationFrame(step)
+  }
+
+  function finalizeZoom() {
+    // Clear visual bridge and update layout atomically
+    const container = containerRef.value
+    if (!container) return
+    const anchor = zoomFinalizeAnchor
+    zoomFinalizeAnchor = null
+    // Update predicted layout to the new scale
+    recomputeLayout(lastScale)
+    // After new layout, scroll back to anchor if provided
+    const stateAfter = {
+      scrollWidth: container.scrollWidth,
+      scrollHeight: container.scrollHeight,
+      clientWidth: container.clientWidth,
+      clientHeight: container.clientHeight,
+    }
+    if (anchor) {
+      // Horizontal anchor（內容比例）
+      let targetLeft = 0
+      if (typeof anchor.pageIndex === 'number' && anchor.pageIndex >= 0 && anchor.pageIndex < pages.value.length && Number.isFinite(anchor.pdfLocalX as number)) {
+        // 以頁內絕對 X 座標回捲（優先）
+        const pv = pages.value[anchor.pageIndex]
+        const host = pv.inner || pv.container
+        const containerRect = container.getBoundingClientRect()
+        let pageLeftNew = 0
+        try {
+          const pageRect = host?.getBoundingClientRect()
+          if (pageRect) pageLeftNew = container.scrollLeft + (pageRect.left - containerRect.left)
+        } catch {}
+        targetLeft = pageLeftNew + (anchor.pdfLocalX as number) * lastScale - anchor.viewportX
+        const maxLeft = Math.max(0, stateAfter.scrollWidth - stateAfter.clientWidth)
+        targetLeft = Math.max(0, Math.min(targetLeft, maxLeft))
+      } else {
+        const leftRaw = stateAfter.scrollWidth > 0 ? (anchor.x * stateAfter.scrollWidth - anchor.viewportX) : 0
+        const maxLeft = Math.max(0, stateAfter.scrollWidth - stateAfter.clientWidth)
+        targetLeft = Math.max(0, Math.min(leftRaw, maxLeft))
+      }
+
+      // Vertical anchor：優先以 PDF 絕對座標（頁內 y 單位）回捲；沒有則退回全域比例。
+      let targetTop = 0
+      if (
+        typeof anchor.pageIndex === 'number' && anchor.pageIndex >= 0 &&
+        anchor.pageIndex < tops.value.length && Array.isArray(scaledHeights.value)
+      ) {
+        const idx = anchor.pageIndex
+        const pageTop = tops.value[idx] || 0
+        if (Number.isFinite(anchor.pdfLocalY as number)) {
+          // 將 PDF 絕對座標乘上新倍率換回像素
+          targetTop = pageTop + (anchor.pdfLocalY as number) * lastScale - anchor.viewportY
+        } else if (stateAfter.scrollHeight > 0) {
+          // 後備：用全域比例
+          const topRaw = anchor.y * stateAfter.scrollHeight - anchor.viewportY
+          targetTop = topRaw
+        }
+      } else if (stateAfter.scrollHeight > 0) {
+        const topRaw = anchor.y * stateAfter.scrollHeight - anchor.viewportY
+        targetTop = topRaw
+      }
+      const maxTop = Math.max(0, stateAfter.scrollHeight - stateAfter.clientHeight)
+      targetTop = Math.max(0, Math.min(targetTop, maxTop))
+      container.scrollTo({ left: targetLeft, top: targetTop, behavior: 'auto' })
+    }
+    // Clear transforms
+    cssZoomBaseScale = null
+    cssZoomTargetScale = null
+    applyHostTransformForZoom()
   }
 
   function setCanvasRef(el: HTMLCanvasElement | Element | ComponentPublicInstance | null, page: PageView) {
@@ -374,6 +521,19 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
 
   function setInnerRef(el: HTMLDivElement | Element | ComponentPublicInstance | null, page: PageView) {
     page.inner = (el as HTMLDivElement | null) ?? null
+  }
+
+  function prepareZoomAnchor(anchor: { x?: number; y?: number; viewportX?: number; viewportY?: number } | null) {
+    if (!anchor) {
+      pendingZoomAnchor = null
+      return
+    }
+    const sanitized: { x?: number; y?: number; viewportX?: number; viewportY?: number } = {}
+    if (Number.isFinite(anchor.x as number)) sanitized.x = anchor.x as number
+    if (Number.isFinite(anchor.y as number)) sanitized.y = anchor.y as number
+    if (Number.isFinite(anchor.viewportX as number)) sanitized.viewportX = anchor.viewportX as number
+    if (Number.isFinite(anchor.viewportY as number)) sanitized.viewportY = anchor.viewportY as number
+    pendingZoomAnchor = sanitized
   }
 
   let rafId: number | null = null
@@ -393,8 +553,7 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
       rafId = null
       updateCurrentPage()
       updateRenderWindow()
-      if (cssZoomTargetScale != null) applyCanvasTransformForZoom()
-      if (cssZoomTargetScale != null) fillCanvasToContainer()
+      if (cssZoomTargetScale != null) applyHostTransformForZoom()
       scheduleTextLayerPass()
     })
   }
@@ -528,11 +687,11 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
       emit('doc-loading')
       const total = doc.numPages
       baseHeights.value = []
-      baseWidth.value = 0
+      baseWidths.value = []
       for (let i = 1; i <= total; i++) {
         const p = await doc.getPage(i)
         const vp = p.getViewport({ scale: 1 })
-        if (i === 1) baseWidth.value = vp.width
+        baseWidths.value.push(vp.width)
         baseHeights.value.push(vp.height)
       }
       pages.value = Array.from({ length: total }, (_, index) =>
@@ -575,14 +734,82 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
 
     if (scale !== lastScale) {
       emit('doc-loading')
-      reanchorToCenter(lastScale, scale)
-      cssZoomBaseScale = lastScale
+      const prev = lastScale
+      cssZoomBaseScale = prev
       cssZoomTargetScale = scale
-      applyCanvasTransformForZoom()
-      fillCanvasToContainer()
+      // Capture current anchor at viewport center for final reanchor（頁索引 + PDF 絕對座標 y + 水平比例）
+      const container = containerRef.value
+      const preset = pendingZoomAnchor
+      pendingZoomAnchor = null
+      if (container) {
+        const fallbackViewportX = container.clientWidth / 2
+        const fallbackViewportY = container.clientHeight / 2
+        const viewportX = Number.isFinite(preset?.viewportX as number)
+          ? (preset!.viewportX as number)
+          : fallbackViewportX
+        const viewportY = Number.isFinite(preset?.viewportY as number)
+          ? (preset!.viewportY as number)
+          : fallbackViewportY
+        const width = Math.max(container.scrollWidth, container.clientWidth)
+        const height = Math.max(container.scrollHeight, container.clientHeight)
+        const rawX = preset?.x
+        const rawY = preset?.y
+        const computedX = Number.isFinite(rawX as number)
+          ? (rawX as number)
+          : (width ? (container.scrollLeft + viewportX) / width : 0.5)
+        const computedY = Number.isFinite(rawY as number)
+          ? (rawY as number)
+          : (height ? (container.scrollTop + viewportY) / height : 0.5)
+        const normX = Math.min(1, Math.max(0, computedX))
+        const normY = Math.min(1, Math.max(0, computedY))
+        const anchorTop = container.scrollTop + viewportY
+        const idx = binarySearchIndex(anchorTop)
+        const pageTop = tops.value[idx] || 0
+        const withinY = anchorTop - pageTop
+        const prevPageHeight = (baseHeights.value[idx] || 0) * prev
+        const withinYClamped = Math.min(Math.max(0, withinY), Math.max(0, prevPageHeight))
+        const pdfLocalY = withinYClamped / Math.max(1e-6, prev)
+        let pdfLocalX = 0
+        try {
+          const anchorLeft = container.scrollLeft + viewportX
+          const pv = pages.value[idx]
+          const host = pv?.inner || pv?.container
+          const containerRect = container.getBoundingClientRect()
+          const pageRect = host?.getBoundingClientRect()
+          const pageLeft = pageRect ? (container.scrollLeft + (pageRect.left - containerRect.left)) : 0
+          const withinX = anchorLeft - pageLeft
+          const prevPageWidth = (baseWidths.value[idx] || 0) * prev
+          const withinXClamped = Math.min(Math.max(0, withinX), Math.max(0, prevPageWidth))
+          pdfLocalX = withinXClamped / Math.max(1e-6, prev)
+        } catch {}
+        zoomFinalizeAnchor = {
+          x: normX,
+          y: normY,
+          viewportX,
+          viewportY,
+          pageIndex: idx,
+          pdfLocalY,
+          pdfLocalX,
+        }
+      } else if (preset) {
+        const normX = Math.min(1, Math.max(0, (preset.x as number) ?? 0.5))
+        const normY = Math.min(1, Math.max(0, (preset.y as number) ?? 0.5))
+        zoomFinalizeAnchor = {
+          x: normX,
+          y: normY,
+          viewportX: (preset.viewportX as number) ?? 0,
+          viewportY: (preset.viewportY as number) ?? 0,
+        }
+      } else {
+        zoomFinalizeAnchor = null
+      }
+      applyHostTransformForZoom()
+      // IMPORTANT: update lastScale BEFORE starting tween/finalize so finalizeZoom uses target scale
+      lastScale = scale
+      startZoomTween()
       for (const pv of pages.value) { pv.lastRenderedScale = undefined }
       scheduleRenderPass()
-      lastScale = scale
+      // Do not reanchor immediately; finalize after tween
       scheduleTextLayerPass()
       emit('doc-loaded', pages.value.length)
     }
@@ -644,11 +871,14 @@ export function usePdfViewerEngine(options: { doc: Ref<PDFDocumentProxy | null>;
     setCanvasRef,
     setContainerRef,
     setInnerRef,
+    prepareZoomAnchor,
     scrollToPage,
     getPageMetrics,
     scrollToPageOffset,
     onPageContextMenu,
     getScrollState,
     scrollToPosition,
+    // allow caller to disable tween once (e.g., for keyboard zoom)
+    disableTweenOnce: (ms = 0) => { tweenOverrideMs = ms },
   }
 }

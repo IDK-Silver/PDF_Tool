@@ -15,6 +15,9 @@ type PinchZoomPayload = {
 const props = defineProps<{
   doc: unknown | null
   scale?: number
+  textIdleMs?: number
+  renderIdleMs?: number
+  zoomTweenMs?: number
 }>()
 
 const emit = defineEmits<{
@@ -29,21 +32,39 @@ const emit = defineEmits<{
 const docRef = computed(() => (props.doc as PDFDocumentProxy | null) ?? null)
 const scaleRef = computed(() => props.scale ?? 1.2)
 
+const engine = usePdfViewerEngine({
+  doc: docRef,
+  scale: scaleRef,
+  emit: emit as any,
+  textIdleMs: props.textIdleMs,
+  renderIdleMs: props.renderIdleMs,
+  zoomTweenMs: props.zoomTweenMs,
+})
+
 const {
   containerRef,
   pages,
   setCanvasRef,
   setContainerRef,
   setInnerRef,
+  prepareZoomAnchor,
   scrollToPage,
   getPageMetrics,
   scrollToPageOffset,
   onPageContextMenu,
   getScrollState,
   scrollToPosition,
-} = usePdfViewerEngine({ doc: docRef, scale: scaleRef, emit: emit as any })
+} = engine
 
-defineExpose({ scrollToPage, getPageMetrics, scrollToPageOffset, getScrollState, scrollToPosition })
+defineExpose({
+  scrollToPage,
+  getPageMetrics,
+  scrollToPageOffset,
+  getScrollState,
+  scrollToPosition,
+  prepareZoomAnchor,
+  disableTweenOnce: (engine as any).disableTweenOnce,
+})
 </script>
 
 <template>

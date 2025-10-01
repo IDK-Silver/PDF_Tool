@@ -14,6 +14,9 @@ const exportDpi = ref<number>(300)
 const exportFormat = ref<'png' | 'jpeg'>('png')
 const jpegQuality = ref<number>(0.9)
 const defaultZoomMode = ref<'actual' | 'fit'>('fit')
+const viewerTextIdleMs = ref<number>(100)
+const viewerRenderIdleMs = ref<number>(20)
+const viewerZoomTweenMs = ref<number>(120)
 
 onMounted(async () => {
   const s = await loadSettings()
@@ -21,6 +24,9 @@ onMounted(async () => {
   exportFormat.value = s.exportFormat
   jpegQuality.value = s.jpegQuality ?? 0.9
   defaultZoomMode.value = s.defaultZoomMode ?? 'fit'
+  viewerTextIdleMs.value = Number.isFinite(s.viewerTextIdleMs) ? (s.viewerTextIdleMs as number) : 100
+  viewerRenderIdleMs.value = Number.isFinite(s.viewerRenderIdleMs) ? (s.viewerRenderIdleMs as number) : 20
+  viewerZoomTweenMs.value = Number.isFinite(s.viewerZoomTweenMs) ? (s.viewerZoomTweenMs as number) : 120
 })
 
 function persist() {
@@ -29,14 +35,18 @@ function persist() {
     exportFormat: exportFormat.value,
     jpegQuality: clampQuality(jpegQuality.value),
     defaultZoomMode: defaultZoomMode.value,
+    viewerTextIdleMs: clampMs(viewerTextIdleMs.value),
+    viewerRenderIdleMs: clampMs(viewerRenderIdleMs.value),
+    viewerZoomTweenMs: clampMs(viewerZoomTweenMs.value),
   }
   saveSettingsDebounced(s)
 }
 
 function clampDpi(v: number) { return Math.min(1200, Math.max(72, Math.round(v || 300))) }
 function clampQuality(v: number) { return Math.min(1, Math.max(0.1, Number.isFinite(v) ? v : 0.9)) }
+function clampMs(v: number) { return Math.min(1000, Math.max(0, Math.round(Number.isFinite(v) ? v : 0))) }
 
-watch([exportDpi, exportFormat, jpegQuality, defaultZoomMode], persist, { deep: false })
+watch([exportDpi, exportFormat, jpegQuality, defaultZoomMode, viewerTextIdleMs, viewerRenderIdleMs, viewerZoomTweenMs], persist, { deep: false })
 </script>
 
 <template>
@@ -75,6 +85,25 @@ watch([exportDpi, exportFormat, jpegQuality, defaultZoomMode], persist, { deep: 
             <label><input type="radio" value="fit" v-model="defaultZoomMode" /> 縮放到適當大小</label>
             <label><input type="radio" value="actual" v-model="defaultZoomMode" /> 實際大小</label>
           </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h4>檢視效能微調</h4>
+        <div class="row">
+          <label class="label" for="textIdle">文字層閒置 (ms)</label>
+          <input id="textIdle" class="input" type="number" min="0" max="1000" step="10" v-model.number="viewerTextIdleMs" />
+          <span class="muted">建議 100</span>
+        </div>
+        <div class="row">
+          <label class="label" for="renderIdle">重繪閒置 (ms)</label>
+          <input id="renderIdle" class="input" type="number" min="0" max="1000" step="5" v-model.number="viewerRenderIdleMs" />
+          <span class="muted">建議 20</span>
+        </div>
+        <div class="row">
+          <label class="label" for="zoomTween">縮放過渡 (ms)</label>
+          <input id="zoomTween" class="input" type="number" min="0" max="1000" step="10" v-model.number="viewerZoomTweenMs" />
+          <span class="muted">建議 120（0 = 關閉）</span>
         </div>
       </div>
     </div>
