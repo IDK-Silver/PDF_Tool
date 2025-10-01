@@ -1,112 +1,86 @@
-import { ref, computed, type Ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import type { Mode, PdfFile } from '../types/pdf'
 
 export function useModeFiles(mode: Ref<Mode>) {
-  // independent lists per mode
-  const filesView = ref<PdfFile[]>([])
-  const filesConvert = ref<PdfFile[]>([])
-  const filesCompose = ref<PdfFile[]>([])
-
-  // independent active ids per mode
-  const activeViewId = ref<string | null>(null)
-  const activeConvertId = ref<string | null>(null)
-  const activeComposeId = ref<string | null>(null)
-
-  const currentFiles = computed(() => {
-    switch (mode.value) {
-      case 'view': return filesView.value
-      case 'convert': return filesConvert.value
-      case 'compose': return filesCompose.value
-    }
-  })
-
-  const currentActiveId = computed(() => {
-    switch (mode.value) {
-      case 'view': return activeViewId.value
-      case 'convert': return activeConvertId.value
-      case 'compose': return activeComposeId.value
-    }
-  })
-
-  const activeFile = computed(() => {
-    const file = currentFiles.value.find(f => f.id === currentActiveId.value) || null
-    console.log('[useModeFiles] Computing activeFile:', {
-      currentActiveId: currentActiveId.value,
-      currentFiles: currentFiles.value.map(f => ({id: f.id, name: f.name})),
-      result: file ? {id: file.id, name: file.name, path: file.path} : null
-    })
-    return file
-  })
-
-  function getListRef(m?: Mode) {
-    const mm = m ?? mode.value
-    return mm === 'view' ? filesView : mm === 'convert' ? filesConvert : filesCompose
+  const fileLists: Record<Mode, Ref<PdfFile[]>> = {
+    view: ref<PdfFile[]>([]),
+    convert: ref<PdfFile[]>([]),
+    compose: ref<PdfFile[]>([]),
   }
 
-  function hasPath(m: Mode, path: string) {
-    return getListRef(m).value.some(f => f.path === path)
+  const activeIds: Record<Mode, Ref<string | null>> = {
+    view: ref<string | null>(null),
+    convert: ref<string | null>(null),
+    compose: ref<string | null>(null),
   }
 
-  function setActiveId(id: string | null, m?: Mode) {
-    const mm = m ?? mode.value
-    if (mm === 'view') {
-      console.log('[useModeFiles] Setting activeViewId from', activeViewId.value, 'to', id)
-      activeViewId.value = id
+  const currentFiles = computed(() => fileLists[mode.value].value)
+  const currentActiveId = computed(() => activeIds[mode.value].value)
+  const activeFile = computed(() => currentFiles.value.find(file => file.id === currentActiveId.value) ?? null)
+
+  function getListRef(targetMode?: Mode) {
+    const resolved = targetMode ?? mode.value
+    return fileLists[resolved]
+  }
+
+  function getActiveRef(targetMode?: Mode) {
+    const resolved = targetMode ?? mode.value
+    return activeIds[resolved]
+  }
+
+  function hasPath(targetMode: Mode, path: string) {
+    return fileLists[targetMode].value.some(file => file.path === path)
+  }
+
+  function setActiveId(id: string | null, targetMode?: Mode) {
+    getActiveRef(targetMode).value = id
+  }
+
+  function addTo(targetMode: Mode, file: Pick<PdfFile, 'path' | 'name' | 'kind'>) {
+    const listRef = fileLists[targetMode]
+    const existing = listRef.value.find(item => item.path === file.path)
+    if (existing) {
+      if (targetMode === mode.value) setActiveId(existing.id, targetMode)
+      return existing.id
     }
-    else if (mm === 'convert') activeConvertId.value = id
-    else activeComposeId.value = id
+
+    const id = Math.random().toString(36).slice(2, 9)
+    const next: PdfFile = { id, path: file.path, name: file.name, kind: file.kind }
+    listRef.value = [next, ...listRef.value]
+
+    if (targetMode === mode.value) setActiveId(id, targetMode)
+    return id
   }
 
-  function addTo(m: Mode, file: Pick<PdfFile, 'path' | 'name' | 'kind'>) {
-    const list = getListRef(m)
-    console.log('[useModeFiles] addTo called:', { mode: m, currentMode: mode.value, path: file.path })
-
-    if (!hasPath(m, file.path)) {
-      const id = Math.random().toString(36).slice(2, 9)
-      const newFile: PdfFile = { id, path: file.path, name: file.name, kind: file.kind }
-      // 使用 unshift 將新檔案加到列表開頭
-      list.value.unshift(newFile)
-      console.log('[useModeFiles] Added new file:', newFile)
-      console.log('[useModeFiles] List after adding:', list.value.map(f => ({id: f.id, name: f.name})))
-
-      // 如果是當前模式，自動選擇新增的檔案
-      if (m === mode.value) {
-        console.log('[useModeFiles] Setting active id for current mode:', id)
-        setActiveId(id, m)
-        console.log('[useModeFiles] Active ID set, current activeFile:', activeFile.value)
-      }
-      return id
+  function removeFrom(targetMode: Mode, id: string) {
+    const listRef = fileLists[targetMode]
+    const next = listRef.value.filter(file => file.id !== id)
+    if (next.length !== listRef.value.length) {
+      listRef.value = next
+      const activeRef = activeIds[targetMode]
+      if (activeRef.value === id) activeRef.value = null
     }
-    // 如果檔案已存在，找到它的 ID 並選擇它
-    const existingFile = list.value.find(f => f.path === file.path)
-    if (existingFile) {
-      console.log('[useModeFiles] File already exists:', existingFile)
-      if (m === mode.value) {
-        console.log('[useModeFiles] Setting active id for existing file:', existingFile.id)
-        setActiveId(existingFile.id, m)
-        console.log('[useModeFiles] Active ID set, current activeFile:', activeFile.value)
-      }
-      return existingFile.id
-    }
-    return null
   }
 
-  function removeFrom(m: Mode, id: string) {
-    const list = getListRef(m)
-    const idx = list.value.findIndex(f => f.id === id)
-    if (idx >= 0) list.value.splice(idx, 1)
-    if (m === mode.value && currentActiveId.value === id) setActiveId(null, m)
+  function removeFromCurrent(id: string) {
+    removeFrom(mode.value, id)
   }
-
-  function removeFromCurrent(id: string) { removeFrom(mode.value, id) }
 
   return {
-    // per-mode lists and active ids (exposed for persistence if needed)
-    filesView, filesConvert, filesCompose,
-    activeViewId, activeConvertId, activeComposeId,
-    // current derived states
-    currentFiles, currentActiveId, activeFile,
-    // helpers
-    getListRef, setActiveId, hasPath, addTo, removeFrom, removeFromCurrent,
+    filesView: fileLists.view,
+    filesConvert: fileLists.convert,
+    filesCompose: fileLists.compose,
+    activeViewId: activeIds.view,
+    activeConvertId: activeIds.convert,
+    activeComposeId: activeIds.compose,
+    currentFiles,
+    currentActiveId,
+    activeFile,
+    getListRef,
+    setActiveId,
+    hasPath,
+    addTo,
+    removeFrom,
+    removeFromCurrent,
   }
 }

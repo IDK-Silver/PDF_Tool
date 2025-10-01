@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch, markRaw, toRaw, onMounted } from 'vue'
-import { loadPdfViewer } from '../lib/pdfjs-viewer'
-import type { ComponentPublicInstance } from 'vue'
+import { computed } from 'vue'
 import type { PDFDocumentProxy } from '../lib/pdfjs'
 import type { PagePointerContext } from '../types/viewer'
+import { usePdfViewerEngine } from '../composables/pdfViewer/usePdfViewerEngine'
+
+type PinchZoomPayload = {
+  deltaY: number
+  anchorX: number
+  anchorY: number
+  viewportX: number
+  viewportY: number
+}
 
 const props = defineProps<{
   doc: unknown | null
@@ -16,639 +23,27 @@ const emit = defineEmits<{
   (e: 'doc-loaded', pageCount: number): void
   (e: 'doc-error', error: unknown): void
   (e: 'visible-page', pageNumber: number): void
+  (e: 'pinch-zoom', payload: PinchZoomPayload): void
 }>()
 
-interface PageView {
-  pageNumber: number
-  width: number
-  height: number
-  scale: number
-  canvas: HTMLCanvasElement | null
-  renderTask: any
-  container?: HTMLDivElement | null
-  inner?: HTMLDivElement | null
-  // virtualization/render control
-  renderToken?: number
-  queued?: boolean
-  lastRenderedScale?: number
-  // text selection layer
-  textTask?: any
-  textToken?: number
-  textBuilder?: any
-}
+const docRef = computed(() => (props.doc as PDFDocumentProxy | null) ?? null)
+const scaleRef = computed(() => props.scale ?? 1.2)
 
-const containerRef = ref<HTMLDivElement | null>(null)
-const pages = ref<PageView[]>([])
+const {
+  containerRef,
+  pages,
+  setCanvasRef,
+  setContainerRef,
+  setInnerRef,
+  scrollToPage,
+  getPageMetrics,
+  scrollToPageOffset,
+  onPageContextMenu,
+  getScrollState,
+  scrollToPosition,
+} = usePdfViewerEngine({ doc: docRef, scale: scaleRef, emit: emit as any })
 
-// --- Layout model (predictive) ---
-// Base measurements at scale=1
-const baseHeights = ref<number[]>([])
-const baseWidth = ref<number>(0)
-
-// Fixed gaps/extras (align CSS)
-const containerPaddingTop = ref<number>(16) // .pdf-viewer padding-top
-const pageListGap = ref<number>(24) // .page-list gap between pages
-const pageLabelExtra = ref<number>(20) // 8px gap + label height (~12)
-const pageGap = computed(() => pageListGap.value + pageLabelExtra.value)
-
-// Derived for current scale
-const scaledHeights = ref<number[]>([])
-const tops = ref<number[]>([])
-
-const displayScale = computed(() => props.scale ?? 1.2)
-
-// --- Virtualization + render queue ---
-const bufferPages = ref<number>(2)
-const maxConcurrentRenders = 3
-let inFlight = 0
-const renderQueue: PageView[] = []
-const currentIndex = ref<number>(0)
-// Throttle text layer rendering to idle after scroll/zoom
-const TEXT_IDLE_MS = 120
-const textBufferPages = ref<number>(1) // render text only near center
-let textIdleTimer: number | null = null
-// Defer canvas re-render during active zoom; use CSS transform first
-const RENDER_IDLE_MS = 160
-let renderIdleTimer: number | null = null
-let renderPaused = false
-// Track a target visual scale for CSS-zoom bridging across scroll/zoom
-let cssZoomTargetScale: number | null = null
-let cssZoomBaseScale: number | null = null
-
-function enqueue(pv: PageView) {
-  if (pv.queued) return
-  pv.queued = true
-  renderQueue.push(pv)
-  pump()
-}
-
-function pump() {
-  while (inFlight < maxConcurrentRenders && renderQueue.length) {
-    const pv = renderQueue.shift()!
-    startRender(pv)
-  }
-}
-
-async function startRender(pv: PageView) {
-  const doc = lastDoc
-  if (!doc || !pv.canvas) { pv.queued = false; return }
-  inFlight++
-  // Bump token to invalidate older attempts
-  const token = (pv.renderToken = (pv.renderToken || 0) + 1)
-  pv.scale = displayScale.value
-  try {
-    await renderPage(doc, pv)
-    // If token changed during render (superseded), ignore
-    if (pv.renderToken !== token) return
-    pv.lastRenderedScale = pv.scale
-    // Delay text-layer rendering to idle; a scheduled pass will handle it
-    scheduleTextLayerPass()
-  } finally {
-    pv.queued = false
-    inFlight--
-    pump()
-  }
-}
-
-function updateRenderWindow() {
-  const n = pages.value.length
-  if (!n) return
-  if (renderPaused) return
-  const idx = currentIndex.value
-  const start = Math.max(0, idx - bufferPages.value)
-  const end = Math.min(n - 1, idx + bufferPages.value)
-  for (let i = 0; i < n; i++) {
-    const pv = pages.value[i]
-    const inRange = i >= start && i <= end
-    if (!pv.canvas) continue
-    if (inRange) {
-      // schedule render if stale or not yet rendered at current scale
-      if (pv.lastRenderedScale !== displayScale.value) enqueue(pv)
-    } else {
-      // cancel out-of-range render to free resources
-      if (pv.renderTask) void cancelTask(pv.renderTask)
-      if (pv.textTask) void cancelTextTask(pv.textTask)
-      try {
-        const host = pv.inner || pv.container
-        const tl = host?.querySelector('.textLayer')
-        if (tl) tl.remove()
-      } catch {}
-      pv.queued = false
-    }
-  }
-}
-
-async function cancelTask(task: any) {
-  if (!task) return
-  try { task.cancel?.() } catch {}
-  try { await task.promise } catch {}
-}
-
-async function resetPages() {
-  for (const view of pages.value) {
-    await cancelTask(view.renderTask)
-    view.renderTask = null
-    try { await cancelTask(view.textTask) } catch {}
-    view.textTask = null
-  }
-  pages.value = []
-  baseHeights.value = []
-  baseWidth.value = 0
-  scaledHeights.value = []
-  tops.value = []
-  cssZoomTargetScale = null
-  cssZoomBaseScale = null
-}
-
-async function renderPage(doc: PDFDocumentProxy, pageView: PageView) {
-  try {
-    const pdfPage = await doc.getPage(pageView.pageNumber)
-    const viewport = pdfPage.getViewport({ scale: pageView.scale })
-    const outputScale = window.devicePixelRatio || 1
-    pageView.width = viewport.width
-    pageView.height = viewport.height
-
-    if (!pageView.canvas) return
-
-    const canvas = pageView.canvas
-    const context = canvas.getContext('2d')
-    if (!context) return
-
-    // Ensure any previous render on this canvas is fully cancelled before touching it
-    await cancelTask(pageView.renderTask)
-
-    canvas.width = Math.floor(viewport.width * outputScale)
-    canvas.height = Math.floor(viewport.height * outputScale)
-    // Use exact CSS pixel sizes to avoid fractional rounding drift vs text layer
-    canvas.style.width = `${viewport.width}px`
-    canvas.style.height = `${viewport.height}px`
-
-    const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined
-
-    const renderTask = pdfPage.render({
-      canvas,
-      canvasContext: context,
-      viewport,
-      transform,
-    })
-    pageView.renderTask = markRaw(renderTask)
-    await renderTask.promise
-    // Clear any temporary CSS transform once true pixels are ready
-    try {
-      canvas.style.transform = 'none'
-      canvas.style.willChange = ''
-    } catch {}
-    // If this canvas reached target scale, no more CSS zoom bridge needed for it
-    if (cssZoomTargetScale != null && pageView.scale === cssZoomTargetScale) {
-      // no-op here; logic in applyCanvasTransformForZoom checks lastRenderedScale
-    }
-  } catch (error: any) {
-    const name = error?.name || ''
-    const msg = (error?.message || '').toString()
-    const lower = msg.toLowerCase()
-    if (
-      name === 'RenderingCancelledException' ||
-      lower.includes('rendering cancelled') ||
-      lower.includes('rendering canceled') ||
-      lower.includes('cancel')
-    ) {
-      // Ignore expected cancellations during re-render (e.g., scale/resize changes)
-      return
-    }
-    emit('doc-error', error)
-  }
-}
-
-async function cancelTextTask(task: any) {
-  if (!task) return
-  try { task.cancel?.() } catch {}
-  try { await task.promise } catch {}
-}
-
-async function renderTextLayerForPage(doc: PDFDocumentProxy, pageView: PageView) {
-  try {
-    const container = pageView.inner || pageView.container || null
-    if (!container) return
-    // Cancel and clear previous
-    await cancelTextTask(pageView.textTask)
-    pageView.textTask = null
-    pageView.textBuilder?.cancel?.()
-    pageView.textBuilder = null
-
-    const pdfPage = await doc.getPage(pageView.pageNumber)
-    const viewport = pdfPage.getViewport({ scale: pageView.scale })
-    try { container.querySelector('.textLayer')?.remove() } catch {}
-
-    // Ensure viewer is loaded and pdfjsLib is initialized
-    const { TextLayerBuilder } = await loadPdfViewer()
-    // Build a TextLayer and append its div into our container
-    const builder = new (TextLayerBuilder as any)({
-      pdfPage,
-      onAppend: (div: HTMLDivElement) => {
-        try { container.appendChild(div) } catch {}
-      },
-    })
-    pageView.textBuilder = markRaw(builder)
-    const promise = builder.render({ viewport })
-    pageView.textTask = markRaw({ promise, cancel: () => builder.cancel() })
-    await promise
-    try {
-      const divEl = (builder as any).div as HTMLDivElement
-      if (divEl) {
-        divEl.style.width = `${viewport.width}px`
-        divEl.style.height = `${viewport.height}px`
-        divEl.style.pointerEvents = 'auto'
-        ;(divEl.style as any)['userSelect'] = 'text'
-        ;(divEl.style as any)['webkitUserSelect'] = 'text'
-        divEl.style.zIndex = '2'
-        // Ensure CSS vars used by pdf_viewer.css reflect current zoom
-        try {
-          divEl.style.setProperty('--scale-factor', String(viewport.scale))
-          divEl.style.setProperty('--total-scale-factor', String(viewport.scale))
-        } catch {}
-      }
-    } catch {}
-  } catch (error: any) {
-    const name = error?.name || ''
-    const msg = (error?.message || '').toString()
-    const lower = msg.toLowerCase()
-    if (
-      name === 'RenderingCancelledException' ||
-      lower.includes('rendering cancelled') ||
-      lower.includes('rendering canceled') ||
-      lower.includes('textlayer') && lower.includes('cancel') ||
-      lower.includes('cancel') // swallow any cancel/canceled/cancelled variants
-    ) return
-    emit('doc-error', error)
-  }
-}
-
-let lastDoc: PDFDocumentProxy | null = null
-let lastScale = 1
-let suppressVisibleUpdate = false
-
-function binarySearchIndex(anchor: number): number {
-  const t = tops.value
-  const h = scaledHeights.value
-  const n = t.length
-  if (n === 0) return 0
-  if (anchor <= t[0]) return 0
-  if (anchor >= t[n - 1] + h[n - 1]) return n - 1
-  let lo = 0, hi = n - 1
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1
-    const start = t[mid]
-    const end = start + h[mid]
-    if (anchor < start) hi = mid - 1
-    else if (anchor >= end) lo = mid + 1
-    else return mid
-  }
-  return Math.max(0, Math.min(n - 1, lo))
-}
-
-function recomputeLayout(scale: number) {
-  const n = baseHeights.value.length
-  const h = new Array<number>(n)
-  const t = new Array<number>(n)
-  for (let i = 0; i < n; i++) h[i] = baseHeights.value[i] * scale
-  let acc = containerPaddingTop.value
-  for (let i = 0; i < n; i++) {
-    t[i] = acc
-    acc += h[i] + pageGap.value
-  }
-  scaledHeights.value = h
-  tops.value = t
-  // Update predicted width/height for page containers
-  const w = baseWidth.value * scale
-  for (const pv of pages.value) {
-    pv.width = w
-    pv.height = h[pv.pageNumber - 1] || 0
-  }
-}
-
-function reanchorToCenter(_oldScale: number, newScale: number) {
-  const container = containerRef.value
-  if (!container || !pages.value.length) return
-  const oldHeights = scaledHeights.value
-  const oldTops = tops.value
-  const anchor = container.scrollTop + container.clientHeight / 2
-  const idx = binarySearchIndex(anchor)
-  const within = Math.max(0, anchor - oldTops[idx])
-  const ratio = oldHeights[idx] > 0 ? Math.min(1, within / oldHeights[idx]) : 0
-  // Recompute layout at new scale before jump
-  recomputeLayout(newScale)
-  const newAnchorTop = (tops.value[idx] || 0) + (scaledHeights.value[idx] || 0) * ratio - container.clientHeight / 2
-  suppressVisibleUpdate = true
-  container.scrollTo({ top: Math.max(0, newAnchorTop), behavior: 'auto' })
-  // release next frame
-  currentIndex.value = idx
-  requestAnimationFrame(() => { suppressVisibleUpdate = false })
-}
-
-// Measure static extras once DOM exists
-onMounted(() => {
-  const el = containerRef.value
-  if (el) {
-    const cs = getComputedStyle(el)
-    const pt = parseFloat(cs.paddingTop || '16')
-    if (!Number.isNaN(pt)) containerPaddingTop.value = pt
-  }
-})
-
-watch(
-  () => [props.doc as PDFDocumentProxy | null, displayScale.value] as const,
-  async ([doc, scale]) => {
-    const currentDoc = toRaw(props.doc) as PDFDocumentProxy | null
-    if (!doc || !currentDoc) {
-      await resetPages()
-      lastDoc = null
-      return
-    }
-
-    // If document changed, rebuild DOM and base layout
-    if (doc !== lastDoc) {
-      await resetPages()
-      // Clear any pending queued renders from previous doc
-      renderQueue.length = 0
-      inFlight = 0
-      emit('doc-loading')
-      const total = doc.numPages
-      // Measure base sizes at scale=1
-      baseHeights.value = []
-      baseWidth.value = 0
-      for (let i = 1; i <= total; i++) {
-        const p = await doc.getPage(i)
-        const vp = p.getViewport({ scale: 1 })
-        if (i === 1) baseWidth.value = vp.width
-        baseHeights.value.push(vp.height)
-      }
-      // Build page views
-      pages.value = Array.from({ length: total }, (_, index) =>
-        reactive<PageView>({
-          pageNumber: index + 1,
-          width: 0,
-          height: 0,
-          scale,
-          canvas: null,
-          renderTask: null,
-          container: null,
-        }),
-      )
-      // Predictive layout first
-      recomputeLayout(scale)
-      await nextTick()
-      // Measure page label height once if available to refine gap
-      try {
-        const firstLabel = pages.value[0]?.container?.querySelector<HTMLDivElement>('.page-number')
-        if (firstLabel) {
-          const lh = Math.ceil(firstLabel.getBoundingClientRect().height)
-          if (lh > 0) pageLabelExtra.value = 8 + lh
-          // Recompute with refined extras
-          recomputeLayout(scale)
-        }
-      } catch {}
-      // Render pages progressively
-      lastDoc = doc
-      lastScale = scale
-      // Initialize visible index and schedule initial renders
-      const container = containerRef.value
-      if (container) {
-        const anchor = container.scrollTop + container.clientHeight / 2
-        currentIndex.value = binarySearchIndex(anchor)
-      } else {
-        currentIndex.value = 0
-      }
-      updateRenderWindow()
-      scheduleTextLayerPass()
-      if (toRaw(props.doc) === doc) emit('doc-loaded', total)
-      return
-    }
-
-    // Same document, only scale changed: do not rebuild DOM, delay true re-render
-    if (scale !== lastScale) {
-      emit('doc-loading')
-      // Reanchor and update predictive layout immediately
-      reanchorToCenter(lastScale, scale)
-      // Smooth visual scale: temporarily transform canvases until true re-render
-      cssZoomBaseScale = lastScale
-      cssZoomTargetScale = scale
-      applyCanvasTransformForZoom()
-      fillCanvasToContainer()
-      // Invalidate rendered scale and schedule only visible window
-      for (const pv of pages.value) { pv.lastRenderedScale = undefined }
-      // Defer actual canvas re-render until idle to keep zoom smooth
-      scheduleRenderPass()
-      lastScale = scale
-      // Text layer also deferred; schedule its idle pass
-      scheduleTextLayerPass()
-      emit('doc-loaded', pages.value.length)
-    }
-  },
-  { immediate: true },
-)
-
-onBeforeUnmount(async () => {
-  await resetPages()
-})
-
-function setCanvasRef(
-  el: HTMLCanvasElement | Element | ComponentPublicInstance | null,
-  page: PageView,
-) {
-  page.canvas = (el as HTMLCanvasElement | null) ?? null
-}
-
-function setContainerRef(el: HTMLDivElement | Element | ComponentPublicInstance | null, page: PageView) {
-  page.container = (el as HTMLDivElement | null) ?? null
-}
-
-function setInnerRef(el: HTMLDivElement | Element | ComponentPublicInstance | null, page: PageView) {
-  page.inner = (el as HTMLDivElement | null) ?? null
-}
-
-// Compute current page using container center + binary search (no DOM reads)
-let rafId: number | null = null
-function updateCurrentPage() {
-  const container = containerRef.value
-  if (!container || !pages.value.length) return
-  const anchor = container.scrollTop + container.clientHeight / 2
-  const idx = binarySearchIndex(anchor)
-  currentIndex.value = idx
-  emit('visible-page', (idx || 0) + 1)
-}
-function onScroll() {
-  if (suppressVisibleUpdate) return
-  if (rafId) cancelAnimationFrame(rafId)
-  rafId = requestAnimationFrame(() => {
-    rafId = null
-    updateCurrentPage()
-    updateRenderWindow()
-    // If a CSS zoom target is active, keep new visible pages visually scaled
-    if (cssZoomTargetScale != null) applyCanvasTransformForZoom()
-    if (cssZoomTargetScale != null) fillCanvasToContainer()
-    scheduleTextLayerPass()
-  })
-}
-watch(containerRef, (el, prev) => {
-  try { prev?.removeEventListener('scroll', onScroll) } catch {}
-  el?.addEventListener('scroll', onScroll, { passive: true })
-})
-onBeforeUnmount(() => {
-  const el = containerRef.value
-  try { el?.removeEventListener('scroll', onScroll) } catch {}
-  if (rafId) { cancelAnimationFrame(rafId); rafId = null }
-  if (textIdleTimer) { try { clearTimeout(textIdleTimer) } catch {}; textIdleTimer = null }
-  if (renderIdleTimer) { try { clearTimeout(renderIdleTimer) } catch {}; renderIdleTimer = null }
-})
-
-// Keep anchor stable on container resize
-let resizeObs: ResizeObserver | null = null
-watch(containerRef, (el) => {
-  try { resizeObs?.disconnect() } catch {}
-  if (el) {
-    resizeObs = new ResizeObserver(() => {
-      if (!pages.value.length) return
-      // No scale change; anchor to same page/ratio with new viewport height
-      const container = containerRef.value!
-      const anchor = container.scrollTop + container.clientHeight / 2
-      const idx = binarySearchIndex(anchor)
-      const within = Math.max(0, anchor - (tops.value[idx] || 0))
-      const ratio = (scaledHeights.value[idx] || 1) > 0 ? Math.min(1, within / (scaledHeights.value[idx] || 1)) : 0
-      const newAnchorTop = (tops.value[idx] || 0) + (scaledHeights.value[idx] || 0) * ratio - container.clientHeight / 2
-      suppressVisibleUpdate = true
-      container.scrollTo({ top: Math.max(0, newAnchorTop), behavior: 'auto' })
-      requestAnimationFrame(() => { suppressVisibleUpdate = false; updateCurrentPage(); updateRenderWindow() })
-    })
-    resizeObs.observe(el)
-  }
-})
-onBeforeUnmount(() => { try { resizeObs?.disconnect() } catch {} })
-
-function scrollToPage(pageNumber: number, _opts?: { smooth?: boolean }) {
-  const container = containerRef.value
-  if (!container) return
-  const clamped = Math.max(1, Math.min(pages.value.length || 1, pageNumber))
-  if (!tops.value.length) return
-  const targetTop = tops.value[clamped - 1]
-  container.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' })
-}
-
-function getPageMetrics(pageNumber: number) {
-  const container = containerRef.value
-  if (!container) return null
-  const idx = Math.max(0, Math.min((pages.value.length || 1) - 1, pageNumber - 1))
-  const pageTop = tops.value[idx] || 0
-  const pageHeight = scaledHeights.value[idx] || 0
-  return { pageTop, pageHeight, scrollTop: container.scrollTop }
-}
-
-function scrollToPageOffset(pageNumber: number, offsetPx: number) {
-  const container = containerRef.value
-  if (!container) return
-  const idx = Math.max(0, Math.min((pages.value.length || 1) - 1, pageNumber - 1))
-  const pageTop = tops.value[idx] || 0
-  const target = pageTop + Math.max(0, offsetPx)
-  container.scrollTo({ top: Math.max(0, target), behavior: 'auto' })
-}
-
-defineExpose({ scrollToPage, getPageMetrics, scrollToPageOffset })
-
-function scheduleTextLayerPass() {
-  if (textIdleTimer) { try { clearTimeout(textIdleTimer) } catch {} }
-  textIdleTimer = window.setTimeout(() => { textIdleTimer = null; void renderTextLayersForWindow() }, TEXT_IDLE_MS)
-}
-
-async function renderTextLayersForWindow() {
-  const n = pages.value.length
-  if (!n || !lastDoc) return
-  const idx = currentIndex.value
-  const start = Math.max(0, idx - textBufferPages.value)
-  const end = Math.min(n - 1, idx + textBufferPages.value)
-  for (let i = start; i <= end; i++) {
-    const pv = pages.value[i]
-    try { await renderTextLayerForPage(lastDoc, pv) } catch { /* ignore */ }
-  }
-}
-
-function fillCanvasToContainer() {
-  const n = pages.value.length
-  if (!n) return
-  const idx = currentIndex.value
-  const start = Math.max(0, idx - bufferPages.value)
-  const end = Math.min(n - 1, idx + bufferPages.value)
-  for (let i = start; i <= end; i++) {
-    const pv = pages.value[i]
-    const canvas = pv.canvas
-    if (!canvas) continue
-    try {
-      // Make the canvas element itself flex to container while resizing
-      canvas.style.width = '100%'
-      canvas.style.height = 'auto'
-    } catch {}
-  }
-}
-
-function scheduleRenderPass() {
-  if (renderIdleTimer) { try { clearTimeout(renderIdleTimer) } catch {} }
-  renderPaused = true
-  renderIdleTimer = window.setTimeout(() => {
-    renderIdleTimer = null
-    renderPaused = false
-    updateRenderWindow()
-  }, RENDER_IDLE_MS)
-}
-
-function applyCanvasTransformForZoom() {
-  // apply transform to visible window (center ± bufferPages)
-  const n = pages.value.length
-  if (!n || cssZoomTargetScale == null) return
-  const idx = currentIndex.value
-  const start = Math.max(0, idx - bufferPages.value)
-  const end = Math.min(n - 1, idx + bufferPages.value)
-  for (let i = start; i <= end; i++) {
-    const pv = pages.value[i]
-    const canvas = pv.canvas
-    if (!canvas) continue
-    // Only apply transform to canvases whose pixels are still at older scale
-    const fromScale = (pv.lastRenderedScale ?? cssZoomBaseScale ?? lastScale)
-    if (!fromScale || fromScale === cssZoomTargetScale) {
-      try { canvas.style.transform = 'none'; canvas.style.willChange = '' } catch {}
-      continue
-    }
-    const ratio = cssZoomTargetScale / fromScale
-    if (!Number.isFinite(ratio) || ratio <= 0) continue
-    try {
-      canvas.style.transformOrigin = '0 0'
-      canvas.style.transform = `scale(${ratio})`
-      canvas.style.willChange = 'transform'
-    } catch {}
-  }
-}
-
-function onPageContextMenu(event: MouseEvent, page: PageView) {
-  event.preventDefault()
-  const canvas = page.canvas
-  if (!canvas) return
-  const rect = canvas.getBoundingClientRect()
-  const offsetX = event.clientX - rect.left
-  const offsetY = event.clientY - rect.top
-  const pdfX = offsetX / page.scale
-  const pdfY = (page.height - offsetY) / page.scale
-
-  emit('page-contextmenu', {
-    pageNumber: page.pageNumber,
-    pageIndex: page.pageNumber - 1,
-    scale: page.scale,
-    width: page.width,
-    height: page.height,
-    offsetX,
-    offsetY,
-    clientX: event.clientX,
-    clientY: event.clientY,
-    pdfX,
-    pdfY,
-  })
-}
+defineExpose({ scrollToPage, getPageMetrics, scrollToPageOffset, getScrollState, scrollToPosition })
 </script>
 
 <template>
@@ -678,7 +73,7 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
 .pdf-viewer {
   position: relative;
   height: 100%;
-  overflow-y: auto;
+  overflow: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -713,6 +108,8 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
   flex-direction: column;
   gap: 24px;
   align-items: center;
+  width: fit-content;
+  margin: 0 auto;
 }
 
 .page-container {
@@ -720,6 +117,7 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  width: fit-content;
 }
 
 .page-inner {
@@ -749,6 +147,8 @@ function onPageContextMenu(event: MouseEvent, page: PageView) {
 .page-number {
   font-size: 12px;
   color: var(--text-muted, #6b7280);
+  text-align: center;
+  width: 100%;
 }
 
 /* PDF.js 文字層（使用 deep 以套用到動態插入的節點） */

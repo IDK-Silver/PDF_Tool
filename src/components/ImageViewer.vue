@@ -18,11 +18,20 @@ import { computed, ref, watch, onMounted, onBeforeUnmount, defineExpose } from '
 import { readFile } from '@tauri-apps/plugin-fs'
 
 const props = defineProps<{ path: string; alt?: string; scale?: number }>()
+type PinchZoomPayload = {
+  deltaY: number
+  anchorX: number
+  anchorY: number
+  viewportX: number
+  viewportY: number
+}
+
 const emit = defineEmits<{
   (e: 'loading'): void
   (e: 'loaded', payload: { width: number; height: number }): void
   (e: 'error', message: string): void
   (e: 'page-contextmenu', payload: any): void
+  (e: 'pinch-zoom', payload: PinchZoomPayload): void
 }>()
 
 const imageSrc = ref<string | null>(null)
@@ -48,6 +57,45 @@ const imgStyle = computed(() => {
 const containerW = ref(0)
 const containerH = ref(0)
 let resizeObs: ResizeObserver | null = null
+function normalizeWheelDelta(event: WheelEvent) {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return event.deltaY * 16
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return event.deltaY * 360
+  return event.deltaY
+}
+
+function clamp01(value: number) {
+  if (!Number.isFinite(value)) return 0.5
+  return Math.min(1, Math.max(0, value))
+}
+
+function handleWheel(event: WheelEvent) {
+  if (!event.ctrlKey) return
+  const container = containerRef.value
+  if (!container) return
+  event.preventDefault()
+  const deltaY = normalizeWheelDelta(event)
+  if (!Number.isFinite(deltaY)) return
+
+  const rect = container.getBoundingClientRect()
+  const viewportX = event.clientX - rect.left
+  const viewportY = event.clientY - rect.top
+  const contentWidth = Math.max(container.scrollWidth, scaledWidth.value || 1)
+  const contentHeight = Math.max(container.scrollHeight, scaledHeight.value || 1)
+
+  const anchorX = clamp01((container.scrollLeft + viewportX) / contentWidth)
+  const anchorY = clamp01((container.scrollTop + viewportY) / contentHeight)
+
+  const payload: PinchZoomPayload = {
+    deltaY,
+    anchorX,
+    anchorY,
+    viewportX,
+    viewportY,
+  }
+
+  emit('pinch-zoom', payload)
+}
+
 onMounted(() => {
   const el = containerRef.value
   if (el && 'ResizeObserver' in window) {
@@ -59,8 +107,13 @@ onMounted(() => {
     resizeObs.observe(el)
     update()
   }
+  el?.addEventListener('wheel', handleWheel, { passive: false })
 })
-onBeforeUnmount(() => { try { resizeObs?.disconnect() } catch {} })
+onBeforeUnmount(() => {
+  try { resizeObs?.disconnect() } catch {}
+  const el = containerRef.value
+  try { el?.removeEventListener('wheel', handleWheel) } catch {}
+})
 
 // Center only when the scaled image fits on that axis
 const hCenter = computed(() => !!scaledWidth.value && scaledWidth.value <= containerW.value)
@@ -166,15 +219,35 @@ function getPageMetrics(_pageNumber: number) {
   return { pageTop, pageHeight, scrollTop: container.scrollTop }
 }
 function scrollToPageOffset(_pageNumber: number, offsetPx: number) {
+  scrollToPosition({ top: Math.max(0, offsetPx) })
+}
+
+function getScrollState() {
+  const container = containerRef.value
+  if (!container) return null
+  return {
+    scrollLeft: container.scrollLeft,
+    scrollTop: container.scrollTop,
+    scrollWidth: container.scrollWidth,
+    scrollHeight: container.scrollHeight,
+    clientWidth: container.clientWidth,
+    clientHeight: container.clientHeight,
+  }
+}
+
+function scrollToPosition(pos: { left?: number; top?: number }) {
   const container = containerRef.value
   if (!container) return
-  container.scrollTo({ top: Math.max(0, offsetPx), behavior: 'auto' })
+  const targetLeft = pos.left ?? container.scrollLeft
+  const targetTop = pos.top ?? container.scrollTop
+  container.scrollTo({ left: targetLeft, top: targetTop, behavior: 'auto' })
 }
+
 function getContainerWidth() {
   const el = containerRef.value
   return el ? el.clientWidth : 0
 }
-defineExpose({ getPageMetrics, scrollToPageOffset, getContainerWidth })
+defineExpose({ getPageMetrics, scrollToPageOffset, getContainerWidth, getScrollState, scrollToPosition })
 </script>
 
 <style scoped>
@@ -198,5 +271,6 @@ defineExpose({ getPageMetrics, scrollToPageOffset, getContainerWidth })
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+  flex: 0 0 auto; /* 保留原始尺寸，避免 flex 擠壓導致無法完整捲動 */
 }
 </style>

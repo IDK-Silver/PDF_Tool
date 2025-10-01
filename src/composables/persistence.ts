@@ -30,7 +30,7 @@ export type PersistedState = {
   pageHistory?: {
     [filePath: string]: {
       currentPage: number
-      lastViewed: number // timestamp
+      lastViewed: number
     }
   }
 }
@@ -47,24 +47,40 @@ const FILE_NAME = 'state.json'
 const KEY = 'appState'
 
 let storePromise: Promise<Store | null> | null = null
-async function getStore(): Promise<Store | null> {
+
+async function resolveStore(): Promise<Store | null> {
   if (!storePromise) {
-    storePromise = Store.load(FILE_NAME).catch((e) => {
-      console.warn('Store load failed; persistence disabled', e)
+    storePromise = Store.load(FILE_NAME).catch((error) => {
+      console.warn('Store load failed; persistence disabled', error)
       return null
     })
   }
   return storePromise
 }
 
-export async function saveAppState(state: PersistedState): Promise<void> {
-  const store = await getStore()
-  if (!store) {
-    console.warn('[persistence] Store not available, cannot save state')
-    return
+function normalizeState(raw: PersistedStateRaw): PersistedState {
+  return {
+    ...raw,
+    files: {
+      view: normalizeFileList(raw.files.view),
+      convert: normalizeFileList(raw.files.convert),
+      compose: normalizeFileList(raw.files.compose),
+    },
   }
+}
 
-  const stateInfo = {
+function normalizeFileList(list: StoredFile[] | undefined): PdfFile[] {
+  if (!Array.isArray(list)) return []
+  return list
+    .filter(Boolean)
+    .map((file) => ({
+      ...file,
+      kind: file.kind ?? 'pdf',
+    }))
+}
+
+function describeState(state: PersistedState) {
+  return {
     mode: state.lastMode,
     viewFiles: state.files.view.length,
     convertFiles: state.files.convert.length,
@@ -73,62 +89,102 @@ export async function saveAppState(state: PersistedState): Promise<void> {
     activeConvert: state.active.convert,
     activeCompose: state.active.compose,
     windowWidth: state.ui?.windowWidthPx ?? null,
-    windowHeight: state.ui?.windowHeightPx ?? null
-  }
-
-  console.log('[persistence] Saving state:', stateInfo)
-
-  try {
-    await store.set(KEY, state)
-    await store.save()
-    console.log('[persistence] State saved successfully')
-
-    // 驗證儲存：立即讀回來檢查
-    const verifiedRaw = await store.get(KEY) as PersistedStateRaw | undefined
-    const verified = verifiedRaw ? normalizeState(verifiedRaw) : undefined
-    if (verified && verified.active.view === state.active.view) {
-      console.log('[persistence] Save verification successful')
-    } else {
-      console.error('[persistence] Save verification failed!')
-    }
-  } catch (e) {
-    console.error('[persistence] Failed to save state:', e)
-    throw e // 重新拋出錯誤以便呼叫者處理
+    windowHeight: state.ui?.windowHeightPx ?? null,
   }
 }
 
-// Debounced save helper (default 1000ms)
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
-let pendingState: PersistedState | null = null
-export function saveAppStateDebounced(state: PersistedState, delayMs = 1000) {
-  pendingState = state
-  console.log(`[persistence] Scheduling debounced save in ${delayMs}ms`)
+function cloneState(state: PersistedState): PersistedState {
+  return {
+    version: 1,
+    lastMode: state.lastMode,
+    files: {
+      view: state.files.view.map((file) => ({ ...file })),
+      convert: state.files.convert.map((file) => ({ ...file })),
+      compose: state.files.compose.map((file) => ({ ...file })),
+    },
+    active: { ...state.active },
+    queries: { ...state.queries },
+    ui: state.ui ? { ...state.ui } : undefined,
+    pageHistory: state.pageHistory
+      ? Object.fromEntries(Object.entries(state.pageHistory).map(([path, entry]) => [path, { ...entry }]))
+      : undefined,
+  }
+}
 
-  if (debounceTimer) {
-    console.log('[persistence] Clearing previous debounce timer')
-    clearTimeout(debounceTimer)
+async function readRawState(store: Store): Promise<PersistedStateRaw | null> {
+  const raw = (await store.get(KEY)) as PersistedStateRaw | undefined
+  return raw ?? null
+}
+
+async function writeState(store: Store, state: PersistedState): Promise<void> {
+  console.log('[persistence] Saving state:', describeState(state))
+  await store.set(KEY, state)
+  await store.save()
+
+  const verifiedRaw = await readRawState(store)
+  const verified = verifiedRaw ? normalizeState(verifiedRaw) : null
+  if (!verified || verified.active.view !== state.active.view) {
+    console.error('[persistence] Save verification failed')
+  } else {
+    console.log('[persistence] State saved successfully')
+  }
+}
+
+type DebouncedSaver = (state: PersistedState, delayMs?: number) => void
+
+function createDebouncedSaver(fn: (state: PersistedState) => Promise<void>): DebouncedSaver {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let pending: PersistedState | null = null
+
+  return (state, delayMs = 1000) => {
+    pending = state
+    if (timer) clearTimeout(timer)
+
+    timer = setTimeout(async () => {
+      timer = null
+      if (!pending) return
+      try {
+        await fn(pending)
+      } catch (error) {
+        console.error('[persistence] Debounced save failed:', error)
+      } finally {
+        pending = null
+      }
+    }, delayMs)
+  }
+}
+
+export async function saveAppState(state: PersistedState): Promise<void> {
+  const store = await resolveStore()
+  if (!store) {
+    console.warn('[persistence] Store not available, cannot save state')
+    return
   }
 
-  debounceTimer = setTimeout(async () => {
-    debounceTimer = null
-    if (pendingState) {
-      console.log('[persistence] Executing debounced save')
-      try {
-        await saveAppState(pendingState)
-        console.log('[persistence] Debounced save completed')
-      } catch (e) {
-        console.error('[persistence] Debounced save failed:', e)
-      } finally {
-        pendingState = null
+  try {
+    const plain = cloneState(state)
+    if (!plain.pageHistory) {
+      const current = await readRawState(store)
+      if (current?.pageHistory) {
+        plain.pageHistory = { ...current.pageHistory }
       }
-    } else {
-      console.log('[persistence] No pending state for debounced save')
     }
-  }, delayMs)
+    await writeState(store, plain)
+  } catch (error) {
+    console.error('[persistence] Failed to save state:', error)
+    throw error
+  }
+}
+
+const debouncedSave = createDebouncedSaver(saveAppState)
+
+export function saveAppStateDebounced(state: PersistedState, delayMs = 1000) {
+  console.log(`[persistence] Scheduling debounced save in ${delayMs}ms`)
+  debouncedSave(cloneState(state), delayMs)
 }
 
 export async function loadAppState(): Promise<PersistedState | null> {
-  const store = await getStore()
+  const store = await resolveStore()
   if (!store) {
     console.warn('[persistence] Store not available, cannot load state')
     return null
@@ -136,8 +192,7 @@ export async function loadAppState(): Promise<PersistedState | null> {
 
   try {
     console.log('[persistence] Loading state from store')
-    const raw = (await store.get(KEY)) as PersistedStateRaw | undefined
-
+    const raw = await readRawState(store)
     if (!raw) {
       console.log('[persistence] No saved state found')
       return null
@@ -148,67 +203,36 @@ export async function loadAppState(): Promise<PersistedState | null> {
       return null
     }
 
-    const data = normalizeState(raw)
-
-    const stateInfo = {
-      mode: data.lastMode,
-      viewFiles: data.files.view.length,
-      convertFiles: data.files.convert.length,
-      composeFiles: data.files.compose.length,
-      activeView: data.active.view,
-      activeConvert: data.active.convert,
-      activeCompose: data.active.compose,
-      viewFileNames: data.files.view.map(f => f.name)
-    }
-
-    console.log('[persistence] Loaded state:', stateInfo)
-    return data
-  } catch (e) {
-    console.error('[persistence] Failed to load state:', e)
+    const state = normalizeState(raw)
+    console.log('[persistence] Loaded state:', describeState(state))
+    return state
+  } catch (error) {
+    console.error('[persistence] Failed to load state:', error)
     return null
   }
 }
 
-function normalizeState(raw: PersistedStateRaw): PersistedState {
-  return {
-    ...raw,
-    files: {
-      view: normalizeFileList(raw.files.view),
-      convert: normalizeFileList(raw.files.convert),
-      compose: normalizeFileList(raw.files.compose),
-    }
-  }
-}
-
-function normalizeFileList(list: StoredFile[] | undefined): PdfFile[] {
-  if (!Array.isArray(list)) return []
-  return list
-    .filter((file): file is StoredFile => !!file)
-    .map((file) => ({
-      ...file,
-      kind: file.kind ?? 'pdf'
-    }))
-}
-
 export async function clearAppState(): Promise<void> {
-  const store = await getStore()
+  const store = await resolveStore()
   if (!store) return
   try {
-    // Prefer delete if available; fallback to set null
     if (typeof (store as any).delete === 'function') {
       await (store as any).delete(KEY)
     } else {
       await store.set(KEY, null)
+      await store.save()
     }
-    await store.save()
-  } catch {}
+  } catch (error) {
+    console.error('[persistence] Failed to clear state:', error)
+  }
 }
 
 // ----- App Settings (stored separately to avoid conflicts with appState writes) -----
+
 export type AppSettings = {
   exportDpi: number
   exportFormat: 'png' | 'jpeg'
-  jpegQuality?: number // 0..1 for canvas quality
+  jpegQuality?: number
   defaultZoomMode?: 'actual' | 'fit'
 }
 
@@ -219,7 +243,7 @@ function defaultSettings(): AppSettings {
 }
 
 export async function loadSettings(): Promise<AppSettings> {
-  const store = await getStore()
+  const store = await resolveStore()
   if (!store) return defaultSettings()
   try {
     const data = (await store.get(SETTINGS_KEY)) as AppSettings | undefined
@@ -230,25 +254,29 @@ export async function loadSettings(): Promise<AppSettings> {
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
-  const store = await getStore()
+  const store = await resolveStore()
   if (!store) return
   try {
     await store.set(SETTINGS_KEY, settings)
     await store.save()
-  } catch (e) {
-    console.warn('Failed to save settings', e)
+  } catch (error) {
+    console.warn('Failed to save settings', error)
   }
 }
 
 let settingsTimer: ReturnType<typeof setTimeout> | null = null
 let pendingSettings: AppSettings | null = null
+
 export function saveSettingsDebounced(settings: AppSettings, delayMs = 500) {
   pendingSettings = settings
   if (settingsTimer) clearTimeout(settingsTimer)
   settingsTimer = setTimeout(async () => {
     settingsTimer = null
-    if (pendingSettings) {
-      try { await saveSettings(pendingSettings) } finally { pendingSettings = null }
+    if (!pendingSettings) return
+    try {
+      await saveSettings(pendingSettings)
+    } finally {
+      pendingSettings = null
     }
   }, delayMs)
 }
