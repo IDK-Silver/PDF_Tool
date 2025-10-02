@@ -238,6 +238,9 @@ export type AppSettings = {
   viewerTextIdleMs?: number
   viewerRenderIdleMs?: number
   viewerZoomTweenMs?: number
+  // Behavior when toggling sidebar (e.g., Cmd+B)
+  switchToActualOnSidebarToggle?: boolean
+  sidebarToggleTargetScale?: number
 }
 
 const SETTINGS_KEY = 'appSettings'
@@ -251,6 +254,8 @@ function defaultSettings(): AppSettings {
     viewerTextIdleMs: 100,
     viewerRenderIdleMs: 20,
     viewerZoomTweenMs: 120,
+    switchToActualOnSidebarToggle: false,
+    sidebarToggleTargetScale: 1,
   }
 }
 

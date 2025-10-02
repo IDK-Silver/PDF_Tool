@@ -83,14 +83,16 @@ async function waitForTextLayer(idx: number, tries = 8, delayMs = 50): Promise<H
   return null
 }
 
-function walkTextNodes(root: Node, cb: (node: Text) => void) {
+function collectTextNodes(root: Node) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const nodes: Text[] = []
   let n: Node | null
   // eslint-disable-next-line no-cond-assign
   while ((n = walker.nextNode())) {
     const t = n as Text
-    if (t.nodeValue && t.nodeValue.trim().length) cb(t)
+    if (t.nodeValue && t.nodeValue.length) nodes.push(t)
   }
+  return nodes
 }
 
 function indexOfAll(hay: string, needle: string, caseSensitive = false): number[] {
@@ -117,10 +119,11 @@ function makeHighlightDiv(x: number, y: number, w: number, h: number, current = 
     top: `${y}px`,
     width: `${Math.max(1, w)}px`,
     height: `${Math.max(1, h)}px`,
-    background: current ? 'rgba(255, 196, 0, 0.45)' : 'rgba(255, 235, 59, 0.25)',
+    background: current ? 'rgba(255, 196, 0, 0.45)' : 'rgba(255, 235, 59, 0.28)',
     pointerEvents: 'none',
     borderRadius: '2px',
-    boxShadow: current ? '0 0 0 1px rgba(255, 196, 0, 0.6) inset' : '',
+    border: current ? '2px solid rgba(255, 187, 0, 0.9)' : '1px solid rgba(255, 193, 7, 0.75)',
+    boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.2) inset',
   } as Partial<CSSStyleDeclaration>)
   return div
 }
@@ -146,18 +149,42 @@ async function highlightInPage(
   const matches: Array<{ rects: Array<{ x: number; y: number; w: number; h: number }> }> = []
   const pageRect = (host as HTMLElement).getBoundingClientRect()
 
-  walkTextNodes(textLayer, (textNode) => {
-    const value = textNode.nodeValue || ''
-    const hits = indexOfAll(value, trimmed, caseSensitive)
-    for (const start of hits) {
+  // Build a flat text buffer across all text nodes to support cross-node matches
+  const nodes = collectTextNodes(textLayer)
+  const indexMap: Array<{ node: Text; start: number; end: number }> = []
+  let accLen = 0
+  for (const node of nodes) {
+    const val = node.nodeValue || ''
+    const start = accLen
+    const end = start + val.length
+    indexMap.push({ node, start, end })
+    accLen = end
+  }
+  const fullText = nodes.map(n => n.nodeValue || '').join('')
+  const globalHits = indexOfAll(fullText, trimmed, caseSensitive)
+  for (const hit of globalHits) {
+    const startPos = hit
+    const endPos = hit + trimmed.length
+    // Locate start node
+    let si = 0
+    while (si < indexMap.length && !(startPos >= indexMap[si].start && startPos < indexMap[si].end)) si++
+    if (si >= indexMap.length) continue
+    // Locate end node (endPos can equal end; clamp to last char in that node)
+    let ei = si
+    while (ei < indexMap.length && endPos > indexMap[ei].end) ei++
+    if (ei >= indexMap.length) ei = indexMap.length - 1
+    const startRec = indexMap[si]
+    const endRec = indexMap[ei]
+    const startOffset = Math.max(0, startPos - startRec.start)
+    const endOffset = Math.max(0, Math.min((endPos - endRec.start), (endRec.end - endRec.start)))
+    try {
       const range = document.createRange()
-      try {
-        range.setStart(textNode, start)
-        range.setEnd(textNode, start + trimmed.length)
-      } catch { continue }
+      range.setStart(startRec.node, startOffset)
+      range.setEnd(endRec.node, endOffset)
       const rects: Array<{ x: number; y: number; w: number; h: number }> = []
       const rectList = range.getClientRects()
       for (const r of Array.from(rectList)) {
+        if (!r.width || !r.height) continue
         rects.push({
           x: r.left - pageRect.left,
           y: r.top - pageRect.top,
@@ -166,8 +193,10 @@ async function highlightInPage(
         })
       }
       if (rects.length) matches.push({ rects })
+    } catch {
+      // ignore faulty ranges
     }
-  })
+  }
 
   if (!matches.length) return { total: 0, active: null }
 
@@ -293,13 +322,10 @@ defineExpose({
   position: absolute;
   inset: 0;
   pointer-events: none; /* 不阻擋文字選取/點擊 */
-  z-index: 1;
+  z-index: 3;
 }
 
-:deep(.find-highlight),
-:deep(.find-highlight-current) {
-  mix-blend-mode: multiply;
-}
+/* ensure highlights remain visible over dark/light images */
 
 .page-number {
   font-size: 12px;

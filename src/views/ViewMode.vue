@@ -559,12 +559,12 @@ function setZoomActual() {
 
 function zoomIn(step = 0.1) {
   const target = clampScale(scale.value + step)
-  void applyScaleWithAnchor(target, 'custom')
+  void applyScaleWithAnchor(target, 'actual')
 }
 
 function zoomOut(step = 0.1) {
   const target = clampScale(scale.value - step)
-  void applyScaleWithAnchor(target, 'custom')
+  void applyScaleWithAnchor(target, 'actual')
 }
 
 function onPinchZoom(payload: PinchZoomPayload) {
@@ -579,7 +579,7 @@ function onPinchZoom(payload: PinchZoomPayload) {
     viewportY: payload.viewportY,
   }
   pinchChain = pinchChain
-    .then(() => applyScaleWithAnchor(target, 'custom', anchor))
+    .then(() => applyScaleWithAnchor(target, 'actual', anchor))
     .catch((error) => {
       console.error('[ViewMode] Pinch zoom failed:', error)
     })
@@ -591,6 +591,15 @@ watch([pdfDoc, () => zoomMode.value], async ([doc, mode]) => {
   if (mode === 'fit') scale.value = computeFitScale()
 })
 
+// Repaint search highlights after zoom scale changes so boxes align with text
+watch(() => scale.value, async () => {
+  if (!isPdfFile.value) return
+  if (!searchOpen.value) return
+  if (!searchQuery.value.trim()) return
+  // keep current index, just re-highlight at new scale
+  await highlightCurrentMatch()
+})
+
 function onKeydown(event: KeyboardEvent) {
   const meta = event.metaKey || event.ctrlKey
   if (!meta) return
@@ -600,6 +609,7 @@ function onKeydown(event: KeyboardEvent) {
     if (isPdfFile.value) toggleSearch(true)
     return
   }
+  // Cmd/Ctrl + B is handled globally to toggle sidebar; do not override.
   const viewerAny: any = viewerRef.value
   // 禁用一次 tween，讓鍵盤縮放即時、不疊加動畫
   try { viewerAny?.disableTweenOnce?.(0) } catch {}
@@ -607,6 +617,25 @@ function onKeydown(event: KeyboardEvent) {
   else if (key === '-' || key === '_') { event.preventDefault(); zoomOut() }
   else if (key === '0') { event.preventDefault(); setZoomFit() }
 }
+
+// When the sidebar collapses/expands (e.g., via Cmd/Ctrl+B), optionally switch to Actual-size mode
+watch(
+  () => leftCollapsed?.value,
+  (_collapsed, _prev) => {
+    if (!isPdfFile.value) return
+    if (!settings.value?.switchToActualOnSidebarToggle) return
+    // Only switch when we were in Fit mode to avoid overriding explicit choice
+    if (zoomMode.value !== 'fit') return
+    // Use the scale right before layout changes as target (fallback to setting value)
+    const target = Number.isFinite(scale.value) && (scale.value as number) > 0
+      ? (scale.value as number)
+      : (Number.isFinite(settings.value.sidebarToggleTargetScale) ? (settings.value.sidebarToggleTargetScale as number) : 1)
+    // Disable tween once for snappier switch on layout change
+    try { (viewerRef.value as any)?.disableTweenOnce?.(0) } catch {}
+    void applyScaleWithAnchor(target, 'actual')
+  },
+  { flush: 'pre' },
+)
 
 function onWindowResize() {
   if (zoomMode.value === 'fit' && pdfDoc.value) {
@@ -699,6 +728,10 @@ function onPageContextMenu(context: PagePointerContext) {
   <div class="view-mode-root">
     <header class="view-header">
       <div class="header-left">
+        <button v-if="leftCollapsed" class="btn-expand" type="button" @click="setLeftCollapsed?.(false)"
+          aria-label="展開側欄" title="展開側欄">
+          <ChevronDoubleRightIcon class="icon" aria-hidden="true" />
+        </button>
         <button
           v-if="isPdfFile"
           class="search-btn"
@@ -709,10 +742,6 @@ function onPageContextMenu(context: PagePointerContext) {
           title="搜尋 (⌘/Ctrl+F)"
         >
           <MagnifyingGlassIcon class="icon" aria-hidden="true" />
-        </button>
-        <button v-if="leftCollapsed" class="btn-expand" type="button" @click="setLeftCollapsed?.(false)"
-          aria-label="展開側欄" title="展開側欄">
-          <ChevronDoubleRightIcon class="icon" aria-hidden="true" />
         </button>
       </div>
       <div class="header-right" v-if="props.activeFile">
