@@ -241,6 +241,9 @@ export type AppSettings = {
   // Behavior when toggling sidebar (e.g., Cmd+B)
   switchToActualOnSidebarToggle?: boolean
   sidebarToggleTargetScale?: number
+  // Search highlight retry behaviour
+  searchHighlightRetryDelayMs?: number
+  searchHighlightRetryCount?: number
 }
 
 const SETTINGS_KEY = 'appSettings'
@@ -256,6 +259,8 @@ function defaultSettings(): AppSettings {
     viewerZoomTweenMs: 120,
     switchToActualOnSidebarToggle: false,
     sidebarToggleTargetScale: 1,
+    searchHighlightRetryDelayMs: 80,
+    searchHighlightRetryCount: 4,
   }
 }
 

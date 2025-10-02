@@ -1,6 +1,7 @@
 import { nextTick } from 'vue'
 import type { Ref } from 'vue'
 import type { PageView } from './usePdfViewerEngine'
+import { createSearchData, findAllOccurrences } from '../../utils/searchText'
 
 type HighlightOptions = {
   pages: Ref<PageView[]>
@@ -9,7 +10,7 @@ type HighlightOptions = {
 
 type HighlightResult = { total: number; active: number | null }
 
-type HighlightConfig = { caseSensitive?: boolean; activeIndex?: number }
+type HighlightConfig = { caseSensitive?: boolean; activeIndex?: number; countOnly?: boolean }
 
 function makeHighlightDiv(x: number, y: number, w: number, h: number, current = false): HTMLDivElement {
   const div = document.createElement('div')
@@ -39,21 +40,6 @@ function collectTextNodes(root: Node) {
     if (t.nodeValue && t.nodeValue.length) nodes.push(t)
   }
   return nodes
-}
-
-function indexOfAll(hay: string, needle: string, caseSensitive = false): number[] {
-  const h = caseSensitive ? hay : hay.toLowerCase()
-  const n = caseSensitive ? needle : needle.toLowerCase()
-  const res: number[] = []
-  let pos = 0
-  if (!n) return res
-  while (true) {
-    const i = h.indexOf(n, pos)
-    if (i < 0) break
-    res.push(i)
-    pos = i + n.length
-  }
-  return res
 }
 
 async function waitForTextLayer(page: PageView): Promise<HTMLElement | null> {
@@ -113,19 +99,26 @@ export function usePageHighlights(options: HighlightOptions) {
       accLen = end
     }
     const fullText = nodes.map(n => n.nodeValue || '').join('')
-    const hits = indexOfAll(fullText, trimmed, caseSensitive)
-    for (const startPos of hits) {
-      const endPos = startPos + trimmed.length
+    const { normalizedHay, hayText, needleText } = createSearchData(fullText, trimmed, caseSensitive, true)
+    if (!needleText) return { total: 0, active: null }
+    const hits = findAllOccurrences(hayText, needleText)
+    for (const normStart of hits) {
+      const normEnd = normStart + needleText.length
+      const startOriginal = normalizedHay.map[normStart]
+      const endOriginal = normEnd > 0
+        ? ((normEnd - 1) < normalizedHay.map.length ? normalizedHay.map[normEnd - 1] + 1 : fullText.length)
+        : (startOriginal ?? 0)
+      if (startOriginal == null || endOriginal == null || endOriginal <= startOriginal) continue
       let si = 0
-      while (si < indexMap.length && !(startPos >= indexMap[si].start && startPos < indexMap[si].end)) si++
+      while (si < indexMap.length && !(startOriginal >= indexMap[si].start && startOriginal < indexMap[si].end)) si++
       if (si >= indexMap.length) continue
       let ei = si
-      while (ei < indexMap.length && endPos > indexMap[ei].end) ei++
+      while (ei < indexMap.length && endOriginal > indexMap[ei].end) ei++
       if (ei >= indexMap.length) ei = indexMap.length - 1
       const startRec = indexMap[si]
       const endRec = indexMap[ei]
-      const startOffset = Math.max(0, startPos - startRec.start)
-      const endOffset = Math.max(0, Math.min(endPos - endRec.start, endRec.end - endRec.start))
+      const startOffset = Math.max(0, startOriginal - startRec.start)
+      const endOffset = Math.max(0, Math.min(endOriginal - endRec.start, endRec.end - endRec.start))
       try {
         const range = document.createRange()
         range.setStart(startRec.node, startOffset)
@@ -144,18 +137,20 @@ export function usePageHighlights(options: HighlightOptions) {
 
     if (!matches.length) return { total: 0, active: null }
 
+    const drawEnabled = !cfg?.countOnly
     const activeIndex = Math.max(0, Math.min(matches.length - 1, cfg?.activeIndex ?? 0))
-    matches.forEach((match, matchIndex) => {
-      match.rects.forEach((rect) => {
-        overlay.appendChild(makeHighlightDiv(rect.x, rect.y, rect.w, rect.h, matchIndex === activeIndex))
+    if (drawEnabled) {
+      matches.forEach((match, matchIndex) => {
+        match.rects.forEach((rect) => {
+          overlay.appendChild(makeHighlightDiv(rect.x, rect.y, rect.w, rect.h, matchIndex === activeIndex))
+        })
       })
-    })
-
-    const focusRect = matches[activeIndex]?.rects?.[0]
-    if (focusRect) {
-      try { options.scrollToPageOffset(pageIndex + 1, Math.max(0, focusRect.y - 60)) } catch {}
+      const focusRect = matches[activeIndex]?.rects?.[0]
+      if (focusRect) {
+        try { options.scrollToPageOffset(pageIndex + 1, Math.max(0, focusRect.y - 60)) } catch {}
+      }
     }
-    return { total: matches.length, active: activeIndex }
+    return { total: matches.length, active: drawEnabled ? activeIndex : null }
   }
 
   return {

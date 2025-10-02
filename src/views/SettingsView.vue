@@ -19,6 +19,8 @@ const viewerRenderIdleMs = ref<number>(20)
 const viewerZoomTweenMs = ref<number>(120)
 const switchToActualOnSidebarToggle = ref<boolean>(false)
 const sidebarToggleTargetScale = ref<number>(1)
+const searchHighlightRetryDelayMs = ref<number>(80)
+const searchHighlightRetryCount = ref<number>(4)
 
 onMounted(async () => {
   const s = await loadSettings()
@@ -31,6 +33,8 @@ onMounted(async () => {
   viewerZoomTweenMs.value = Number.isFinite(s.viewerZoomTweenMs) ? (s.viewerZoomTweenMs as number) : 120
   switchToActualOnSidebarToggle.value = !!s.switchToActualOnSidebarToggle
   sidebarToggleTargetScale.value = Number.isFinite(s.sidebarToggleTargetScale) ? (s.sidebarToggleTargetScale as number) : 1
+  searchHighlightRetryDelayMs.value = Number.isFinite(s.searchHighlightRetryDelayMs) ? (s.searchHighlightRetryDelayMs as number) : 80
+  searchHighlightRetryCount.value = Number.isFinite(s.searchHighlightRetryCount) ? Math.round(s.searchHighlightRetryCount as number) : 4
 })
 
 function persist() {
@@ -44,6 +48,8 @@ function persist() {
     viewerZoomTweenMs: clampMs(viewerZoomTweenMs.value),
     switchToActualOnSidebarToggle: !!switchToActualOnSidebarToggle.value,
     sidebarToggleTargetScale: clampScale(sidebarToggleTargetScale.value),
+    searchHighlightRetryDelayMs: clampMs(searchHighlightRetryDelayMs.value),
+    searchHighlightRetryCount: clampRetryCount(searchHighlightRetryCount.value),
   }
   saveSettingsDebounced(s)
 }
@@ -52,6 +58,7 @@ function clampDpi(v: number) { return Math.min(1200, Math.max(72, Math.round(v |
 function clampQuality(v: number) { return Math.min(1, Math.max(0.1, Number.isFinite(v) ? v : 0.9)) }
 function clampMs(v: number) { return Math.min(1000, Math.max(0, Math.round(Number.isFinite(v) ? v : 0))) }
 function clampScale(v: number) { return Math.min(6, Math.max(0.1, Number.isFinite(v) ? v : 1)) }
+function clampRetryCount(v: number) { return Math.min(10, Math.max(0, Math.round(Number.isFinite(v) ? v : 4))) }
 watch([
   exportDpi,
   exportFormat,
@@ -62,6 +69,8 @@ watch([
   viewerZoomTweenMs,
   switchToActualOnSidebarToggle,
   sidebarToggleTargetScale,
+  searchHighlightRetryDelayMs,
+  searchHighlightRetryCount,
 ], persist, { deep: false })
 </script>
 
@@ -105,6 +114,13 @@ watch([
         <div class="row">
           <label class="label">側欄切換時</label>
           <label><input type="checkbox" v-model="switchToActualOnSidebarToggle" /> 自動切換到「實際大小」</label>
+        </div>
+        <div class="row">
+          <label class="label">搜尋高亮重試</label>
+          <span class="muted">延遲(ms)</span>
+          <input class="input" type="number" min="0" max="1000" step="10" v-model.number="searchHighlightRetryDelayMs" />
+          <span class="muted">次數</span>
+          <input class="input" type="number" min="0" max="10" step="1" v-model.number="searchHighlightRetryCount" />
         </div>
       </div>
 

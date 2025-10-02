@@ -62,6 +62,11 @@ const { clearHighlights: clearFindHighlights, highlightInPage } = usePageHighlig
   scrollToPageOffset,
 })
 
+async function countMatchesInPage(pageIndex: number, query: string, caseSensitive = false): Promise<number> {
+  const res = await highlightInPage(pageIndex, query, { caseSensitive, countOnly: true })
+  return res?.total || 0
+}
+
 defineExpose({
   scrollToPage,
   getPageMetrics,
@@ -72,6 +77,7 @@ defineExpose({
   disableTweenOnce: (engine as any).disableTweenOnce,
   highlightInPage,
   clearFindHighlights,
+  countMatchesInPage,
 })
 </script>
 

@@ -1,6 +1,8 @@
 import { nextTick, ref, watch, type Ref } from 'vue'
 import type { PDFDocumentProxy } from '../../lib/pdfjs'
 import type { PdfFile } from '../../types/pdf'
+import type { AppSettings } from '../persistence'
+import { createSearchData, findAllOccurrences } from '../../utils/searchText'
 
 type SearchStateSnapshot = {
   open: boolean
@@ -17,6 +19,7 @@ type PdfSearchOptions = {
   isPdfFile: Ref<boolean>
   activeFileRef: Ref<PdfFile | null>
   scale?: Ref<number>
+  settings?: Ref<AppSettings>
 }
 
 export function usePdfSearch(options: PdfSearchOptions) {
@@ -90,18 +93,9 @@ export function usePdfSearch(options: PdfSearchOptions) {
   }
 
   function countOccurrences(hay: string, needle: string): number {
-    if (!needle) return 0
-    const h = hay.toLowerCase()
-    const n = needle.toLowerCase()
-    let c = 0
-    let pos = 0
-    while (true) {
-      const i = h.indexOf(n, pos)
-      if (i < 0) break
-      c += 1
-      pos = i + n.length
-    }
-    return c
+    const { hayText, needleText } = createSearchData(hay, needle, false, true)
+    if (!needleText) return 0
+    return findAllOccurrences(hayText, needleText).length
   }
 
   function mapGlobalIndex(index: number) {
@@ -116,7 +110,7 @@ export function usePdfSearch(options: PdfSearchOptions) {
     return null
   }
 
-  async function highlightCurrentMatch(expectedToken?: number) {
+  async function highlightCurrentMatch(expectedToken?: number, attempt = 0): Promise<void> {
     const viewer = options.viewerRef.value
     if (!viewer?.highlightInPage) return
     const q = searchQuery.value.trim()
@@ -132,7 +126,21 @@ export function usePdfSearch(options: PdfSearchOptions) {
     await nextTick(); await nextTick()
     if (expectedToken != null && expectedToken !== searchComputeToken) return
     try {
-      await viewer.highlightInPage(mapping.pageIndex, q, { activeIndex: mapping.matchIndex })
+      const result = await viewer.highlightInPage(mapping.pageIndex, q, { activeIndex: mapping.matchIndex })
+      const success = result && Number.isFinite(result.total) && (result.total as number) > 0
+      const retryDelaySetting = Number(options.settings?.value?.searchHighlightRetryDelayMs ?? 80)
+      const retryDelay = Number.isFinite(retryDelaySetting) ? Math.max(0, retryDelaySetting) : 80
+      const retryCountSetting = Number(options.settings?.value?.searchHighlightRetryCount ?? 4)
+      const retryLimit = Number.isFinite(retryCountSetting) ? Math.max(0, Math.round(retryCountSetting)) : 4
+      if (!success && attempt < retryLimit) {
+        if (retryDelay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelay))
+        } else {
+          await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+        }
+        if (expectedToken != null && expectedToken !== searchComputeToken) return
+        await highlightCurrentMatch(expectedToken, attempt + 1)
+      }
     } catch (error) {
       console.error('[PdfSearch] highlight failed', error)
     }
@@ -156,14 +164,15 @@ export function usePdfSearch(options: PdfSearchOptions) {
 
     const entries: Array<{ pageIndex: number; count: number }> = []
     let total = 0
+    // Robust count that doesn't rely on textLayer readiness: use getTextContent() + normalization
     for (let i = 0; i < totalPages; i++) {
       const txt = await getPageText(i)
       if (token !== searchComputeToken) return
       const count = countOccurrences(txt, q)
-      if (count > 0) {
-        entries.push({ pageIndex: i, count })
-        total += count
-      }
+      if (count > 0) entries.push({ pageIndex: i, count })
+      total += Math.max(0, count)
+      // Incrementally update total for better UX on large docs
+      searchTotal.value = total
     }
     if (token !== searchComputeToken) return
 
@@ -178,6 +187,9 @@ export function usePdfSearch(options: PdfSearchOptions) {
     }
 
     if (!keepIndex || searchIndex.value >= total) searchIndex.value = 0
+    if (!searchOpen.value && searchQuery.value.trim()) {
+      searchOpen.value = true
+    }
     await highlightCurrentMatch(token)
     persistCurrentSearchState()
   }

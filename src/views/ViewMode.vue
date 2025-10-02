@@ -99,6 +99,7 @@ const {
   isPdfFile,
   activeFileRef,
   scale,
+  settings,
 })
 
 
