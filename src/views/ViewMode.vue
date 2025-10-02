@@ -1,37 +1,35 @@
 <script setup lang="ts">
-import { computed, inject, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
-import { readFile } from '@tauri-apps/plugin-fs'
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { ChevronDoubleRightIcon, MagnifyingGlassIcon, ChevronUpIcon, ChevronDownIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import PdfViewer from '../components/PdfViewer.vue'
 import ImageViewer from '../components/ImageViewer.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import { loadSettings, type AppSettings } from '../composables/persistence'
-import { getDocument, type PDFDocumentProxy } from '../lib/pdfjs'
 import type { PdfFile } from '../types/pdf'
 import type { PagePointerContext } from '../types/viewer'
 import { usePageHistory } from '../composables/viewMode/usePageHistory'
 import { useExportTools } from '../composables/viewMode/useExportTools'
 import { usePageContextMenu } from '../composables/viewMode/usePageContextMenu'
-
-type PinchZoomPayload = {
-  deltaY: number
-  anchorX: number
-  anchorY: number
-  viewportX: number
-  viewportY: number
-}
+import { usePdfSearch } from '../composables/viewMode/usePdfSearch'
+import { useViewerScaling } from '../composables/viewMode/useViewerScaling'
+import { useDocumentLoader } from '../composables/viewMode/useDocumentLoader'
 
 const props = defineProps<{ activeFile: PdfFile | null }>()
 
 const activeFileRef = computed(() => props.activeFile)
 
-const pdfDoc = ref<PDFDocumentProxy | null>(null)
-const loading = ref(false)
-const viewerError = ref<string | null>(null)
-const pageCount = ref(0)
+const {
+  pdfDoc,
+  loading,
+  viewerError,
+  pageCount,
+  normalizeError,
+  destroyCurrentDoc,
+  loadDocumentFromPath,
+  setDocument,
+} = useDocumentLoader()
+
 const currentPage = ref(1)
-const suppressVisibleUpdate = ref(false)
-// Stores a page index we want to restore once the document finishes loading
 const pendingRestorePage = ref<number | null>(null)
 
 const settings = ref<AppSettings>({
@@ -50,219 +48,59 @@ const loadingLabel = computed(() => (isImageFile.value ? '正在載入圖片…'
 const leftCollapsed = inject('leftCollapsed') as Ref<boolean> | undefined
 const setLeftCollapsed = inject('setLeftCollapsed') as ((v?: boolean) => void) | undefined
 
-const scale = ref(1)
-const zoomMode = ref<'actual' | 'fit' | 'custom'>('fit')
-const minScale = 0.01
-const maxScale = 4
 const viewerContainerRef = ref<HTMLDivElement | null>(null)
 const containerWidth = ref(0)
-const basePageWidth = ref(0)
-const lastAppliedScale = ref(1)
 const viewerRef = ref<any>(null)
-let pinchChain: Promise<void> = Promise.resolve()
 
-type SearchStateSnapshot = {
-  open: boolean
-  query: string
-  index: number
-}
+const {
+  scale,
+  zoomMode,
+  suppressVisibleUpdate,
+  basePageWidth,
+  lastAppliedScale,
+  computeFitScale,
+  setZoomFit,
+  setZoomActual,
+  zoomIn,
+  zoomOut,
+  onPinchZoom,
+  handleWindowResize,
+} = useViewerScaling({
+  viewerRef,
+  viewerContainerRef,
+  pdfDoc,
+  isPdfFile,
+  isImageFile,
+  currentPage,
+  settings,
+  leftCollapsed,
+})
 
-// Search state
-const searchOpen = ref(false)
-const searchQuery = ref('')
-const searchTotal = ref<number | null>(null)
-const searchIndex = ref(0)
-const searchPageMatches = ref<Array<{ pageIndex: number; count: number }>>([])
-const searchInputRef = ref<HTMLInputElement | null>(null)
-const pageTextCache = new Map<number, string>()
-const searchStateByPath = ref(new Map<string, SearchStateSnapshot>())
-let searchComputeToken = 0
+const {
+  searchOpen,
+  searchQuery,
+  searchTotal,
+  searchIndex,
+  searchInputRef,
+  toggleSearch,
+  onSearchInput,
+  onSearchEnter,
+  goToPrevMatch,
+  goToNextMatch,
+  highlightCurrentMatch,
+  persistSearchStateFor,
+  applySearchStateFor,
+  clearCaches,
+  handleDocLoaded,
+} = usePdfSearch({
+  viewerRef,
+  pdfDoc,
+  pageCount,
+  isPdfFile,
+  activeFileRef,
+  scale,
+})
 
-function resetSearchRuntime() {
-  searchComputeToken += 1
-  searchPageMatches.value = []
-  searchTotal.value = null
-  try { viewerRef.value?.clearFindHighlights?.() } catch {}
-}
-
-function persistSearchStateFor(path: string | null | undefined) {
-  if (!path) return
-  const snapshot: SearchStateSnapshot = {
-    open: searchOpen.value,
-    query: searchQuery.value,
-    index: searchIndex.value,
-  }
-  searchStateByPath.value.set(path, snapshot)
-}
-
-function persistCurrentSearchState() {
-  if (!isPdfFile.value) return
-  persistSearchStateFor(activeFileRef.value?.path ?? null)
-}
-
-function applySearchStateFor(path: string | null, isPdf: boolean) {
-  resetSearchRuntime()
-  if (!path || !isPdf) {
-    searchOpen.value = false
-    searchQuery.value = ''
-    searchIndex.value = 0
-    return
-  }
-  const stored = searchStateByPath.value.get(path) || null
-  searchOpen.value = stored?.open ?? false
-  searchQuery.value = stored?.query ?? ''
-  searchIndex.value = stored?.index ?? 0
-  persistCurrentSearchState()
-}
-
-function toggleSearch(open?: boolean) {
-  if (!isPdfFile.value && (open ?? true)) return
-  const next = open ?? !searchOpen.value
-  searchOpen.value = next
-  if (next) {
-    nextTick(() => searchInputRef.value?.focus())
-    if (searchQuery.value.trim()) void updateSearchMatches({ keepIndex: true })
-  } else {
-    resetSearchRuntime()
-  }
-  persistCurrentSearchState()
-}
-
-async function getPageText(idx: number): Promise<string> {
-  if (pageTextCache.has(idx)) return pageTextCache.get(idx) as string
-  const doc = pdfDoc.value
-  if (!doc) return ''
-  try {
-    const page = await doc.getPage(idx + 1)
-    const tc = await page.getTextContent()
-    const text = tc.items.map((it: any) => (it?.str ?? '')).join(' ')
-    pageTextCache.set(idx, text)
-    return text
-  } catch {
-    return ''
-  }
-}
-
-function countOccurrences(hay: string, needle: string): number {
-  if (!needle) return 0
-  const h = hay.toLowerCase()
-  const n = needle.toLowerCase()
-  let c = 0, pos = 0
-  while (true) {
-    const i = h.indexOf(n, pos)
-    if (i < 0) break
-    c += 1
-    pos = i + n.length
-  }
-  return c
-}
-
-function mapGlobalIndex(index: number) {
-  if (!searchPageMatches.value.length) return null
-  let offset = 0
-  for (const entry of searchPageMatches.value) {
-    if (index < offset + entry.count) {
-      return { pageIndex: entry.pageIndex, matchIndex: index - offset }
-    }
-    offset += entry.count
-  }
-  return null
-}
-
-async function highlightCurrentMatch(expectedToken?: number) {
-  const viewer = viewerRef.value
-  if (!viewer?.highlightInPage) return
-  const q = searchQuery.value.trim()
-  const total = searchTotal.value ?? 0
-  if (!q || !total) {
-    try { viewer.clearFindHighlights?.() } catch {}
-    return
-  }
-  if (expectedToken != null && expectedToken !== searchComputeToken) return
-  const mapping = mapGlobalIndex(Math.min(searchIndex.value, Math.max(0, total - 1)))
-  if (!mapping) return
-  viewer.scrollToPage?.(mapping.pageIndex + 1)
-  await nextTick(); await nextTick()
-  if (expectedToken != null && expectedToken !== searchComputeToken) return
-  try {
-    await viewer.highlightInPage(mapping.pageIndex, q, { activeIndex: mapping.matchIndex })
-  } catch (error) {
-    console.error('[ViewMode] highlight failed', error)
-  }
-}
-
-async function updateSearchMatches(options: { keepIndex?: boolean } = {}) {
-  const keepIndex = !!options.keepIndex
-  const q = searchQuery.value.trim()
-  const totalPages = pageCount.value
-  const viewer = viewerRef.value
-  const token = ++searchComputeToken
-
-  if (!q || !totalPages || !isPdfFile.value) {
-    searchPageMatches.value = []
-    searchTotal.value = q ? 0 : null
-    if (!keepIndex) searchIndex.value = 0
-    try { viewer?.clearFindHighlights?.() } catch {}
-    persistCurrentSearchState()
-    return
-  }
-
-  const entries: Array<{ pageIndex: number; count: number }> = []
-  let total = 0
-  for (let i = 0; i < totalPages; i++) {
-    const txt = await getPageText(i)
-    if (token !== searchComputeToken) return
-    const count = countOccurrences(txt, q)
-    if (count > 0) {
-      entries.push({ pageIndex: i, count })
-      total += count
-    }
-  }
-  if (token !== searchComputeToken) return
-
-  searchPageMatches.value = entries
-  searchTotal.value = total
-
-  if (!total) {
-    if (!keepIndex) searchIndex.value = 0
-    try { viewer?.clearFindHighlights?.() } catch {}
-    persistCurrentSearchState()
-    return
-  }
-
-  if (!keepIndex || searchIndex.value >= total) searchIndex.value = 0
-  await highlightCurrentMatch(token)
-  persistCurrentSearchState()
-}
-
-function onSearchInput() {
-  searchIndex.value = 0
-  void updateSearchMatches()
-}
-
-async function findInDirection(dir: 1 | -1) {
-  if (!isPdfFile.value) return
-  const q = searchQuery.value.trim()
-  if (!q) return
-  if (searchTotal.value == null) await updateSearchMatches({ keepIndex: false })
-  const total = searchTotal.value ?? 0
-  if (!total) return
-  searchIndex.value = (searchIndex.value + (dir === 1 ? 1 : -1) + total) % total
-  await highlightCurrentMatch()
-  persistCurrentSearchState()
-}
-
-async function onSearchEnter(event: KeyboardEvent) {
-  await findInDirection(event.shiftKey ? -1 : 1)
-}
-
-function goToPrevMatch() {
-  void findInDirection(-1)
-}
-
-function goToNextMatch() {
-  void findInDirection(1)
-}
 
 let loadToken = 0
 let resizeObs: ResizeObserver | null = null
@@ -306,27 +144,6 @@ watch(
   { immediate: true, deep: true },
 )
 
-function normalizeError(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'string') return error
-  try {
-    return JSON.stringify(error)
-  } catch {
-    return String(error)
-  }
-}
-
-async function destroyCurrentDoc() {
-  const doc = pdfDoc.value
-  if (!doc) return
-  pdfDoc.value = null
-  try {
-    await doc.destroy()
-  } catch {
-    /* ignore */
-  }
-}
-
 watch(
   () => activeFileRef.value?.path ?? null,
   async (path, oldPath, onCleanup) => {
@@ -335,10 +152,9 @@ watch(
     const token = loadToken
     contextMenu.reset()
     resetExportState()
-    pageCount.value = 0
     viewerError.value = null
     pendingRestorePage.value = null
-    pageTextCache.clear()
+    clearCaches()
     const nextIsPdf = activeFileRef.value?.kind !== 'image'
     applySearchStateFor(path, nextIsPdf)
 
@@ -365,19 +181,12 @@ watch(
     })
 
     try {
-      const bytes = await readFile(path)
-      if (cancelled || token !== loadToken) return
-
-      const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes as ArrayBuffer)
-      const loadingTask = getDocument({ data })
-      const doc = (await loadingTask.promise) as unknown as PDFDocumentProxy
-
+      const doc = await loadDocumentFromPath(path)
       if (cancelled || token !== loadToken) {
         await doc.destroy().catch(() => undefined)
         return
       }
-
-      pdfDoc.value = markRaw(doc) as unknown as PDFDocumentProxy
+      setDocument(doc, doc.numPages)
     } catch (error) {
       if (token !== loadToken) return
       console.error('[ViewMode] Error loading PDF:', error)
@@ -438,6 +247,7 @@ onMounted(async () => {
 
 onBeforeUnmount(async () => {
   persistSearchStateFor(activeFileRef.value?.path ?? null)
+  clearCaches()
   await destroyCurrentDoc()
   if (resizeObs) {
     try { resizeObs.disconnect() } catch { /* ignore */ }
@@ -449,147 +259,6 @@ onBeforeUnmount(async () => {
 
 const labelActual = computed(() => (isImageFile.value ? '1:1（實際像素）' : '實際大小'))
 const labelFit = computed(() => (isImageFile.value ? '填滿寬度' : '縮放到適當大小'))
-
-function clampScale(value: number) {
-  const upper = scale.value > maxScale ? Math.max(lastAppliedScale.value, scale.value) : maxScale
-  return Math.min(upper, Math.max(minScale, value))
-}
-
-function computeFitScale(): number {
-  const container = viewerContainerRef.value
-  if (!basePageWidth.value) return scale.value
-
-  let innerWidth = container ? Math.max(0, container.clientWidth - 32) : 0
-  if (isImageFile.value) {
-    const viewer: any = viewerRef.value
-    const widthFromViewer = viewer?.getContainerWidth?.()
-    innerWidth = typeof widthFromViewer === 'number' && widthFromViewer > 0
-      ? widthFromViewer
-      : (container ? container.clientWidth : 0)
-  }
-
-  if (innerWidth <= 0) return scale.value
-  const rawScale = innerWidth / basePageWidth.value
-  return Number.isFinite(rawScale) && rawScale > 0 ? rawScale : scale.value
-}
-
-async function ensureBasePageWidth() {
-  try {
-    if (!pdfDoc.value) return
-    const page = await pdfDoc.value.getPage(1)
-    const viewport = page.getViewport({ scale: 1 })
-    basePageWidth.value = viewport.width
-  } catch {
-    // ignored
-  }
-}
-
-async function applyScaleWithAnchor(
-  newScale: number,
-  mode: 'actual' | 'fit' | 'custom' = 'custom',
-  anchor?: { x?: number; y?: number; viewportX?: number; viewportY?: number },
-) {
-  const viewer: any = viewerRef.value
-  const page = currentPage.value || 1
-  const before = viewer?.getPageMetrics?.(page)
-  const oldOffset = before ? Math.max(0, before.scrollTop - before.pageTop) : 0
-  const ratio = lastAppliedScale.value ? newScale / lastAppliedScale.value : 1
-  const scrollStateBefore = viewer?.getScrollState?.()
-  const fallbackContainer = viewerContainerRef.value
-  const viewportWidth = scrollStateBefore?.clientWidth ?? fallbackContainer?.clientWidth ?? 0
-  const viewportHeight = scrollStateBefore?.clientHeight ?? fallbackContainer?.clientHeight ?? 0
-  const pointerViewportX = anchor?.viewportX ?? (viewportWidth ? viewportWidth / 2 : 0)
-  const pointerViewportY = anchor?.viewportY ?? (viewportHeight ? viewportHeight / 2 : 0)
-
-  const contentWidthBefore = Math.max(scrollStateBefore?.scrollWidth ?? 0, 1)
-  const contentHeightBefore = Math.max(scrollStateBefore?.scrollHeight ?? 0, 1)
-  const anchorX = Math.min(1, Math.max(0, anchor?.x ?? (scrollStateBefore ? (scrollStateBefore.scrollLeft + pointerViewportX) / contentWidthBefore : 0.5)))
-  const anchorY = Math.min(1, Math.max(0, anchor?.y ?? (scrollStateBefore ? (scrollStateBefore.scrollTop + pointerViewportY) / contentHeightBefore : 0.5)))
-
-  if (viewer?.prepareZoomAnchor) {
-    viewer.prepareZoomAnchor({
-      x: anchorX,
-      y: anchorY,
-      viewportX: pointerViewportX,
-      viewportY: pointerViewportY,
-    })
-  }
-
-  zoomMode.value = mode
-  scale.value = newScale
-  suppressVisibleUpdate.value = true
-  await nextTick(); await nextTick()
-  // For PDF, its own engine re-anchors vertically; avoid double-adjust.
-  if (isImageFile.value && viewer?.scrollToPageOffset) {
-    viewer.scrollToPageOffset(page, Math.max(0, oldOffset * ratio))
-  }
-  lastAppliedScale.value = newScale
-  currentPage.value = page
-  await nextTick()
-
-  const scrollStateAfter = viewer?.getScrollState?.()
-  const shouldAdjustImage = isImageFile.value && viewer?.scrollToPosition && scrollStateAfter
-  if (shouldAdjustImage) {
-    const contentWidthAfter = Math.max(scrollStateAfter.scrollWidth ?? 0, 1)
-    const contentHeightAfter = Math.max(scrollStateAfter.scrollHeight ?? 0, 1)
-    const leftRaw = anchorX * contentWidthAfter - pointerViewportX
-    const maxLeft = Math.max(0, contentWidthAfter - scrollStateAfter.clientWidth)
-    const targetLeft = Math.max(0, Math.min(leftRaw, maxLeft))
-
-    let targetTop: number | undefined
-    if (anchor?.y != null) {
-      const topRaw = anchorY * contentHeightAfter - pointerViewportY
-      const maxTop = Math.max(0, contentHeightAfter - scrollStateAfter.clientHeight)
-      targetTop = Math.max(0, Math.min(topRaw, maxTop))
-    }
-
-    viewer.scrollToPosition({ left: targetLeft, top: targetTop })
-  }
-
-  suppressVisibleUpdate.value = false
-}
-
-function setZoomFit() {
-  void applyScaleWithAnchor(computeFitScale(), 'fit')
-}
-
-function setZoomActual() {
-  void applyScaleWithAnchor(1, 'actual')
-}
-
-function zoomIn(step = 0.1) {
-  const target = clampScale(scale.value + step)
-  void applyScaleWithAnchor(target, 'actual')
-}
-
-function zoomOut(step = 0.1) {
-  const target = clampScale(scale.value - step)
-  void applyScaleWithAnchor(target, 'actual')
-}
-
-function onPinchZoom(payload: PinchZoomPayload) {
-  if (!payload || !Number.isFinite(payload.deltaY)) return
-  const factor = Math.exp(-payload.deltaY / 600)
-  const target = clampScale(scale.value * factor)
-  if (Math.abs(target - scale.value) < 0.0001) return
-  const anchor = {
-    x: payload.anchorX,
-    y: payload.anchorY,
-    viewportX: payload.viewportX,
-    viewportY: payload.viewportY,
-  }
-  pinchChain = pinchChain
-    .then(() => applyScaleWithAnchor(target, 'actual', anchor))
-    .catch((error) => {
-      console.error('[ViewMode] Pinch zoom failed:', error)
-    })
-}
-
-watch([pdfDoc, () => zoomMode.value], async ([doc, mode]) => {
-  if (!doc) return
-  await ensureBasePageWidth()
-  if (mode === 'fit') scale.value = computeFitScale()
-})
 
 // Repaint search highlights after zoom scale changes so boxes align with text
 watch(() => scale.value, async () => {
@@ -618,30 +287,7 @@ function onKeydown(event: KeyboardEvent) {
   else if (key === '0') { event.preventDefault(); setZoomFit() }
 }
 
-// When the sidebar collapses/expands (e.g., via Cmd/Ctrl+B), optionally switch to Actual-size mode
-watch(
-  () => leftCollapsed?.value,
-  (_collapsed, _prev) => {
-    if (!isPdfFile.value) return
-    if (!settings.value?.switchToActualOnSidebarToggle) return
-    // Only switch when we were in Fit mode to avoid overriding explicit choice
-    if (zoomMode.value !== 'fit') return
-    // Use the scale right before layout changes as target (fallback to setting value)
-    const target = Number.isFinite(scale.value) && (scale.value as number) > 0
-      ? (scale.value as number)
-      : (Number.isFinite(settings.value.sidebarToggleTargetScale) ? (settings.value.sidebarToggleTargetScale as number) : 1)
-    // Disable tween once for snappier switch on layout change
-    try { (viewerRef.value as any)?.disableTweenOnce?.(0) } catch {}
-    void applyScaleWithAnchor(target, 'actual')
-  },
-  { flush: 'pre' },
-)
-
-function onWindowResize() {
-  if (zoomMode.value === 'fit' && pdfDoc.value) {
-    applyScaleWithAnchor(computeFitScale(), 'fit')
-  }
-}
+const onWindowResize = () => { handleWindowResize() }
 
 function onImageLoading() {
   loading.value = true
@@ -678,9 +324,7 @@ function onDocLoaded(count: number) {
       console.log(`[ViewMode] Restored page ${savedPage} after PDF load`)
     }, 150)
   }
-  if (searchOpen.value && searchQuery.value.trim()) {
-    void updateSearchMatches({ keepIndex: true })
-  }
+  void handleDocLoaded()
 }
 
 function onDocError(error: unknown) {
