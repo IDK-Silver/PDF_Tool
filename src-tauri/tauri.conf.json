@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Kano PDF",
-  "version": "2.1.0",
-  "identifier": "com.yuufeng.pdf-tool",
+  "productName": "kano_pdf_tool",
+  "version": "0.1.0",
+  "identifier": "com.yufeng.kano_pdf_tool",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,18 +12,13 @@
   "app": {
     "windows": [
       {
-        "title": "Kano PDF",
-        "width": 1200,
-        "height": 800,
-        "minWidth": 800,
-        "minHeight": 600,
-        "dragDropEnabled": true,
-        "visible": false
+        "title": "kano_pdf_tool",
+        "width": 800,
+        "height": 600
       }
     ],
     "security": {
-      "csp": null,
-      "capabilities": ["default"]
+      "csp": null
     }
   },
   "bundle": {
@@ -35,64 +30,6 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "fileAssociations": [
-      {
-        "ext": ["pdf"],
-        "name": "PDF Document",
-        "description": "Portable Document Format",
-        "role": "Viewer",
-        "mimeType": "application/pdf"
-      },
-      {
-        "ext": ["png"],
-        "name": "PNG Image",
-        "description": "Portable Network Graphics",
-        "role": "Viewer",
-        "mimeType": "image/png"
-      },
-      {
-        "ext": ["jpg", "jpeg"],
-        "name": "JPEG Image",
-        "description": "JPEG Image",
-        "role": "Viewer",
-        "mimeType": "image/jpeg"
-      },
-      {
-        "ext": ["gif"],
-        "name": "GIF Image",
-        "description": "Graphics Interchange Format",
-        "role": "Viewer",
-        "mimeType": "image/gif"
-      },
-      {
-        "ext": ["bmp"],
-        "name": "Bitmap Image",
-        "description": "Bitmap",
-        "role": "Viewer",
-        "mimeType": "image/bmp"
-      },
-      {
-        "ext": ["webp"],
-        "name": "WebP Image",
-        "description": "WebP Image",
-        "role": "Viewer",
-        "mimeType": "image/webp"
-      },
-      {
-        "ext": ["tiff", "tif"],
-        "name": "TIFF Image",
-        "description": "Tagged Image File Format",
-        "role": "Viewer",
-        "mimeType": "image/tiff"
-      },
-      {
-        "ext": ["svg"],
-        "name": "SVG Image",
-        "description": "Scalable Vector Graphics",
-        "role": "Viewer",
-        "mimeType": "image/svg+xml"
-      }
     ]
   }
 }

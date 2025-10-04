@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    pdf_tool_lib::run()
+    kano_pdf_tool_lib::run()
 }

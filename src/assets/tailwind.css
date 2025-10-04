@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --background: 0 0% 100%;
+        --foreground: 224 71% 4%;
+        --muted: 210 40% 96.1%;
+        --muted-foreground: 215.4 16.3% 46.9%;
+        --accent: 221.2 83.2% 53.3%;
+        --on-accent: 0 0% 100%;
+        --border: 214.3 31.8% 91.4%;
+    }
+
+    .dark {
+        --background: 224 71% 4%;
+        --foreground: 210 20% 98%;
+        --muted: 217.2 32.6% 17.5%;
+        --muted-foreground: 215 20.2% 65.1%;
+        --accent: 221.2 83.2% 53.3%;
+        --on-accent: 0 0% 100%;
+        --border: 217.2 32.6% 17.5%;
+    }
+
+    body {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+    }
+}
