@@ -1,55 +1,42 @@
-# Agent Design Guide
+# LLM Agent 行為規範與回應準則
 
-This repository is maintained by codified automation ("agents").  The goal is to keep the codebase clean, modular, and easy to reason about as features grow.  Use this guide as the playbook for future refactors or new automation work.
+本檔僅定義本專案中 LLM Agent 的行為規範與回應準則；任何與設計、架構、API、composable 佈局相關的內容，一律記錄於 `docs/` 目錄（以 `docs/design.md` 為主），不在此重複。
 
-## Core Principles
+## 目的與範圍
 
-1. **Single Responsibility Composables**
-   - Prefer extracting feature-specific logic into dedicated composables/modules.
-   - Each composable manages one concern (e.g., PDF document lifecycle, viewer scaling, search state, highlight rendering).
-   - Components (`*.vue`) coordinate composables instead of owning detailed logic.
+- 目的：確保代理行為一致、產出可維護、溝通清晰。
+- 範圍：對整個 repo 生效；實作細節請以 `docs/` 文件為唯一權威來源。
 
-2. **Lean Components**
-   - Keep Vue components as declarative bindings between state and templates.
-   - If a component contains extensive business logic, consider promoting it into a composable or utility.
+## 工作流程
 
-3. **Clear API Boundaries**
-   - Composables should return explicit, documented APIs (state refs + action functions).
-   - Avoid leaking internal implementation details (e.g., raw DOM nodes) unless required.
+- 變更前先閱讀並對齊 `docs/design.md` 與相關 `docs/` 文件。
+- 多步任務使用計畫工具維護進度；關鍵指令前提供一到兩句的動作說明。
+- 修改聚焦且最小，避免牽動不相關部分；維持既有風格與結構。
+- 牽涉架構/API/流程變更時，更新或新增 `docs/` 文件；不要把細節寫入本檔。
 
-4. **Search & Highlight Strategy**
-   - PDF text search operates via the text layer; cross-node matching and highlight painting are handled in `usePdfSearch` + `usePageHighlights`.
-   - Image/PDF hybrid behaviour should fallback gracefully (optionally via future OCR).
+## 回應與產出
 
-5. **Scaling & Layout Behaviour**
-   - Zoom behaviour (pinch, keyboard, fit/actual toggles, sidebar interactions) lives in `useViewerScaling` to keep ViewMode focused on orchestration.
-   - Maintain consistent anchor logic when changing scale, ensuring the viewport re-centres around the pointer/focus content.
+- 語氣：簡潔、直接、友善；以可執行建議為主。
+- 結構：必要時使用條列；引用檔案請給出可點擊路徑（例如：`docs/design.md:12`）。
+- 不複述 `docs/` 的長篇內容；僅提供摘要與檔案連結/路徑。
 
-6. **Document Lifecycle**
-   - PDF loading/destroy and error handling reside in `useDocumentLoader`.
-   - Any file-related side effects (search state, page history) observe loader events instead of re-implementing load logic.
+## 程式碼組織
 
-7. **State Persistence**
-   - Use the persistence composables to read/write user settings and per-file state (e.g., search snapshots).
-   - Keep serialization logic (debounce, schema migration) isolated from UI code.
+- 模組化：避免將大量邏輯堆在單一檔案；依關注點拆成 composable／模組／工具函式。
+- 單一職責：每個檔案專注一件事；共用邏輯抽離、避免重複。
+- 清晰 API：只輸出必要的函式、型別與 refs；隱藏內部實作。
+- 放置位置：依既有目錄結構與命名，具體規範以 `docs/design.md` 為準。
 
-8. **Testing Mindset**
-   - Type-check (`vue-tsc`) after each refactor to catch missing contracts early.
-   - Prefer writing deterministic helper functions (pure where possible) to support future unit tests.
+## 驗證與自查
 
-## When Adding New Features
+- 能力允許時執行型別檢查（如 `vue-tsc`）與現有測試，優先驗證變更範圍。
+- 不新增與任務無關的修復；若發現問題，於回應中簡述與建議後續。
 
-- Start by identifying the module/composable most aligned with the feature.
-- If the logic does not fit existing modules, scaffold a new composable with a focused API.
-- Update documentation (design.md / AGENT.md) so future agents inherit the context.
-- Ensure components only glue together composables and presentational layout.
+## 文件維護
 
-## Current Composable Layout
+- 架構、API 或流程上的任何更動，請更新 `docs/design.md` 或於 `docs/` 新增對應文件。
+- 本檔保持最小且與行為相關，不承載設計或實作細節。
 
-- `useDocumentLoader` – PDF load/destroy, error state, page count.
-- `useViewerScaling` – zoom state, anchors, sidebar integrations, pinch handling.
-- `usePdfSearch` – per-file search state, match traversal.
-- `usePageHighlights` – draw/remove search highlights for PdfViewer.
-- `usePdfViewerEngine` – low-level PDF.js rendering window (kept cohesive, even if larger).
+## 快速連結
 
-Refer back to this guide whenever automation or manual refactors are scheduled.  Consistency is the key to keeping the project maintainable.
+- `docs/design.md`
