@@ -2,7 +2,23 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-rou
 
 
 const routes: RouteRecordRaw[] = [
-    { path: '/', name: 'media_view', component: () => import('../view/MediaView.vue')}
+  { path: '/', redirect: { name: 'media_view' } },
+  {
+    path: '/media',
+    name: 'media_view',
+    components: {
+      default: () => import('../components/MediaView/MediaView.vue'),
+      filelist: () => import('../components/FileList/MediaFileListPane.vue'),
+    },
+  },
+  {
+    path: '/editor',
+    name: 'pdf_editor',
+    components: {
+      default: () => import('../components/PdfEditor/PdfEditorView.vue'),
+      filelist: () => import('../components/FileList/PdfFileListPane.vue'),
+    },
+  },
 ];
 
 

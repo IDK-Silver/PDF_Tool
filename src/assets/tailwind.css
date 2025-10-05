@@ -31,4 +31,17 @@
         background-color: hsl(var(--background));
         color: hsl(var(--foreground));
     }
+
+    /* Remove default page margins and page-level scrollbars */
+    html, body {
+        margin: 8px;
+        height: 100%;
+        overflow: hidden; /* prevent whole-page scrollbars */
+    }
+
+    /* Ensure Vue mount fills the viewport width/height */
+    #app {
+        min-height: 100dvh;
+        width: 100%;
+    }
 }
