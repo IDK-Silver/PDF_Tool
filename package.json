@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "pdfium:fetch": "node scripts/fetch-pdfium.mjs --version chromium/7442 --dest src-tauri/resources/pdfium --targets auto"
   },
   "dependencies": {
     "@heroicons/vue": "^2.2.0",
