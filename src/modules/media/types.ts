@@ -23,3 +23,12 @@ export interface PageRender {
   contentUrl?: string
 }
 
+export interface PageRenderBytesRaw {
+  pageIndex: number
+  widthPx: number
+  heightPx: number
+  scale?: number
+  dpi?: number
+  format: 'png' | 'webp'
+  imageBytes: number[]
+}

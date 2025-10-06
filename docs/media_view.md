@@ -50,8 +50,8 @@
    - 以 `convertFileSrc(path)` 生成可顯示的 `contentUrl`（Tauri v2 於 `@tauri-apps/api/core`）。
    - 將狀態更新給 MediaView。
 5. MediaView 僅依 `type` 在圖片與 PDF 間切換渲染策略：
-   - image：直接以 `<img>` 顯示原檔（`convertFileSrc`）。
-   - pdf：呼叫後端渲染頁面為位圖，前端以 `<img>` 顯示渲染結果。
+   - image：前端讀取檔案 bytes（`@tauri-apps/plugin-fs`）產生 `Blob URL` 顯示。
+   - pdf：呼叫後端渲染單頁 bytes，前端以 `Blob URL` 顯示渲染結果。
 
 ## 型別與資料結構（前端）
 - 索引基準：所有 PDF 頁面索引採 0-based（包含 `pageIndex` 與 `indices`）。
@@ -74,13 +74,18 @@
   - `heightPx: number`
   - `scale: number`（相對 1x 渲染縮放）或 `dpi: number`（二選一）
   - `format: 'png' | 'webp'`
-  - `imagePath: string`（暫存檔路徑，前端以 `convertFileSrc` 顯示）
-  - 前端可在接收後補充 `contentUrl: string` 可選（由 `convertFileSrc` 產生）。
+  - `imagePath: string`（舊：臨時檔路徑；現主線改為 bytes 模式則不使用）
+  - 前端可在接收後補充 `contentUrl: string` 可選（由 `Blob` 產生的 `objectURL`）。
 
 ## API 合約（Tauri Rust）
 共用錯誤（統一）：
 - 以 `Result<T, MediaError>` 回傳。
-- `MediaError { code: 'not_found' | 'unsupported_type' | 'parse_error' | 'permission_denied' | 'io_error', message: string }`
+- `MediaError { code: 'not_found' | 'unsupported_type' | 'parse_error' | 'permission_denied' | 'io_error' | 'invalid_input', message: string }`
+
+序列化命名：
+- 後端傳回之結構除特別註明外一律採用「前端友善」命名。
+  - `MediaDescriptor`：欄位名稱與前端一致（`type`, `name`, `size`, `pages`...）。
+  - `PageRender`：Rust 端以 `#[serde(rename_all = "camelCase")]` 輸出，對應前端 `pageIndex`, `widthPx`, `heightPx`, `imagePath`。
 
 1) 媒體基本解析
 - 指令：`analyze_media`
@@ -164,9 +169,9 @@
 - 型別偵測策略：
   - 優先依副檔名；如需更嚴謹可輔以 `infer` 檔頭檢測。
 - 回傳欄位：
-  - 通用：`type`, `name`, `path`, `size`（檔案大小）
-  - 圖片：`width`, `height`（用 `image::image_dimensions`，不解碼整張）；`orientation`（可選，用 `kamadak-exif` 讀 EXIF）
-  - PDF：`pages`（用 `lopdf` 或 `pdfium` 取得頁數）；可選頁尺寸（pt）。
+  - 通用：`type`, `name`, `path`, `size`（檔案大小）。
+  - 圖片：`width`, `height`, `orientation` 為後續強化項（目前不強制回傳）。
+  - PDF：頁數以 `pdf_info` 取得（`analyze_media` 不強制回傳）。
 - 不支援格式：回 `Err(MediaError { code: 'unsupported_type' ... })`。
 
 Rust 端檔案規劃：
@@ -176,35 +181,40 @@ Rust 端檔案規劃：
   - `#[derive(Serialize)] struct MediaError { code: String, message: String }`
   - `#[tauri::command] fn analyze_media(path: String) -> Result<MediaDescriptor, MediaError>`
   - `#[tauri::command] fn pdf_info(path: String) -> Result<{ pages: number }, MediaError>`（骨架，lazy init）
-  - `#[tauri::command] fn pdf_render_page(path, pageIndex, scale|dpi, rotateDeg, format) -> Result<PageRender, MediaError>`（骨架；後續以 `pdfium-render` 光柵化為位圖輸出到臨時目錄）
+- `#[tauri::command] fn pdf_render_page(args: { path, pageIndex, scale|dpi, rotateDeg, format }) -> Result<PageRender, MediaError>`（統一：直接回傳 bytes）
   - Lazy init `Pdfium`：首次呼叫 `pdf_*` 指令時嘗試從 `resource_dir()/pdfium/<platform>/` 綁定；找不到則回 `not_found` 並提示 `npm run pdfium:fetch`。
 
 ## 前端整合設計
-- 狀態管理（Pinia 建議）：
+- 狀態管理（Pinia）：
   - 位置：`src/modules/media/store.ts`
   - 狀態：
     - `selected: FileItem | null`
     - `descriptor: MediaDescriptor | null`
     - `loading: boolean`
     - `error: string | null`
+    - `pdfFirstPage: PageRender | null`
+  - Getter：
+    - `imageUrl: string | null`（由 `descriptor.path` 轉 `convertFileSrc`）
   - 行為：
     - `select(item: FileItem)`：設定選取並呼叫 `loadDescriptor(item.path)`
-    - `loadDescriptor(path: string)`：`invoke('analyze_media')` → 產生 `contentUrl` → 更新 `descriptor`
+    - `selectPath(path: string)`：提供路徑直入（方便開發）
+    - `loadDescriptor(path: string)`：`invoke('analyze_media')` → 更新 `descriptor`；若為 PDF，呼叫 `ensurePdfFirstPage()`
+    - `ensurePdfFirstPage()`：`pdf_info` → `pdf_render_page(pageIndex=0)` 更新 `pdfFirstPage`
     - `clear()`：清空狀態
 - 服務封裝（建議）：`src/modules/media/service.ts`
   - `analyzeMedia(path: string)` 封裝 `invoke`
   - `toContentUrl(path: string)` 封裝 `convertFileSrc`
 - UI 串接：
-  - MediaFileListPane 綁定 `@item-click="mediaStore.select"` 或 `selectAndLoad`
+  - MediaFileListPane 綁定 `@item-click="mediaStore.select"`
     - 參考：`src/components/FileList/MediaFileListPane.vue:1`、`src/components/FileList/FileList.vue:1`
   - MediaView 根據 store 狀態渲染：
     - `loading`：顯示讀取中
     - `error`：顯示錯誤訊息
-    - `descriptor`：依 `type` 顯示內容
+    - `descriptor`：依 `type` 顯示內容（image → `imageUrl`、pdf → `pdfFirstPage.contentUrl`）
 
 ## MediaView 渲染策略（MVP）
-- image：`<img :src="contentUrl" :style="orientation 對應旋轉（可選）" />`（EXIF 方向：前端以 CSS 處理，不改動原檔）。
-- pdf：每頁以 `<img :src="renderedPageUrl" />` 呈現；縮放時重新要求後端依比例渲染，透明區域以白底扁平化。
+- image：前端以 `@tauri-apps/plugin-fs.readFile` 讀檔 → `Blob` → `objectURL`（EXIF 方向以 CSS 處理）。
+- pdf：後端回傳渲染 bytes → `Blob` → `objectURL`；縮放時重新請求。
 - unknown/錯誤：顯示錯誤訊息與「以系統開啟」按鈕（opener 插件）。
 
 ## 雙檢視與跨文件移頁
@@ -230,8 +240,8 @@ Rust 端檔案規劃：
 
 ## 渲染與輸出（MVP）
 - 每次縮放或視圖變動時，僅渲染必要頁面；不做預取與持久快取。
-- 渲染結果以臨時檔案形式輸出，前端以 `convertFileSrc` 顯示。
-- 允許中的渲染任務完成後覆蓋當前顯示；不保留歷史版本。
+- 全面採 RAM bytes：圖片與 PDF 都不落地檔案；以 `Blob` 與 `objectURL` 呈現。
+- 完成後覆蓋當前顯示；釋放舊 `objectURL`（`URL.revokeObjectURL`）。
 
 ## 檔案安全與原子寫入
 - 修改操作一律以新檔寫入至同目錄暫存檔，完成與 `fsync` 後以原子換名覆蓋或輸出新檔。
@@ -295,6 +305,10 @@ Rust 端檔案規劃：
 - 後端：
   - 單元測試 `analyze_media` 對不同副檔名的回傳。
   - 本機檔案存取權限驗證與錯誤情境覆蓋。
+ - 動態庫驗證：
+   - 取得 PDFium：`npm run pdfium:fetch`（輸出至 `src-tauri/resources/pdfium`）。
+   - 開發啟動：`npm run tauri dev`，載入 PDF 後應成功渲染第 0 頁位圖。
+   - 打包驗證：`npm run tauri build`，啟動後載入 PDF 確認渲染成功；若失敗，檢查 `bundle.resources` 與動態庫實體路徑。
 
 ## 相關連結與參考檔案
 - 路由：`src/router/index.ts:1`
