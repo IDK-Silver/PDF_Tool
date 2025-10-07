@@ -156,8 +156,17 @@ export const useMediaStore = defineStore('media', () => {
     const d = descriptor.value
     if (!d || d.type !== 'pdf') return
     if (index < 0) return
-    // 若已有且目標寬度不大於現有寬度則略過
-    if (pdfPages.value[index] && targetWidth && (pdfPages.value[index]!.widthPx >= targetWidth)) return
+    // 若已有且解析度已足夠則略過（targetWidth 或由 dpi 推算寬度）
+    let requiredWidth: number | null = null
+    if (typeof targetWidth === 'number' && targetWidth > 0) {
+      requiredWidth = targetWidth
+    } else if (typeof dpi === 'number' && dpi > 0) {
+      const size = pageSizesPt.value[index] || await getPageSizePt(index)
+      if (size) {
+        requiredWidth = Math.max(1, Math.floor(size.widthPt * dpi / 72))
+      }
+    }
+    if (pdfPages.value[index] && requiredWidth != null && (pdfPages.value[index]!.widthPx >= requiredWidth)) return
     if (pdfInflight.has(index)) return
     // 進入佇列由 processQueue 控制並行數（去重與較大優先）
     enqueueJob(index, targetWidth, format, dpi)

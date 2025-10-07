@@ -34,6 +34,11 @@ const number = (e: Event, fallback: number) => {
               <input class="w-full border rounded px-2 py-1" :value="s.dprCap" @input="s.dprCap = number($event, s.dprCap)" />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制裝置像素比對輸出寬度的放大，平衡清晰度與性能（預設 2.0）。</p>
             </div>
+            <div>
+              <label class="block mb-1">高清重渲染延遲（ms）</label>
+              <input class="w-full border rounded px-2 py-1" :value="s.highQualityDelayMs" @input="s.highQualityDelayMs = number($event, s.highQualityDelayMs)" />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放停止後延遲再以新倍率請求高清渲染，預設 120ms。</p>
+            </div>
           </div>
         </div>
       </section>

@@ -21,31 +21,45 @@ function dpiForActual() {
 function zoomIn() {
   if (viewMode.value !== 'actual') viewMode.value = 'actual'
   zoom.value = Math.min(400, zoom.value + 10)
-  pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleProcess()
+  pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender()
 }
 function zoomOut() {
   if (viewMode.value !== 'actual') viewMode.value = 'actual'
   zoom.value = Math.max(10, zoom.value - 10)
-  pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleProcess()
+  pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender()
 }
 function resetZoom() {
   viewMode.value = 'actual'
   zoom.value = 100
-  pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleProcess()
+  pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender()
 }
 function setFitMode() {
   if (viewMode.value !== 'fit') {
     viewMode.value = 'fit'
-    pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleProcess()
+    pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender()
   }
 }
 const centerIndex = ref(0)
 const renderRadius = computed(() => Math.max(6, settings.s.highRadius + 6))
+function currentCenterCssWidth(): number {
+  const d = media.descriptor
+  if (!d) return containerW.value || 800
+  if (viewMode.value === 'fit') return containerW.value || 800
+  if (d.type === 'pdf') {
+    const base = media.baseCssWidthAt100(centerIndex.value)
+    if (base) return Math.max(50, base * (zoom.value / 100))
+    return containerW.value || 800
+  }
+  if (d.type === 'image') {
+    return Math.max(50, imageNaturalWidth.value ? imageNaturalWidth.value * (zoom.value / 100) : (containerW.value || 800))
+  }
+  return containerW.value || 800
+}
+
 const estimateHeight = computed(() => {
   const anyEl = [...refs.keys()][0] as HTMLElement | undefined
-  const cw = Math.max(200, anyEl?.clientWidth || 800)
-  const scale = viewMode.value === 'actual' ? (zoom.value / 100) : 1
-  return Math.round(cw * scale * 1.414) + 24 // A4 比例 + 頁間 padding 預估
+  const cw = currentCenterCssWidth() || Math.max(200, anyEl?.clientWidth || 800)
+  return Math.round(cw * 1.414) + 24 // A4 比例 + 頁間 padding 預估
 })
 const renderStart = computed(() => Math.max(0, centerIndex.value - renderRadius.value))
 const renderEnd = computed(() => Math.min((totalPages.value || 1) - 1, centerIndex.value + renderRadius.value))
@@ -60,11 +74,48 @@ let rafScheduled = false
 const pendingIdx = new Set<number>()
 const visibleIdx = new Set<number>()
 const containerW = ref(0)
+let hiResTimer: number | null = null
+
+function scheduleHiResRerender(delay?: number) {
+  if (hiResTimer) { clearTimeout(hiResTimer); hiResTimer = null }
+  const ms = typeof delay === 'number' ? delay : (settings.s.highQualityDelayMs || 120)
+  hiResTimer = window.setTimeout(() => {
+    // 僅將中心附近的頁加入待渲染，避免一次大量請求
+    const center = computeCenterIndex()
+    const rangeHigh = settings.s.highRadius
+    const allowed = new Set<number>()
+    if (center >= 0) {
+      for (let i = Math.max(0, center - rangeHigh); i <= Math.min(totalPages.value - 1, center + rangeHigh); i++) {
+        allowed.add(i)
+      }
+    }
+    pendingIdx.clear()
+    for (const i of visibleIdx) {
+      if (allowed.size === 0 || allowed.has(i)) pendingIdx.add(i)
+    }
+    rafScheduled = false; scheduleProcess()
+    hiResTimer = null
+  }, ms)
+}
 
 function observe(el: Element | null, idx: number) {
   if (!el) return
   refs.set(el, idx)
   io?.observe(el)
+}
+
+function computeCenterIndex(): number {
+  let center = -1
+  const viewportCenter = window.innerHeight / 2
+  let bestDelta = Number.POSITIVE_INFINITY
+  for (const [el, idx] of refs.entries()) {
+    if (!visibleIdx.has(idx)) continue
+    const r = (el as HTMLElement).getBoundingClientRect()
+    const elCenter = r.top + r.height / 2
+    const d = Math.abs(elCenter - viewportCenter)
+    if (d < bestDelta) { bestDelta = d; center = idx }
+  }
+  return center
 }
 
 function scheduleProcess() {
@@ -87,7 +138,16 @@ function scheduleProcess() {
     }
     if (center >= 0) centerIndex.value = center
 
-    for (const idx of list) {
+    // 僅渲染中心頁附近的少量頁，避免小縮放時一次大量請求
+    const rangeHigh = settings.s.highRadius
+    const allowed = new Set<number>()
+    if (center >= 0) {
+      for (let i = Math.max(0, center - rangeHigh); i <= Math.min(totalPages.value - 1, center + rangeHigh); i++) {
+        allowed.add(i)
+      }
+    }
+    const work = list.filter(idx => allowed.size === 0 ? true : allowed.has(idx))
+    for (const idx of work) {
       const el = [...refs.entries()].find(([, i]) => i === idx)?.[0] as HTMLElement | undefined
       const cW = Math.max(200, el?.clientWidth || 800)
       if (idx === centerIndex.value) containerW.value = cW
@@ -98,29 +158,6 @@ function scheduleProcess() {
         const baseW = settings.s.targetWidthPolicy === 'container' ? cW : settings.s.baseWidth
         const hiW = Math.floor(baseW * dpr)
         media.renderPdfPage(idx, hiW, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100))
-      }
-    }
-
-    if (center >= 0) {
-      const rangeHigh = settings.s.highRadius
-      const indicesHigh: number[] = []
-      for (let i = Math.max(0, center - rangeHigh); i <= Math.min(totalPages.value - 1, center + rangeHigh); i++) {
-        indicesHigh.push(i)
-      }
-      const anyEl = [...refs.keys()][0] as HTMLElement | undefined
-      const cW = Math.max(200, anyEl?.clientWidth || 800)
-      containerW.value = cW
-      if (viewMode.value === 'actual') {
-        for (const i of indicesHigh) {
-          media.renderPdfPage(i, undefined, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100), dpiForActual())
-        }
-      } else {
-        const dpr = dprForMode()
-        const baseW = settings.s.targetWidthPolicy === 'container' ? cW : settings.s.baseWidth
-        const hiW = Math.floor(baseW * dpr)
-        for (const i of indicesHigh) {
-          media.renderPdfPage(i, hiW, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100))
-        }
       }
     }
   })
@@ -154,10 +191,8 @@ onBeforeUnmount(() => {
   refs.clear()
 })
 
-// 當檢視模式變更時，重新排程可視頁面的渲染（fit/actual 切換）
-watch(viewMode, () => {
-  pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleProcess()
-})
+// 當檢視模式變更時，延遲請求高清重渲染，避免連續縮放卡頓
+watch(viewMode, () => { scheduleHiResRerender() })
 
 // 動態計算「最佳符合」對應的實際大小百分比（以 96dpi 為 100% 基準）
 async function updateFitPercent() {
@@ -198,6 +233,34 @@ async function updateFitPercent() {
 
 watch([viewMode, centerIndex, containerW], () => { updateFitPercent() })
 onMounted(() => { updateFitPercent() })
+
+// 也監看 zoom 用於調整估計高度與卡片寬度（高清重渲染已透過 debounce 控制）
+watch(zoom, () => { /* no-op: 僅觸發依賴更新 */ })
+
+function pageCardStyle(idx: number) {
+  const baseStyle: any = { contentVisibility: 'auto', containIntrinsicSize: '800px 1131px' }
+  if (viewMode.value === 'fit') return baseStyle
+  const d = media.descriptor
+  if (!d) return baseStyle
+  if (d.type === 'pdf') {
+    const base = media.baseCssWidthAt100(idx)
+    if (base) return { ...baseStyle, width: `${Math.max(50, Math.round(base * (zoom.value / 100)))}px` }
+    return baseStyle
+  }
+  if (d.type === 'image') {
+    if (imageNaturalWidth.value) return { ...baseStyle, width: `${Math.max(50, Math.round(imageNaturalWidth.value * (zoom.value / 100)))}px` }
+    return baseStyle
+  }
+  return baseStyle
+}
+
+const imageEl = ref<HTMLImageElement | null>(null)
+const imageNaturalWidth = ref<number | null>(null)
+function onImageLoad(e: Event) {
+  const el = e.target as HTMLImageElement
+  imageNaturalWidth.value = el?.naturalWidth || null
+  updateFitPercent()
+}
 </script>
 
 <template>
@@ -226,12 +289,13 @@ onMounted(() => { updateFitPercent() })
       <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-20 pb-10" data-image-view>
         <div class="w-full flex justify-center">
           <div :class="['mx-auto px-6', viewMode==='fit' ? 'max-w-3xl w-full' : 'max-w-none w-auto']">
-            <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto">
+            <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto" :style="pageCardStyle(0)">
               <img
                 :src="media.imageUrl"
                 alt="image"
                 :class="viewMode==='fit' ? 'w-full block' : 'block'"
-                :style="viewMode==='actual' ? { transform: `scale(${zoom/100})`, transformOrigin: 'top center' } : undefined"
+                ref="imageEl"
+                @load="onImageLoad"
                 @error="media.fallbackLoadImageBlob()"
               />
             </div>
@@ -245,16 +309,14 @@ onMounted(() => { updateFitPercent() })
           v-for="idx in renderIndices"
           :key="idx"
           class="w-full mb-10 flex justify-center"
+          :style="viewMode==='actual' ? { marginBottom: Math.round(40 * (zoom/100)) + 'px' } : undefined"
           :data-pdf-page="idx"
           :ref="el => observe(el as Element, idx)"
         >
           <div :class="['mx-auto px-6', viewMode==='fit' ? 'max-w-3xl w-full' : 'max-w-none w-auto']">
             <div
               :class="['bg-white rounded-md shadow border border-neutral-200', viewMode==='fit' ? 'overflow-hidden' : 'overflow-visible']"
-              :style="[
-                { contentVisibility: 'auto', containIntrinsicSize: '800px 1131px' },
-                viewMode==='actual' ? { transform: `scale(${zoom/100})`, transformOrigin: 'top center' } : null
-              ]"
+              :style="pageCardStyle(idx)"
             >
               <img v-if="media.pdfPages[idx]?.contentUrl" :src="media.pdfPages[idx]!.contentUrl" :alt="`page-` + idx" :class="viewMode==='fit' ? 'w-full block' : 'block'" decoding="async" loading="lazy" />
               <div v-else class="w-full aspect-[1/1.414] bg-gray-100 animate-pulse"></div>

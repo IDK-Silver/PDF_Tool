@@ -4,6 +4,7 @@ export interface SettingsState {
   // Rendering
   highQualityFormat: 'png' | 'jpeg'
   dprCap: number
+  highQualityDelayMs: number
 
   // Width policy
   targetWidthPolicy: TargetWidthPolicy
@@ -27,6 +28,7 @@ export interface SettingsState {
 export const defaultSettings: SettingsState = {
   highQualityFormat: 'png',
   dprCap: 2.0,
+  highQualityDelayMs: 120,
 
   targetWidthPolicy: 'container',
   baseWidth: 1200,
