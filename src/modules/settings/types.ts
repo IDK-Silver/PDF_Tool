@@ -13,6 +13,10 @@ export interface SettingsState {
   // Performance
   maxConcurrentRenders: number
   prefetchPx: number
+  // Background preloading
+  preloadAllPages: boolean
+  preloadRange: number
+  preloadIdleMs: number
 
   // Debug
   devPerfOverlay: boolean
@@ -35,6 +39,9 @@ export const defaultSettings: SettingsState = {
 
   maxConcurrentRenders: 3,
   prefetchPx: 800,
+  preloadAllPages: false,
+  preloadRange: 8,
+  preloadIdleMs: 300,
 
   devPerfOverlay: false,
 

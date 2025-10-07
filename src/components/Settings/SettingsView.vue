@@ -83,6 +83,21 @@ const number = (e: Event, fallback: number) => {
               <input class="w-full border rounded px-2 py-1" :value="s.highRadius" @input="s.highRadius = number($event, s.highRadius)" />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">以目前頁為中心，向上下預抓的頁數（預設 2）。</p>
             </div>
+            <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" v-model="s.preloadAllPages" /> 前景穩定後背景預加載全部頁面
+              </label>
+              <div>
+                <label class="block mb-1">預加載頁數（中心半徑）</label>
+                <input class="w-full border rounded px-2 py-1" :disabled="s.preloadAllPages" :value="s.preloadRange" @input="s.preloadRange = number($event, s.preloadRange)" />
+                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">非「全部」時，以當前頁為中心預先加載的範圍。</p>
+              </div>
+              <div>
+                <label class="block mb-1">預加載延遲（ms）</label>
+                <input class="w-full border rounded px-2 py-1" :value="s.preloadIdleMs" @input="s.preloadIdleMs = number($event, s.preloadIdleMs)" />
+                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">捲動或縮放穩定後延遲觸發背景預加載。</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>

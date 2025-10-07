@@ -25,7 +25,7 @@ function setMode(mode: Mode) {
 <template>
 	<nav class="w-full flex flex-col gap-[2px] mb-[6px] ">
 		<button v-for="mode in modes" :key="mode.key" type="button" @click="setMode(mode.key)" class="
-			                w-full min-h-[32px] flex items-center p-0 border-0 rounded-none text-9xl 
+			                w-full min-h-[32px] flex items-center p-0 border-0 rounded-none
 		                hover:text-[hsl(var(--foreground))]
 				" :class="current_mode === mode.key ?
 					'text-[hsl(var(--foreground))] font-medium !bg-[hsl(var(--selection))]' :

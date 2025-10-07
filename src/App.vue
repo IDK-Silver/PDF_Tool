@@ -14,8 +14,10 @@ import SettingBar from './components/SettingBar.vue';
       <ModeChooseList />
       <RouterView name="filelist" />
     </aside>
-    <main class="w-9/12 flex-shrink-1 overflow-auto bg-background">
-      <RouterView />
+    <main class="w-9/12 shrink h-full min-h-0 overflow-hidden bg-background flex flex-col">
+      <div class="flex-1 min-h-0">
+        <RouterView />
+      </div>
     </main>
   </div>
 </template>

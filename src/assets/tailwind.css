@@ -44,4 +44,45 @@
         min-height: 100dvh;
         width: 100%;
     }
+
+    /* Desktop-app feel: disable accidental text selection and dragging */
+    html, body, #app {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+    input, textarea, select, button, [contenteditable="true"], .selectable {
+        -webkit-user-select: text;
+        user-select: text;
+    }
+    img, svg {
+        -webkit-user-drag: none;
+        user-select: none;
+        pointer-events: auto;
+    }
+}
+
+@layer utilities {
+    /* Always-visible, styled vertical scrollbar */
+    .scrollbar-visible {
+        scrollbar-width: thin; /* Firefox */
+        scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--border));
+    }
+    .scrollbar-visible::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+    .scrollbar-visible::-webkit-scrollbar-thumb {
+        background-color: hsl(var(--muted-foreground) / 0.5);
+        border-radius: 8px;
+        border: 3px solid transparent;
+        background-clip: content-box;
+    }
+    .scrollbar-visible::-webkit-scrollbar-thumb:hover {
+        background-color: hsl(var(--muted-foreground) / 0.7);
+    }
+    .scrollbar-visible::-webkit-scrollbar-track {
+        background-color: hsl(var(--border));
+    }
 }

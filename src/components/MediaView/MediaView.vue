@@ -41,6 +41,11 @@ function setFitMode() {
 }
 const centerIndex = ref(0)
 const renderRadius = computed(() => Math.max(6, settings.s.highRadius + 6))
+const currentPage = computed(() => {
+  const tp = totalPages.value
+  if (!tp || tp <= 0) return 0
+  return Math.min(tp, Math.max(1, centerIndex.value + 1))
+})
 function currentCenterCssWidth(): number {
   const d = media.descriptor
   if (!d) return containerW.value || 800
@@ -69,12 +74,14 @@ const topSpacerHeight = computed(() => renderStart.value * estimateHeight.value)
 const bottomSpacerHeight = computed(() => Math.max(0, (totalPages.value - renderEnd.value - 1)) * estimateHeight.value)
 
 let io: IntersectionObserver | null = null
+const scrollRootEl = ref<HTMLElement | null>(null)
 const refs = new Map<Element, number>()
 let rafScheduled = false
 const pendingIdx = new Set<number>()
 const visibleIdx = new Set<number>()
 const containerW = ref(0)
 let hiResTimer: number | null = null
+let preloadTimer: number | null = null
 
 function scheduleHiResRerender(delay?: number) {
   if (hiResTimer) { clearTimeout(hiResTimer); hiResTimer = null }
@@ -96,6 +103,45 @@ function scheduleHiResRerender(delay?: number) {
     rafScheduled = false; scheduleProcess()
     hiResTimer = null
   }, ms)
+}
+
+function schedulePreload() {
+  if (preloadTimer) { clearTimeout(preloadTimer); preloadTimer = null }
+  const ms = Math.max(0, settings.s.preloadIdleMs || 0)
+  // 僅當有頁面且非 loading 時執行
+  if (!totalPages.value || media.loading) return
+  preloadTimer = window.setTimeout(() => {
+    doPreload()
+    preloadTimer = null
+  }, ms)
+}
+
+function doPreload() {
+  if (!totalPages.value) return
+  const tp = totalPages.value
+  const indices: number[] = []
+  if (settings.s.preloadAllPages) {
+    for (let i = 0; i < tp; i++) indices.push(i)
+  } else {
+    const r = Math.max(0, settings.s.preloadRange)
+    const start = Math.max(0, centerIndex.value - r)
+    const end = Math.min(tp - 1, centerIndex.value + r)
+    for (let i = start; i <= end; i++) indices.push(i)
+  }
+  const baseW = settings.s.targetWidthPolicy === 'container'
+    ? (containerW.value || settings.s.baseWidth || 1200)
+    : settings.s.baseWidth
+  const dpr = dprForMode()
+  const hiW = Math.max(200, Math.floor(baseW * (viewMode.value === 'fit' ? dpr : 1)))
+  const fmt = settings.s.highQualityFormat
+  const q = (fmt === 'jpeg') ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100)
+  for (const i of indices) {
+    if (viewMode.value === 'actual') {
+      media.renderPdfPage(i, undefined, fmt, q, dpiForActual())
+    } else {
+      media.renderPdfPage(i, hiW, fmt, q)
+    }
+  }
 }
 
 function observe(el: Element | null, idx: number) {
@@ -178,12 +224,14 @@ onMounted(() => {
       }
     }
     scheduleProcess()
-  }, { root: null, rootMargin: settings.prefetchRootMargin, threshold: 0.01 })
-  // 既有元素補 observe
-  document.querySelectorAll('[data-pdf-page]').forEach((el, i) => {
+  }, { root: scrollRootEl.value, rootMargin: settings.prefetchRootMargin, threshold: 0.01 })
+  // 既有元素補 observe（限本容器）
+  scrollRootEl.value?.querySelectorAll('[data-pdf-page]').forEach((el, i) => {
     refs.set(el as Element, i)
     io?.observe(el as Element)
   })
+  // 初始排程背景預加載
+  schedulePreload()
 })
 
 onBeforeUnmount(() => {
@@ -193,6 +241,7 @@ onBeforeUnmount(() => {
 
 // 當檢視模式變更時，延遲請求高清重渲染，避免連續縮放卡頓
 watch(viewMode, () => { scheduleHiResRerender() })
+watch([viewMode, centerIndex, containerW, () => settings.s.preloadAllPages, () => settings.s.preloadRange, () => settings.s.preloadIdleMs], () => { schedulePreload() })
 
 // 動態計算「最佳符合」對應的實際大小百分比（以 96dpi 為 100% 基準）
 async function updateFitPercent() {
@@ -264,69 +313,72 @@ function onImageLoad(e: Event) {
 </script>
 
 <template>
-  <div class="p-4 space-y-3">
+  <div ref="scrollRootEl" class="h-full overflow-y-scroll overflow-x-hidden scrollbar-visible overscroll-y-contain" style="scrollbar-gutter: stable;">
     <div v-if="settings.s.devPerfOverlay" class="fixed bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
       inflight: {{ media.inflightCount }} · queued: {{ media.queue.length }}
     </div>
-    <div v-if="media.loading">讀取中…</div>
-    <div v-else-if="media.error" class="text-red-600">{{ media.error }}</div>
 
-    <div v-else>
-      <!-- 工具列：固定於視窗頂部，不隨滾動消失 -->
-      <div class="fixed top-0 left-0 right-0 z-30 bg-white/90 backdrop-blur border-b">
-        <div class="max-w-5xl mx-auto px-4 py-2 flex items-center gap-2">
-          <span class="text-sm text-[hsl(var(--muted-foreground))]">檢視</span>
-          <button @click="setFitMode" class="px-3 py-1 text-sm rounded border" :class="viewMode==='fit' ? 'bg-[hsl(var(--accent))]' : 'bg-white'">最佳符合</button>
-          <button @click="resetZoom" class="px-3 py-1 text-sm rounded border" :class="viewMode==='actual' ? 'bg-[hsl(var(--accent))]' : 'bg-white'">實際大小</button>
-          <div class="ml-4 flex items-center gap-2">
-            <button @click="zoomOut" class="px-2 py-1 text-sm rounded border bg-white">-</button>
-            <div class="min-w-[56px] text-center text-sm">{{ displayZoom }}%</div>
-            <button @click="zoomIn" class="px-2 py-1 text-sm rounded border bg-white">+</button>
-          </div>
+    <!-- 工具列：黏在 MediaView 頂部（不覆蓋左側欄），永遠貼齊頂端 -->
+    <div class="sticky top-0 z-20 bg-background/90 backdrop-blur border-b">
+      <div class="px-4 py-2 flex items-center gap-2">
+        <span class="text-sm text-[hsl(var(--muted-foreground))]">檢視</span>
+        <button @click="setFitMode" class="px-3 py-1 text-sm rounded border" :class="viewMode==='fit' ? 'bg-[hsl(var(--accent))]' : 'bg-white'">最佳符合</button>
+        <button @click="resetZoom" class="px-3 py-1 text-sm rounded border" :class="viewMode==='actual' ? 'bg-[hsl(var(--accent))]' : 'bg-white'">實際大小</button>
+        <div class="ml-4 flex items-center gap-2">
+          <button @click="zoomOut" class="px-2 py-1 text-sm rounded border bg-white">-</button>
+          <div class="min-w-[56px] text-center text-sm">{{ displayZoom }}%</div>
+          <button @click="zoomIn" class="px-2 py-1 text-sm rounded border bg-white">+</button>
         </div>
+        <div v-if="totalPages" class="ml-4 text-sm tabular-nums text-[hsl(var(--muted-foreground))]">{{ currentPage }} / {{ totalPages }}</div>
       </div>
+    </div>
 
-      <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-20 pb-10" data-image-view>
-        <div class="w-full flex justify-center">
-          <div :class="['mx-auto px-6', viewMode==='fit' ? 'max-w-3xl w-full' : 'max-w-none w-auto']">
-            <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto" :style="pageCardStyle(0)">
-              <img
-                :src="media.imageUrl"
-                alt="image"
-                :class="viewMode==='fit' ? 'w-full block' : 'block'"
-                ref="imageEl"
-                @load="onImageLoad"
-                @error="media.fallbackLoadImageBlob()"
-              />
+    <div class="p-4 space-y-3">
+      <div v-if="media.loading">讀取中…</div>
+      <div v-else-if="media.error" class="text-red-600">{{ media.error }}</div>
+      <div v-else>
+        <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-4 pb-10" data-image-view>
+          <div class="w-full flex justify-center">
+            <div :class="['mx-auto px-6', viewMode==='fit' ? 'max-w-3xl w-full' : 'max-w-none w-auto']">
+              <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto" :style="pageCardStyle(0)">
+                <img
+                  :src="media.imageUrl"
+                  alt="image"
+                  :class="viewMode==='fit' ? 'w-full block' : 'block'"
+                  ref="imageEl"
+                  @load="onImageLoad"
+                  @error="media.fallbackLoadImageBlob()"
+                  draggable="false"
+                />
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div v-else-if="totalPages" class="w-full min-h-full bg-neutral-200 pt-20 pb-10">
-        <div :style="{ height: topSpacerHeight + 'px' }"></div>
-        <div
-          v-for="idx in renderIndices"
-          :key="idx"
-          class="w-full mb-10 flex justify-center"
-          :style="viewMode==='actual' ? { marginBottom: Math.round(40 * (zoom/100)) + 'px' } : undefined"
-          :data-pdf-page="idx"
-          :ref="el => observe(el as Element, idx)"
-        >
-          <div :class="['mx-auto px-6', viewMode==='fit' ? 'max-w-3xl w-full' : 'max-w-none w-auto']">
-            <div
-              :class="['bg-white rounded-md shadow border border-neutral-200', viewMode==='fit' ? 'overflow-hidden' : 'overflow-visible']"
-              :style="pageCardStyle(idx)"
-            >
-              <img v-if="media.pdfPages[idx]?.contentUrl" :src="media.pdfPages[idx]!.contentUrl" :alt="`page-` + idx" :class="viewMode==='fit' ? 'w-full block' : 'block'" decoding="async" loading="lazy" />
-              <div v-else class="w-full aspect-[1/1.414] bg-gray-100 animate-pulse"></div>
+        <div v-else-if="totalPages" class="w-full min-h-full bg-neutral-200 pt-4 pb-10">
+          <div :style="{ height: topSpacerHeight + 'px' }"></div>
+          <div
+            v-for="idx in renderIndices"
+            :key="idx"
+            class="w-full mb-10 flex justify-center"
+            :style="viewMode==='actual' ? { marginBottom: Math.round(40 * (zoom/100)) + 'px' } : undefined"
+            :data-pdf-page="idx"
+            :ref="el => observe(el as Element, idx)"
+          >
+            <div :class="['mx-auto px-6', viewMode==='fit' ? 'max-w-3xl w-full' : 'max-w-none w-auto']">
+              <div
+                :class="['bg-white rounded-md shadow border border-neutral-200', viewMode==='fit' ? 'overflow-hidden' : 'overflow-visible']"
+                :style="pageCardStyle(idx)"
+              >
+                <img v-if="media.pdfPages[idx]?.contentUrl" :src="media.pdfPages[idx]!.contentUrl" :alt="`page-` + idx" :class="viewMode==='fit' ? 'w-full block' : 'block'" decoding="async" loading="lazy" draggable="false" />
+                <div v-else class="w-full aspect-[1/1.414] bg-gray-100 animate-pulse"></div>
+              </div>
+              <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
             </div>
-            <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
           </div>
+          <div :style="{ height: bottomSpacerHeight + 'px' }"></div>
         </div>
-        <div :style="{ height: bottomSpacerHeight + 'px' }"></div>
       </div>
     </div>
   </div>
-  
 </template>

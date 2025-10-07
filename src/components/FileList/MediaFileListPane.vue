@@ -55,11 +55,16 @@ const filtered = computed(() => {
 </script>
 
 <template>
-  <div class="w-full border-b border-[hsl(var(--border))] p-[8px]">
-  </div>
-  <div class="grid grid-cols-10 gap-2">
-    <input v-model="q" class="col-span-8 border rounded px-2 py-1 text-sm" placeholder="搜尋檔名或路徑" />
-    <button class="col-span-2 border rounded px-2 py-1 text-sm" @click="addFiles">＋ 新增</button>
+  <!-- <div class="w-full border-b border-[hsl(var(--border))] p-[8px]">
+  </div> -->
+
+  <!-- <div p-[8px]>
+
+  </div> -->
+
+  <div class="grid grid-cols-10 gap-2 h-auto min-h-8">
+    <input v-model="q" class="col-span-8 border rounded text-sm" placeholder="搜尋檔名或路徑" />
+    <button class="col-span-2 border rounded  text-sm" @click="addFiles">＋</button>
   </div>
   <FileList :items="filtered" v-bind:selected-id="selectedId" @update:selectedId="selectedId = $event"
     @item-click="onItemClick" />
