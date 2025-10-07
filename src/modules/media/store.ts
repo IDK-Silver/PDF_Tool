@@ -26,6 +26,28 @@ export const useMediaStore = defineStore('media', () => {
   const inflightCount = ref(0)
   const queue = ref<Array<{ index: number; targetWidth?: number; format: 'png'|'jpeg'|'webp' }>>([])
   const settings = useSettingsStore()
+  const pdfInflight = new Set<number>()
+  const pageGen = ref<Record<number, number>>({})
+
+  function nextGen(idx: number) {
+    const g = (pageGen.value[idx] || 0) + 1
+    pageGen.value[idx] = g
+    return g
+  }
+
+  function enqueueJob(index: number, targetWidth: number | undefined, format: 'png'|'jpeg'|'webp') {
+    // 若同頁已有較小需求，替換為較大需求；避免同頁重複入隊
+    queue.value = queue.value.filter(j => !(j.index === index && (targetWidth || 0) >= (j.targetWidth || 0)))
+    queue.value.push({ index, targetWidth, format })
+    // 控制隊列上限，避免暴增
+    if (queue.value.length > 100) {
+      queue.value.splice(0, queue.value.length - 100)
+    }
+  }
+
+  function cancelQueued(index: number) {
+    queue.value = queue.value.filter(j => j.index !== index)
+  }
 
   async function select(item: FileItem) {
     selected.value = item
@@ -135,7 +157,6 @@ export const useMediaStore = defineStore('media', () => {
     // 已在 loadDescriptor 中處理 pdfOpen 與第 0 頁
   }
 
-  const pdfInflight = new Set<number>()
   async function renderPdfPage(index: number, targetWidth?: number, format: 'png'|'jpeg'|'webp' = 'png', _quality?: number) {
     const d = descriptor.value
     if (!d || d.type !== 'pdf') return
@@ -143,8 +164,8 @@ export const useMediaStore = defineStore('media', () => {
     // 若已有且目標寬度不大於現有寬度則略過
     if (pdfPages.value[index] && targetWidth && (pdfPages.value[index]!.widthPx >= targetWidth)) return
     if (pdfInflight.has(index)) return
-    // 進入佇列由 processQueue 控制並行數
-    queue.value.push({ index, targetWidth, format })
+    // 進入佇列由 processQueue 控制並行數（去重與較大優先）
+    enqueueJob(index, targetWidth, format)
     processQueue()
   }
 
@@ -159,10 +180,21 @@ export const useMediaStore = defineStore('media', () => {
       pdfInflight.add(idx)
       inflightCount.value++
       const q = (job.format === 'jpeg') ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100)
+      const gen = nextGen(idx)
       pdfRenderPage({ path: d.path, docId: docId.value ?? undefined, pageIndex: idx, targetWidth: job.targetWidth, format: job.format, quality: q })
         .then(p => {
-          pdfPages.value[idx] = p
-          if (idx === 0) pdfFirstPage.value = p
+          // 只在世代一致時套用，避免過期回應覆蓋
+          if (pageGen.value[idx] === gen) {
+            // 若已有更大寬度的圖片，避免回退
+            if (!pdfPages.value[idx] || (p.widthPx >= (pdfPages.value[idx]!.widthPx || 0))) {
+              pdfPages.value[idx] = p
+              if (idx === 0) pdfFirstPage.value = p
+            } else if (p.contentUrl) {
+              URL.revokeObjectURL(p.contentUrl)
+            }
+          } else if (p.contentUrl) {
+            URL.revokeObjectURL(p.contentUrl)
+          }
         })
         .catch(e => console.warn('渲染頁面失敗', idx, e))
         .finally(() => {
@@ -212,6 +244,7 @@ export const useMediaStore = defineStore('media', () => {
     loadDescriptor,
     ensurePdfFirstPage,
     renderPdfPage,
+    cancelQueued,
     processQueue,
     fallbackLoadImageBlob,
     clear,

@@ -23,6 +23,10 @@ export interface SettingsState {
   // Encoding quality
   jpegQuality: number // 1-100
   pngFast: boolean
+
+  // Warm window prefetch radii
+  lowRadius: number
+  highRadius: number
 }
 
 export const defaultSettings: SettingsState = {
@@ -43,4 +47,7 @@ export const defaultSettings: SettingsState = {
 
   jpegQuality: 82,
   pngFast: true,
+
+  lowRadius: 8,
+  highRadius: 2,
 }
