@@ -62,8 +62,8 @@ const filtered = computed(() => {
 
   </div> -->
 
-  <div class="grid grid-cols-10 gap-2 h-auto min-h-8">
-    <input v-model="q" class="col-span-8 border rounded text-sm" placeholder="搜尋檔名或路徑" />
+  <div class="grid grid-cols-10 gap-1 h-auto min-h-8 max-w-[17]">
+    <input v-model="q" class="col-span-8 border rounded text-sm pl-2" placeholder="搜尋檔名或路徑" />
     <button class="col-span-2 border rounded  text-sm" @click="addFiles">＋</button>
   </div>
   <FileList :items="filtered" v-bind:selected-id="selectedId" @update:selectedId="selectedId = $event"

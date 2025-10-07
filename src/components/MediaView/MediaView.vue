@@ -511,7 +511,7 @@ function onImageLoad(e: Event) {
 
 <template>
   <div ref="scrollRootEl"
-    class="h-full overflow-y-scroll overflow-x-hidden scrollbar-visible overscroll-y-contain border-t  border-r"
+    class="h-full overflow-y-scroll overflow-x-hidden scrollbar-visible overscroll-y-contain"
     style="scrollbar-gutter: stable;">
     <div v-if="settings.s.devPerfOverlay"
       class="fixed bottom-2 right-2 z-50 pointer-events-none bg-black/75 text-white text-xs px-2 py-1 rounded shadow">

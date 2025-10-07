@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { useSettingsStore } from '@/modules/settings/store'
+import { onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 const settings = useSettingsStore()
 const s = settings.s
+const route = useRoute()
 
 const number = (e: Event, fallback: number) => {
   const v = Number((e.target as HTMLInputElement).value)
@@ -13,12 +16,33 @@ function resetToDefaults() {
     settings.reset()
   }
 }
+
+// 初次載入若網址帶 hash，自動捲動到對應區塊
+function scrollToHash(raw: string | null | undefined) {
+  const hash = raw || ''
+  // only accept simple #id fragments (avoid '#/settings')
+  if (!hash.startsWith('#') || hash.length <= 1 || hash.startsWith('#/')) return
+  // basic validation for CSS ID selector
+  if (!/^#[A-Za-z][\w\-:.]*$/.test(hash)) return
+  const root = document.querySelector('[data-settings-scroll-root]') as HTMLElement | null
+  const el = document.querySelector(hash) as HTMLElement | null
+  if (!root || !el) return
+  const header = root.querySelector('header.sticky') as HTMLElement | null
+  const offset = (header?.offsetHeight ?? 0) + 8
+  const rRect = root.getBoundingClientRect()
+  const eRect = el.getBoundingClientRect()
+  const top = root.scrollTop + (eRect.top - rRect.top) - offset
+  root.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+}
+
+onMounted(() => { scrollToHash(route.hash) })
+watch(() => route.hash, (h) => { scrollToHash(h) })
 </script>
 
 <template>
-  <div class="h-full overflow-auto">
+  <div class="h-full overflow-auto" data-settings-scroll-root>
     <div class="mx-auto max-w-3xl p-6 space-y-8 text-sm">
-      <header class="sticky top-0 bg-background/80 backdrop-blur z-10 -mx-6 px-6 py-3 border-b">
+      <header class="sticky top-0 bg-background/80 backdrop-blur z-10 py-3 border-b">
         <div class="flex items-center justify-between gap-3">
           <h1 class="text-lg font-medium">設定</h1>
           <button @click="resetToDefaults" class="px-2 py-1 text-sm rounded border bg-white">回復預設</button>

@@ -17,14 +17,24 @@ const route = useRoute();
 
 const current_mode = computed<Mode>(() => (route.name as Mode) || 'media_view');
 
-function setMode(mode: Mode) {
-	router.push({ name: mode })
+async function setMode(mode: Mode) {
+  try {
+    await router.push({ name: mode })
+  } catch (_) {
+    // ignore
+  }
+  const toHash = mode === 'media_view' ? '#/media' : '#/editor'
+  setTimeout(() => {
+    if ((route.name as any) !== mode) {
+      window.location.hash = toHash
+    }
+  }, 0)
 }
 </script>
 
 
 <template>
-	<nav class="w-full flex flex-col gap-1 py-3 pr-2 min-h-1">
+	<nav class="w-full flex flex-col gap-1 py-3 pr-1 min-h-1 relative z-[60] pointer-events-auto">
 		<button v-for="mode in modes" :key="mode.key" type="button" @click="setMode(mode.key)" class="
 			w-full min-h-[8px] flex items-center gap-2 px-3 py-2 border-0 rounded-md max-h-8
 			transition-colors duration-150
