@@ -198,6 +198,13 @@ Rust 端檔案規劃：
     - `error: string | null`
     - `pdfFirstPage: PageRender | null`
   - Getter：
+  
+### FileList 永續化（補充）
+- 左側 MediaFileListPane 的檔案清單會持久化於 localStorage，重新開啟 App 仍保留。
+- 儲存欄位：`{ id, name, path, lastPage? }`（`id = path`，`lastPage` 為 PDF 的 1-based 最近瀏覽頁碼）。
+- 新增檔案時加入清單頂部；再次新增已存在的檔案會移至頂部。
+- MediaView 載入 PDF 時若存在 `lastPage`，會自動跳轉至該頁；滾動瀏覽時同步更新 `lastPage`。
+- 實作：`src/modules/filelist/store.ts:1`；元件使用：`src/components/FileList/MediaFileListPane.vue:1`、`src/components/MediaView/MediaView.vue:1`。
     - `imageUrl: string | null`（由 `descriptor.path` 轉 `convertFileSrc`）
   - 行為：
     - `select(item: FileItem)`：設定選取並呼叫 `loadDescriptor(item.path)`

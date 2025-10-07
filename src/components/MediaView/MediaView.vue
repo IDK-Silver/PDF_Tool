@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { useMediaStore } from '@/modules/media/store'
+import { useFileListStore } from '@/modules/filelist/store'
 import { useSettingsStore } from '@/modules/settings/store'
 const media = useMediaStore()
 const settings = useSettingsStore()
+const filelist = useFileListStore()
 
 const totalPages = computed(() => media.descriptor?.pages ?? 0)
 const isPdf = computed(() => media.descriptor?.type === 'pdf')
@@ -110,6 +112,23 @@ async function gotoPage(page: number) {
     pendingIdx.add(idx); scheduleProcess()
   }
 }
+
+// 當載入新文件（PDF）時，嘗試跳到最近一次瀏覽的頁碼
+watch(() => media.descriptor?.path, async (p) => {
+  const d = media.descriptor
+  if (!p || !d || d.type !== 'pdf') return
+  const last = filelist.getLastPage(p)
+  if (typeof last === 'number' && last > 1) {
+    await nextTick()
+    try { await gotoPage(last) } catch {}
+  }
+})
+
+// 追蹤目前頁碼，持久化到 FileList（1-based）
+watch([() => media.descriptor?.path, currentPage, isPdf], ([p, cp, pdf]) => {
+  if (!p || !pdf) return
+  if (typeof cp === 'number' && cp > 0) filelist.setLastPage(p, cp)
+})
 
 async function commitPageInput() {
   pageEditing.value = false
