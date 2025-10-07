@@ -20,7 +20,8 @@ pub fn run() {
             media::pdf_open,
             media::pdf_close,
             media::pdf_render_page,
-            media::pdf_page_size
+            media::pdf_page_size,
+            media::pdf_render_cancel
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

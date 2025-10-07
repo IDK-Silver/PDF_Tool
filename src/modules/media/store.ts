@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
 import type { MediaDescriptor, PageRender } from './types'
-import { analyzeMedia, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize } from './service'
+import { analyzeMedia, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel } from './service'
 import { useSettingsStore } from '@/modules/settings/store'
 
 export const useMediaStore = defineStore('media', () => {
@@ -71,13 +71,20 @@ export const useMediaStore = defineStore('media', () => {
     queue.value = queue.value.filter(j => j.index !== index)
   }
 
+  // Best-effort 取消：提升該頁 generation 並通知後端忽略較舊請求
+  async function cancelInflight(index: number) {
+    const newGen = nextGen(index)
+    try { if (docId.value != null) await pdfRenderCancel(docId.value, index, newGen) } catch (_) {}
+  }
+
   // Enforce strict visible range: drop queued jobs outside [start, end]
   // and invalidate inflight outside by bumping generation so results are ignored.
   function enforceVisibleRange(start: number, end: number) {
     queue.value = queue.value.filter(j => j.index >= start && j.index <= end)
     for (const i of pdfInflight) {
       if (i < start || i > end) {
-        nextGen(i)
+        const g = nextGen(i)
+        try { if (docId.value != null) { pdfRenderCancel(docId.value, i, g) } } catch(_) {}
       }
     }
   }
@@ -226,7 +233,7 @@ export const useMediaStore = defineStore('media', () => {
       inflightCount.value++
       const q = (job.format === 'jpeg') ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100)
       const gen = nextGen(idx)
-      pdfRenderPage({ docId: docId.value ?? undefined, pageIndex: idx, targetWidth: job.targetWidth, dpi: job.dpi, format: job.format, quality: q })
+      pdfRenderPage({ docId: docId.value ?? undefined, pageIndex: idx, targetWidth: job.targetWidth, dpi: job.dpi, format: job.format, quality: q, gen })
         .then(p => {
           // 只在世代一致時套用，避免過期回應覆蓋
           if (pageGen.value[idx] === gen) {
@@ -314,6 +321,7 @@ export const useMediaStore = defineStore('media', () => {
     ensurePdfFirstPage,
     renderPdfPage,
     cancelQueued,
+    cancelInflight,
     enforceVisibleRange,
     processQueue,
     setPriorityIndex,

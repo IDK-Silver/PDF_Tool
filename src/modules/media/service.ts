@@ -21,6 +21,7 @@ export async function pdfRenderPage(opts: {
   format?: 'png'|'webp'|'jpeg'
   targetWidth?: number
   quality?: number
+  gen?: number
 }): Promise<PageRender> {
   // Rust 端以單一參數結構接收，回傳 bytes
   const raw = await invoke<PageRenderBytesRaw>('pdf_render_page', { args: opts })
@@ -52,4 +53,8 @@ export async function pdfClose(docId: number): Promise<void> {
 
 export async function pdfPageSize(docId: number, pageIndex: number): Promise<PdfPageSize> {
   return invoke<PdfPageSize>('pdf_page_size', { docId, pageIndex })
+}
+
+export async function pdfRenderCancel(docId: number, pageIndex: number, minGen: number): Promise<void> {
+  await invoke('pdf_render_cancel', { docId, pageIndex, minGen })
 }

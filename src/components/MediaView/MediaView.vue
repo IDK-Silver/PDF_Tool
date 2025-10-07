@@ -6,17 +6,20 @@ const media = useMediaStore()
 const settings = useSettingsStore()
 
 const totalPages = computed(() => media.descriptor?.pages ?? 0)
+const isPdf = computed(() => media.descriptor?.type === 'pdf')
 // 檢視模式與縮放
 const viewMode = ref<'fit' | 'actual'>('fit')
-const zoom = ref(100)
+// A.4: transform-based live zoom
+const zoomTarget = ref(100) // 使用者即時目標倍率（顯示用）
+const zoomApplied = ref(100) // 實際套用於布局寬度的倍率（debounce 套用）
 // 顯示用百分比：fit 以容器寬相對 96dpi 的等效百分比顯示
 const displayFitPercent = ref<number | null>(null)
-const displayZoom = computed(() => viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoom.value)
+const displayZoom = computed(() => viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value)
 function dprForMode() {
   return viewMode.value === 'fit' ? Math.min((window.devicePixelRatio || 1), settings.s.dprCap) : 1
 }
 function dpiForActual() {
-  const dpi = Math.max(24, Math.round(96 * (zoom.value / 100)))
+  const dpi = Math.max(24, Math.round(96 * (zoomApplied.value / 100)))
   const cap = Math.max(48, settings.s.actualDpiCap || dpi)
   return Math.min(dpi, cap)
 }
@@ -25,36 +28,56 @@ function fitPercentBaseline(): number {
   const p = Math.round(displayFitPercent.value ?? 100)
   return Math.max(10, Math.min(400, p))
 }
+function scheduleZoomApply() {
+  if (zoomDebounceTimer) { clearTimeout(zoomDebounceTimer); zoomDebounceTimer = null }
+  const ms = Math.max(120, Math.min(300, settings.s.highQualityDelayMs || 180))
+  zoomDebounceTimer = window.setTimeout(() => {
+    zoomDebounceTimer = null
+    if (viewMode.value === 'actual') {
+      // 停止互動後才套用實際寬度並觸發高清重繪
+      zoomApplied.value = zoomTarget.value
+      pendingIdx.clear();
+      for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
+      scheduleHiResRerender(0)
+    }
+  }, ms)
+}
 function zoomIn() {
   if (viewMode.value !== 'actual') {
     // 由 fit 切換到 actual 時，以當前 fit 百分比作為起始縮放
     viewMode.value = 'actual'
-    zoom.value = fitPercentBaseline()
+    zoomTarget.value = fitPercentBaseline()
+    zoomApplied.value = zoomTarget.value
   }
-  zoom.value = Math.min(400, zoom.value + 10)
-  pendingIdx.clear();[...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender()
+  zoomTarget.value = Math.min(400, zoomTarget.value + 10)
+  scheduleZoomApply()
 }
 function zoomOut() {
   if (viewMode.value !== 'actual') {
     viewMode.value = 'actual'
-    zoom.value = fitPercentBaseline()
+    zoomTarget.value = fitPercentBaseline()
+    zoomApplied.value = zoomTarget.value
   }
-  zoom.value = Math.max(10, zoom.value - 10)
-  pendingIdx.clear();[...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender()
+  zoomTarget.value = Math.max(10, zoomTarget.value - 10)
+  scheduleZoomApply()
 }
 function resetZoom() {
   viewMode.value = 'actual'
-  zoom.value = 100
-  pendingIdx.clear();[...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender()
+  zoomTarget.value = 100
+  zoomApplied.value = 100
+  pendingIdx.clear();[...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender(0)
 }
 function setFitMode() {
   if (viewMode.value !== 'fit') {
     viewMode.value = 'fit'
-    pendingIdx.clear();[...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender()
+    pendingIdx.clear();[...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender(0)
   }
 }
 const centerIndex = ref(0)
-const renderRadius = computed(() => Math.max(6, settings.s.highRadius + 6))
+// 減少一次掛載的頁面數量（固定小範圍 overscan，與 highRadius 解耦）
+const RENDER_OVERSCAN = 3
+const HIREZ_OVERSCAN = 2
+const renderRadius = computed(() => RENDER_OVERSCAN)
 const currentPage = computed(() => {
   const tp = totalPages.value
   if (!tp || tp <= 0) return 0
@@ -105,11 +128,11 @@ function currentCenterCssWidth(): number {
   if (viewMode.value === 'fit') return containerW.value || 800
   if (d.type === 'pdf') {
     const base = media.baseCssWidthAt100(centerIndex.value)
-    if (base) return Math.max(50, base * (zoom.value / 100))
+    if (base) return Math.max(50, base * (zoomApplied.value / 100))
     return containerW.value || 800
   }
   if (d.type === 'image') {
-    return Math.max(50, imageNaturalWidth.value ? imageNaturalWidth.value * (zoom.value / 100) : (containerW.value || 800))
+    return Math.max(50, imageNaturalWidth.value ? imageNaturalWidth.value * (zoomApplied.value / 100) : (containerW.value || 800))
   }
   return containerW.value || 800
 }
@@ -127,6 +150,7 @@ const topSpacerHeight = computed(() => renderStart.value * estimateHeight.value)
 const bottomSpacerHeight = computed(() => Math.max(0, (totalPages.value - renderEnd.value - 1)) * estimateHeight.value)
 
 let io: IntersectionObserver | null = null
+let resizeObs: ResizeObserver | null = null
 const scrollRootEl = ref<HTMLElement | null>(null)
 const refs = new Map<Element, number>()
 let rafScheduled = false
@@ -134,33 +158,59 @@ const pendingIdx = new Set<number>()
 const visibleIdx = new Set<number>()
 const containerW = ref(0)
 let hiResTimer: number | null = null
+let zoomDebounceTimer: number | null = null
 let preloadStartTimer: number | null = null
 let idleHandle: number | null = null
 let preloadQueue: number[] = []
 let preloadingPaused = false
 
+// 以 scrollTop 估算可見區域（O(1)）；避免逐一量測 DOM
+const visibleStart = ref(0)
+const visibleEnd = ref(0)
+let scrollRaf = 0 as number | 0
+function updateVisibleByScroll() {
+  const root = scrollRootEl.value
+  const tp = totalPages.value || 0
+  if (!root || tp <= 0) return
+  const est = Math.max(1, estimateHeight.value)
+  const top = root.scrollTop
+  const mid = top + root.clientHeight / 2
+  const last = tp - 1
+  const ci = Math.max(0, Math.min(last, Math.floor(mid / est)))
+  centerIndex.value = ci
+  media.setPriorityIndex(ci)
+  // 可見區域 + 小範圍 overscan
+  const start = Math.max(0, Math.floor(top / est) - HIREZ_OVERSCAN)
+  const end = Math.min(last, Math.floor((top + root.clientHeight) / est) + HIREZ_OVERSCAN)
+  visibleStart.value = start
+  visibleEnd.value = end
+  // 強制限制隊列在可見區間附近
+  media.enforceVisibleRange(start, end)
+}
+function onScroll() {
+  if (scrollRaf) return
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = 0 as any
+    updateVisibleByScroll()
+    scheduleHiResRerender()
+  })
+}
+
 function scheduleHiResRerender(delay?: number) {
   if (hiResTimer) { clearTimeout(hiResTimer); hiResTimer = null }
   const ms = typeof delay === 'number' ? delay : (settings.s.highQualityDelayMs || 120)
   hiResTimer = window.setTimeout(() => {
-    // 僅將中心附近的頁加入待渲染，避免一次大量請求
-    const center = computeCenterIndex()
-    const rangeHigh = settings.s.highRadius
-    const allowed = new Set<number>()
-    if (center >= 0) {
-      for (let i = Math.max(0, center - rangeHigh); i <= Math.min(totalPages.value - 1, center + rangeHigh); i++) {
-        allowed.add(i)
-      }
-    }
-    // 同時納入當前可見頁，避免被過度過濾
-    for (const i of visibleIdx) allowed.add(i)
-    // 加入目前實際可見頁，避免滑動時灰階卡住
-    for (const i of visibleIdx) allowed.add(i)
+    // 僅針對「可見 + 小範圍 overscan」發出高清重繪請求
+    const tp = totalPages.value || 0
+    if (tp <= 0) { hiResTimer = null; return }
+    const start = Math.max(0, visibleStart.value)
+    const end = Math.min(tp - 1, visibleEnd.value)
+    const hiStart = Math.max(0, start)
+    const hiEnd = Math.min(tp - 1, end)
     pendingIdx.clear()
-    for (const i of visibleIdx) {
-      if (allowed.size === 0 || allowed.has(i)) pendingIdx.add(i)
-    }
-    rafScheduled = false; scheduleProcess()
+    for (let i = hiStart; i <= hiEnd; i++) pendingIdx.add(i)
+    rafScheduled = false
+    scheduleProcess()
     hiResTimer = null
   }, ms)
 }
@@ -209,9 +259,14 @@ function schedulePreloadStart() {
 function scheduleIdle() {
   cancelIdle()
   if (preloadingPaused) return
-  const ric = (window as any).requestIdleCallback as ((cb: any) => number) | undefined
+  const ric = (window as any).requestIdleCallback as ((cb: any, opts?: { timeout: number }) => number) | undefined
   const cb = (deadline: any) => processPreloadBatch(deadline)
-  idleHandle = ric ? ric(cb) : window.setTimeout(() => cb({ timeRemaining: () => 12, didTimeout: true }), 16)
+  if (ric) {
+    const timeout = Math.max(1000, settings.s.preloadIdleMs || 0)
+    idleHandle = ric(cb, { timeout })
+  } else {
+    idleHandle = window.setTimeout(() => cb({ timeRemaining: () => 12, didTimeout: true }), 16)
+  }
 }
 
 function processPreloadBatch(deadline: { timeRemaining?: () => number, didTimeout?: boolean }) {
@@ -247,20 +302,6 @@ function observe(el: Element | null, idx: number) {
   io?.observe(el)
 }
 
-function computeCenterIndex(): number {
-  let center = -1
-  const viewportCenter = window.innerHeight / 2
-  let bestDelta = Number.POSITIVE_INFINITY
-  for (const [el, idx] of refs.entries()) {
-    if (!visibleIdx.has(idx)) continue
-    const r = (el as HTMLElement).getBoundingClientRect()
-    const elCenter = r.top + r.height / 2
-    const d = Math.abs(elCenter - viewportCenter)
-    if (d < bestDelta) { bestDelta = d; center = idx }
-  }
-  return center
-}
-
 function scheduleProcess() {
   if (rafScheduled) return
   rafScheduled = true
@@ -268,41 +309,26 @@ function scheduleProcess() {
     const list = Array.from(pendingIdx)
     pendingIdx.clear()
     rafScheduled = false
-    // 計算中心頁索引（從目前可見頁中找與視窗中心最近者）
-    let center = -1
-    const viewportCenter = window.innerHeight / 2
-    let bestDelta = Number.POSITIVE_INFINITY
-    for (const [el, idx] of refs.entries()) {
-      if (!visibleIdx.has(idx)) continue
-      const r = (el as HTMLElement).getBoundingClientRect()
-      const elCenter = r.top + r.height / 2
-      const d = Math.abs(elCenter - viewportCenter)
-      if (d < bestDelta) { bestDelta = d; center = idx }
-    }
-    if (center >= 0) { centerIndex.value = center; media.setPriorityIndex(center) }
-
-    // 僅渲染中心頁附近的少量頁，避免小縮放時一次大量請求
+    // 依據可見區間 + highRadius 計算實際要處理的集合
+    const tp = totalPages.value || 0
+    if (tp <= 0) return
+    const center = centerIndex.value
     const rangeHigh = settings.s.highRadius
+    const start = Math.max(0, Math.min(visibleStart.value, center - rangeHigh))
+    const end = Math.min(tp - 1, Math.max(visibleEnd.value, center + rangeHigh))
+    media.enforceVisibleRange(start, end)
     const allowed = new Set<number>()
-    if (center >= 0) {
-      for (let i = Math.max(0, center - rangeHigh); i <= Math.min(totalPages.value - 1, center + rangeHigh); i++) {
-        allowed.add(i)
-      }
-    }
-    // Strict visible-range priority（放寬）：至少涵蓋目前可見範圍，避免可見頁被丟棄
-    if (center >= 0) {
-      let minVisible = Number.POSITIVE_INFINITY
-      let maxVisible = -1
-      for (const i of visibleIdx) { if (i < minVisible) minVisible = i; if (i > maxVisible) maxVisible = i }
-      const start = Math.max(0, Math.min(minVisible === Number.POSITIVE_INFINITY ? center : minVisible, center - rangeHigh))
-      const end = Math.min((totalPages.value || 1) - 1, Math.max(maxVisible < 0 ? center : maxVisible, center + rangeHigh))
-      media.enforceVisibleRange(start, end)
-    }
-    const work = list.filter(idx => allowed.size === 0 ? true : allowed.has(idx))
+    for (let i = start; i <= end; i++) allowed.add(i)
+    const work = list.filter(idx => allowed.has(idx))
     for (const idx of work) {
-      const el = [...refs.entries()].find(([, i]) => i === idx)?.[0] as HTMLElement | undefined
-      const cW = Math.max(200, el?.clientWidth || 800)
-      if (idx === centerIndex.value) containerW.value = cW
+      // 只量測一次中心頁的寬度，避免大量 reflow
+      if (idx === center) {
+        const root = scrollRootEl.value
+        const el = root?.querySelector(`[data-pdf-page="${center}"]`) as HTMLElement | null
+        const cW = Math.max(200, el?.clientWidth || 800)
+        containerW.value = cW
+      }
+      const cW = containerW.value || 800
       if (viewMode.value === 'actual') {
         media.renderPdfPage(idx, undefined, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100), dpiForActual())
       } else {
@@ -319,6 +345,20 @@ function scheduleProcess() {
 }
 
 onMounted(() => {
+  // 監聽滾動，採用 scrollTop + 估算高度的 O(1) 計算
+  scrollRootEl.value?.addEventListener('scroll', onScroll, { passive: true })
+  // 初始化可見區域與中心
+  updateVisibleByScroll()
+  // 容器寬度監控（避免在 scroll handler 中頻繁量測）
+  if (scrollRootEl.value && 'ResizeObserver' in window) {
+    resizeObs = new ResizeObserver(() => {
+      const w = scrollRootEl.value?.clientWidth || 0
+      if (w > 0) containerW.value = w
+      scheduleUpdateFitPercent()
+      scheduleHiResRerender()
+    })
+    resizeObs.observe(scrollRootEl.value)
+  }
   io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       const idx = refs.get(e.target)
@@ -327,8 +367,9 @@ onMounted(() => {
         pendingIdx.add(idx)
         visibleIdx.add(idx)
       } else {
-        // 離開視窗，取消排隊的任務
+        // 離開視窗，取消排隊並盡量取消 inflight（提升 gen + 通知後端）
         media.cancelQueued(idx)
+        try { media.cancelInflight(idx) } catch {}
         visibleIdx.delete(idx)
       }
     }
@@ -348,8 +389,7 @@ onMounted(() => {
     if (!settings.s.pausePreloadOnInteraction) return
     preloadingPaused = true
     cancelIdle()
-    // Drop long-tail preload tasks immediately
-    preloadQueue = []
+    // 不清空佇列，僅暫停；避免來回浪費
     // 立即優先處理當前可見頁，避免可見區域長時間灰階
     pendingIdx.clear();
     for (const i of visibleIdx) pendingIdx.add(i)
@@ -372,6 +412,8 @@ onBeforeUnmount(() => {
   io?.disconnect()
   refs.clear()
   cancelIdle()
+  scrollRootEl.value?.removeEventListener('scroll', onScroll)
+  try { resizeObs?.disconnect() } catch {}
 })
 
 // 當檢視模式變更時，延遲請求高清重渲染，避免連續縮放卡頓
@@ -421,11 +463,17 @@ async function updateFitPercent() {
   }
 }
 
-watch([viewMode, centerIndex, containerW, () => settings.s.maxTargetWidth, () => settings.s.dprCap], () => { updateFitPercent() })
-onMounted(() => { updateFitPercent() })
+// Debounce fit 百分比更新，避免量測風暴
+let fitTimer: number | null = null
+function scheduleUpdateFitPercent() {
+  if (fitTimer) { clearTimeout(fitTimer); fitTimer = null }
+  fitTimer = window.setTimeout(() => { fitTimer = null; updateFitPercent() }, 150)
+}
+watch([viewMode, centerIndex, containerW, () => settings.s.maxTargetWidth, () => settings.s.dprCap], () => { scheduleUpdateFitPercent() })
+onMounted(() => { scheduleUpdateFitPercent() })
 
-// 也監看 zoom 用於調整估計高度與卡片寬度（高清重渲染已透過 debounce 控制）
-watch(zoom, () => { /* no-op: 僅觸發依賴更新 */ })
+// 監看 zoomApplied 以影響估高與寬度布局（debounce 後才更新）
+watch(zoomApplied, () => { /* no-op: 讓依賴更新 */ })
 
 function pageCardStyle(idx: number) {
   const baseStyle: any = { contentVisibility: 'auto', containIntrinsicSize: '800px 1131px' }
@@ -434,14 +482,22 @@ function pageCardStyle(idx: number) {
   if (!d) return baseStyle
   if (d.type === 'pdf') {
     const base = media.baseCssWidthAt100(idx)
-    if (base) return { ...baseStyle, width: `${Math.max(50, Math.round(base * (zoom.value / 100)))}px` }
+    if (base) return { ...baseStyle, width: `${Math.max(50, Math.round(base * (zoomApplied.value / 100)))}px` }
     return baseStyle
   }
   if (d.type === 'image') {
-    if (imageNaturalWidth.value) return { ...baseStyle, width: `${Math.max(50, Math.round(imageNaturalWidth.value * (zoom.value / 100)))}px` }
+    if (imageNaturalWidth.value) return { ...baseStyle, width: `${Math.max(50, Math.round(imageNaturalWidth.value * (zoomApplied.value / 100)))}px` }
     return baseStyle
   }
   return baseStyle
+}
+
+const liveScale = computed(() => viewMode.value === 'actual' ? Math.max(0.1, zoomTarget.value / Math.max(1, zoomApplied.value)) : 1)
+function imgTransformStyle() {
+  if (viewMode.value !== 'actual') return undefined
+  const s = liveScale.value
+  if (!Number.isFinite(s) || s === 1) return undefined
+  return { transform: `scale(${s})`, transformOrigin: 'top left' }
 }
 
 const imageEl = ref<HTMLImageElement | null>(null)
@@ -454,46 +510,44 @@ function onImageLoad(e: Event) {
 </script>
 
 <template>
-  <div ref="scrollRootEl" class="h-full overflow-y-scroll overflow-x-hidden scrollbar-visible overscroll-y-contain"
+  <div ref="scrollRootEl"
+    class="h-full overflow-y-scroll overflow-x-hidden scrollbar-visible overscroll-y-contain border-t  border-r"
     style="scrollbar-gutter: stable;">
     <div v-if="settings.s.devPerfOverlay"
       class="fixed bottom-2 right-2 z-50 pointer-events-none bg-black/75 text-white text-xs px-2 py-1 rounded shadow">
-      <span v-if="totalPages">p {{ currentPage }} / {{ totalPages }} · </span>
+      <span v-if="isPdf">p {{ currentPage }} / {{ totalPages }} · </span>
       inflight: {{ media.inflightCount }} · queued: {{ media.queue.length }}
     </div>
 
     <!-- 工具列：黏在 MediaView 頂部（不覆蓋左側欄），永遠貼齊頂端 -->
     <div class="sticky top-0 z-20 bg-background/90 backdrop-blur border-b">
-      <div class="px-4 py-2 grid grid-cols-3 items-center">
-        <div class="text-sm text-[hsl(var(--muted-foreground))] justify-self-start">檢視</div>
-        <div v-if="totalPages" class="justify-self-center text-center text-sm tabular-nums text-[hsl(var(--muted-foreground))]">
-          <input
-            type="text"
-            inputmode="numeric"
-            pattern="[0-9]*"
-            class="w-16 px-2 py-1 text-sm text-center rounded border bg-white text-[hsl(var(--foreground))]"
-            v-model="pageInput"
-            @focus="pageEditing = true"
-            @blur="commitPageInput"
-            @keydown.enter.prevent="commitPageInput"
-            aria-label="頁碼"
-          />
-          <span class="mx-1">/</span>
-          <span>{{ totalPages }}</span>
-        </div>
-        <div class="justify-self-end flex items-center gap-4 pr-4">
+      <div class="px-4 py-2 flex items-center justify-between gap-3 min-w-0">
+        <div class="text-sm text-[hsl(var(--muted-foreground))]">檢視</div>
+        <div class="flex items-center gap-4 pr-4 flex-wrap justify-end min-w-0">
+          <!-- 頁碼顯示：永遠在按鈕群左側，未載入時顯示 0/0，不被遮擋 -->
+          <div class="flex items-center text-sm tabular-nums text-[hsl(var(--muted-foreground))] whitespace-nowrap">
+            <template v-if="isPdf && totalPages > 0">
+              <input type="text" inputmode="numeric" pattern="[0-9]*"
+                class="w-16 px-2 py-1 text-sm text-center rounded border bg-white text-[hsl(var(--foreground))]"
+                v-model="pageInput" @focus="pageEditing = true" @blur="commitPageInput"
+                @keydown.enter.prevent="commitPageInput" aria-label="頁碼" />
+              <span class="mx-1">/</span>
+              <span>{{ totalPages }}</span>
+            </template>
+            <template v-else>
+              <span>0</span>
+              <span class="mx-1">/</span>
+              <span>0</span>
+            </template>
+          </div>
           <div class="flex items-center gap-2 shrink-0">
-            <button
-              @click="setFitMode"
+            <button @click="setFitMode"
               class="text-sm rounded border whitespace-nowrap w-16 h-8 flex items-center justify-center"
-              :class="viewMode === 'fit' ? 'bg-[hsl(var(--accent))]' : 'bg-white'"
-            >最佳符合</button>
-            
-            <button
-              @click="resetZoom"
+              :class="viewMode === 'fit' ? 'bg-[hsl(var(--accent))]' : 'bg-white'">最佳符合</button>
+
+            <button @click="resetZoom"
               class="text-sm rounded border whitespace-nowrap w-16 h-8 flex items-center justify-center"
-              :class="viewMode === 'actual' ? 'bg-[hsl(var(--accent))]' : 'bg-white'"
-            >實際大小</button>
+              :class="viewMode === 'actual' ? 'bg-[hsl(var(--accent))]' : 'bg-white'">實際大小</button>
           </div>
           <div class="flex items-center gap-2">
             <button @click="zoomOut" class="px-2 py-1 text-sm rounded border bg-white">-</button>
@@ -513,7 +567,8 @@ function onImageLoad(e: Event) {
             <div :class="['mx-auto px-6', viewMode === 'fit' ? 'max-w-none w-full' : 'max-w-none w-auto']">
               <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto" :style="pageCardStyle(0)">
                 <img :src="media.imageUrl" alt="image" :class="viewMode === 'fit' ? 'w-full block' : 'block'"
-                  ref="imageEl" @load="onImageLoad" @error="media.fallbackLoadImageBlob()" draggable="false" />
+                  :style="imgTransformStyle()" ref="imageEl" @load="onImageLoad" @error="media.fallbackLoadImageBlob()"
+                  draggable="false" />
               </div>
             </div>
           </div>
@@ -522,15 +577,15 @@ function onImageLoad(e: Event) {
         <div v-else-if="totalPages" class="w-full min-h-full bg-neutral-200 pt-4 pb-10">
           <div :style="{ height: topSpacerHeight + 'px' }"></div>
           <div v-for="idx in renderIndices" :key="idx" class="w-full mb-10 flex justify-center"
-            :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoom / 100)) + 'px' } : undefined"
+            :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomApplied / 100)) + 'px' } : undefined"
             :data-pdf-page="idx" :ref="el => observe(el as Element, idx)">
             <div :class="['mx-auto px-6', viewMode === 'fit' ? 'max-w-none w-full' : 'max-w-none w-auto']">
               <div
                 :class="['bg-white rounded-md shadow border border-neutral-200', viewMode === 'fit' ? 'overflow-hidden' : 'overflow-visible']"
                 :style="pageCardStyle(idx)">
                 <img v-if="media.pdfPages[idx]?.contentUrl" :src="media.pdfPages[idx]!.contentUrl" :alt="`page-` + idx"
-                  :class="viewMode === 'fit' ? 'w-full block' : 'block'" decoding="async" loading="lazy"
-                  draggable="false" />
+                  :class="viewMode === 'fit' ? 'w-full block' : 'block'" :style="imgTransformStyle()" decoding="async"
+                  loading="lazy" draggable="false" />
                 <div v-else class="w-full aspect-[1/1.414] bg-gray-100 animate-pulse"></div>
               </div>
               <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>

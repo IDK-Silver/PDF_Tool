@@ -183,7 +183,8 @@ Rust 端檔案規劃：
   - `#[tauri::command] fn pdf_info(path: String) -> Result<{ pages: number }, MediaError>`（骨架，lazy init）
 - `#[tauri::command] fn pdf_open(path: String) -> Result<{ docId: number, pages: number }, MediaError>`（讀取 PDF bytes 至記憶體，回傳識別與頁數）
 - `#[tauri::command] fn pdf_close(docId: number) -> Result<(), MediaError>`（釋放記憶體快取）
-- `#[tauri::command] fn pdf_render_page(args: { docId: number, pageIndex: number, targetWidth?|scale|dpi, rotateDeg?, format?('png'|'jpeg'|'webp'), quality?: number }) -> Result<PageRender, MediaError>`（統一回傳 bytes；必須提供 `docId`；`quality`：JPEG 1–100；PNG 以數值門檻切換 fast/default）
+- `#[tauri::command] fn pdf_render_page(args: { docId: number, pageIndex: number, targetWidth?|scale|dpi, rotateDeg?, format?('png'|'jpeg'|'webp'), quality?: number, gen?: number }) -> Result<PageRender, MediaError>`（統一回傳 bytes；必須提供 `docId`；`quality`：JPEG 1–100；PNG 以數值門檻切換 fast/default；`gen`：前端傳遞的世代號，用於後端最佳努力取消）
+ - `#[tauri::command] fn pdf_render_cancel(docId: number, pageIndex: number, minGen: number) -> Result<(), MediaError>`（設定該頁最小允許世代，後端收到較舊 `gen` 的渲染請求會立即丟棄）
  - `#[tauri::command] fn pdf_page_size(docId: number, pageIndex: number) -> Result<{ widthPt: number, heightPt: number }, MediaError>`（回傳頁尺寸點數，供前端換算 96dpi 寬度與縮放百分比）
   - Lazy init `Pdfium`：首次呼叫 `pdf_*` 指令時嘗試從 `resource_dir()/pdfium/<platform>/` 綁定；找不到則回 `not_found` 並提示 `npm run pdfium:fetch`。
 
@@ -355,3 +356,21 @@ Rust 端檔案規劃：
 ---
 
 如需更動架構或 API，請一併更新本文件並同步 `docs/design.md`（若有）。
+### 2025-10 優化摘要（虛擬清單化與抖動抑制）
+- 滾動中心判定改為 `scrollTop` + 估算單頁高度（O(1)），不再遍歷所有頁面做 `getBoundingClientRect`，座標系以自訂滾動容器為準。
+  - 相關實作：`src/components/MediaView/MediaView.vue:1` 中 `onScroll`、`updateVisibleByScroll()`。
+- DOM 掛載範圍縮小：渲染 overscan 固定為 3 頁（與高畫質半徑解耦）。
+  - 相關計算：`renderRadius`、`renderStart`/`renderEnd`（同檔）。
+- 高清重繪範圍限縮為「可見區域 ± 小 overscan」，並以 debounce 觸發；不再從 refs/rects 計算集合。
+  - 相關實作：`scheduleHiResRerender()`、`scheduleProcess()`。
+- Fit 百分比計算以 `ResizeObserver` 與 debounce 合併排程，避免量測風暴。
+  - 相關實作：`scheduleUpdateFitPercent()` 與容器觀察設定。
+- 背景預載：互動時僅暫停，不清空佇列；`requestIdleCallback` 加上 `timeout` 以避免長期不觸發。
+  - 相關實作：`pausePreload`/`resumePreload`、`scheduleIdle()`。
+- 縮放（A.4）：即時使用 CSS `transform: scale(...)` 預覽；停止 120–200ms 後才套用實際寬度並觸發高清重繪。
+  - 狀態：`zoomTarget / zoomApplied`（`MediaView.vue:1`）；樣式：`imgTransformStyle()`。
+- 渲染取消（A.8）：新增後端 `pdf_render_cancel` 與 `gen` 世代號；不僅移除前端佇列，也讓後端丟棄較舊請求（最佳努力）。
+  - 前端：`src/modules/media/store.ts:1` 使用 `nextGen()`、`cancelInflight()` 與 `pdfRenderCancel()`。
+  - 後端：`src-tauri/src/media.rs:1` `PdfRequest::Cancel`、`min_gen` 過濾；`pdf_render_page` 支援 `gen`。
+
+以上均為內部行為優化，未改動對外 API。後續若引入完整虛擬清單或 pdf.js 官方 Viewer，將另行評估與記錄。

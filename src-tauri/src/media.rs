@@ -146,6 +146,7 @@ enum PdfRequest {
     Close { doc_id: u64, reply: mpsc::Sender<Result<(), MediaError>> },
     Render { args: PdfRenderArgs, reply: mpsc::Sender<Result<PageRender, MediaError>> },
     Size { doc_id: u64, page_index: u32, reply: mpsc::Sender<Result<PdfPageSize, MediaError>> },
+    Cancel { doc_id: u64, page_index: u32, min_gen: u64, reply: mpsc::Sender<Result<(), MediaError>> },
 }
 
 pub fn init_pdf_worker() {
@@ -162,6 +163,8 @@ pub fn init_pdf_worker() {
             }
         };
         let mut docs: HashMap<u64, PdfDocument> = HashMap::new();
+        // 最小允許世代：小於此值的渲染將被立刻忽略（最佳努力取消）
+        let mut min_gen: HashMap<(u64, u32), u64> = HashMap::new();
         loop {
             match rx.recv() {
                 Ok(PdfRequest::Open { path, reply }) => {
@@ -187,6 +190,14 @@ pub fn init_pdf_worker() {
                         } else {
                             return Err(MediaError::new("invalid_input", "缺少 docId"));
                         };
+                        // best-effort 取消：若 gen 比 min_gen 小則直接丟棄
+                        let g_req = args.r#gen.unwrap_or(0);
+                        let key = (args.doc_id.unwrap_or(0), args.page_index);
+                        if let Some(g_min) = min_gen.get(&key) {
+                            if g_req < *g_min {
+                                return Err(MediaError::new("canceled", "render canceled"));
+                            }
+                        }
                         render_page_for_document(doc, &args)
                     })();
                     let _ = reply.send(res);
@@ -202,6 +213,12 @@ pub fn init_pdf_worker() {
                         Ok(PdfPageSize { width_pt: page.width().value as f32, height_pt: page.height().value as f32 })
                     })();
                     let _ = reply.send(res);
+                }
+                Ok(PdfRequest::Cancel { doc_id, page_index, min_gen: g, reply }) => {
+                    let key = (doc_id, page_index);
+                    let entry = min_gen.entry(key).or_insert(0);
+                    if g > *entry { *entry = g; }
+                    let _ = reply.send(Ok(()));
                 }
                 Err(_) => break,
             }
@@ -297,6 +314,8 @@ pub struct PdfRenderArgs {
     pub format: Option<String>,
     pub target_width: Option<u32>,
     pub quality: Option<u8>,
+    #[serde(alias = "gen")]
+    pub r#gen: Option<u64>,
 }
 
 #[tauri::command]
@@ -306,6 +325,17 @@ pub fn pdf_render_page(args: PdfRenderArgs) -> Result<PageRender, MediaError> {
         .lock().unwrap().as_ref()
         .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
         .send(PdfRequest::Render { args, reply: rtx })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+}
+
+#[tauri::command]
+pub fn pdf_render_cancel(doc_id: u64, page_index: u32, min_gen: u64) -> Result<(), MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    WORKER_TX
+        .lock().unwrap().as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::Cancel { doc_id, page_index, min_gen, reply: rtx })
         .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
     rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
 }
