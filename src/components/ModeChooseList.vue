@@ -8,7 +8,7 @@ type Mode = 'media_view' | 'pdf_editor';
 
 const modes: { key: Mode, label: string }[] = [
 	{ key: 'media_view', label: '檢視' },
-	{ key: 'pdf_editor', label: '編輯' }
+	// { key: 'pdf_editor', label: '編輯' }
 ];
 
 const router = useRouter();

@@ -19,8 +19,18 @@ function loadFromStorage(): SettingsState {
 export const useSettingsStore = defineStore('settings', () => {
   const s = ref<SettingsState>(loadFromStorage())
 
+  // Debounced persistence to avoid jank when editing numbers rapidly
+  let persistTimer: number | null = null
+  function schedulePersist(v: SettingsState) {
+    if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
+    persistTimer = window.setTimeout(() => {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(v)) } catch {}
+      persistTimer = null
+    }, 200)
+  }
+
   watch(s, v => {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(v)) } catch {}
+    schedulePersist(v)
   }, { deep: true })
 
   const prefetchRootMargin = computed(() => `${s.value.prefetchPx}px 0px`)
@@ -29,9 +39,15 @@ export const useSettingsStore = defineStore('settings', () => {
     (s.value as any)[key] = val
   }
 
+  function reset() {
+    // 保持物件身份不變，避免使用端持有舊引用而不更新
+    Object.assign(s.value, defaultSettings)
+  }
+
   return {
     s,
     prefetchRootMargin,
     set,
+    reset,
   }
 })

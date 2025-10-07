@@ -26,9 +26,7 @@ function allowTextSelection(el: Element | null): boolean {
   return false
 }
 
-window.addEventListener('contextmenu', (e) => {
-  e.preventDefault()
-})
+window.addEventListener('contextmenu', (e) => { e.preventDefault() })
 
 document.addEventListener('dragstart', (e) => {
   if (!allowTextSelection(e.target as Element)) e.preventDefault()
@@ -39,9 +37,11 @@ document.addEventListener('selectstart', (e) => {
 })
 
 document.addEventListener('selectionchange', () => {
+  // Don’t interfere with input/textarea/contenteditable selection at all
+  const ae = document.activeElement as HTMLElement | null
+  if (ae && allowTextSelection(ae)) return
   const sel = window.getSelection()
-  if (!sel) return
-  if (sel.rangeCount === 0) return
+  if (!sel || sel.rangeCount === 0) return
   const anchorNode = sel.anchorNode as (Node & { parentElement?: HTMLElement }) | null
   const anchorEl = anchorNode?.parentElement || null
   if (!allowTextSelection(anchorEl)) {

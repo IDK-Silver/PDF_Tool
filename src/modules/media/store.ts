@@ -29,6 +29,27 @@ export const useMediaStore = defineStore('media', () => {
   const settings = useSettingsStore()
   const pdfInflight = new Set<number>()
   const pageGen = ref<Record<number, number>>({})
+  const priorityIndex = ref(0)
+  // Batch DOM-reactive updates to next animation frame to reduce jank
+  let applyScheduled = false
+  const pendingApply: Array<{ idx: number; page: PageRender }> = []
+  function scheduleApplyFrame() {
+    if (applyScheduled) return
+    applyScheduled = true
+    requestAnimationFrame(() => {
+      applyScheduled = false
+      // apply in order; revoke old blobs to avoid leaks
+      while (pendingApply.length) {
+        const { idx, page } = pendingApply.shift()!
+        const old = pdfPages.value[idx]
+        if (old?.contentUrl && old.contentUrl !== page.contentUrl) {
+          try { URL.revokeObjectURL(old.contentUrl) } catch {}
+        }
+        pdfPages.value[idx] = page
+        if (idx === 0) pdfFirstPage.value = page
+      }
+    })
+  }
 
   function nextGen(idx: number) {
     const g = (pageGen.value[idx] || 0) + 1
@@ -48,6 +69,17 @@ export const useMediaStore = defineStore('media', () => {
 
   function cancelQueued(index: number) {
     queue.value = queue.value.filter(j => j.index !== index)
+  }
+
+  // Enforce strict visible range: drop queued jobs outside [start, end]
+  // and invalidate inflight outside by bumping generation so results are ignored.
+  function enforceVisibleRange(start: number, end: number) {
+    queue.value = queue.value.filter(j => j.index >= start && j.index <= end)
+    for (const i of pdfInflight) {
+      if (i < start || i > end) {
+        nextGen(i)
+      }
+    }
   }
 
   async function select(item: FileItem) {
@@ -176,7 +208,16 @@ export const useMediaStore = defineStore('media', () => {
   async function processQueue() {
     const max = Math.max(1, settings.s.maxConcurrentRenders)
     while (inflightCount.value < max && queue.value.length > 0) {
-      const job = queue.value.shift()!
+      // Pick the job closest to current priority index (center page)
+      let pickAt = 0
+      if (queue.value.length > 1) {
+        let best = Number.POSITIVE_INFINITY
+        for (let i = 0; i < queue.value.length; i++) {
+          const d = Math.abs(queue.value[i].index - priorityIndex.value)
+          if (d < best) { best = d; pickAt = i }
+        }
+      }
+      const job = queue.value.splice(pickAt, 1)[0]
       const idx = job.index
       if (pdfInflight.has(idx)) continue
       const d = descriptor.value
@@ -189,16 +230,11 @@ export const useMediaStore = defineStore('media', () => {
         .then(p => {
           // 只在世代一致時套用，避免過期回應覆蓋
           if (pageGen.value[idx] === gen) {
-            // 釋放舊的 blob，避免記憶體泄漏
-            const old = pdfPages.value[idx]
-            if (old?.contentUrl && old.contentUrl !== p.contentUrl) {
-              URL.revokeObjectURL(old.contentUrl)
-            }
-            pdfPages.value[idx] = p
-            if (idx === 0) pdfFirstPage.value = p
+            pendingApply.push({ idx, page: p })
+            scheduleApplyFrame()
           } else if (p.contentUrl) {
             // 過期回應，釋放本次 blob
-            URL.revokeObjectURL(p.contentUrl)
+            try { URL.revokeObjectURL(p.contentUrl) } catch {}
           }
         })
         .catch(e => console.warn('渲染頁面失敗', idx, e))
@@ -208,6 +244,10 @@ export const useMediaStore = defineStore('media', () => {
           processQueue()
         })
     }
+  }
+
+  function setPriorityIndex(i: number) {
+    priorityIndex.value = Math.max(0, Math.floor(i))
   }
 
   function clear() {
@@ -274,7 +314,9 @@ export const useMediaStore = defineStore('media', () => {
     ensurePdfFirstPage,
     renderPdfPage,
     cancelQueued,
+    enforceVisibleRange,
     processQueue,
+    setPriorityIndex,
     fallbackLoadImageBlob,
     clear,
     pageSizesPt,

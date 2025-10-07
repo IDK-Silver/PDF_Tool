@@ -7,13 +7,22 @@ const number = (e: Event, fallback: number) => {
   const v = Number((e.target as HTMLInputElement).value)
   return Number.isFinite(v) ? v : fallback
 }
+
+function resetToDefaults() {
+  if (confirm('確定要回復預設設定？此動作會覆蓋目前所有設定。')) {
+    settings.reset()
+  }
+}
 </script>
 
 <template>
   <div class="h-full overflow-auto">
     <div class="mx-auto max-w-3xl p-6 space-y-8 text-sm">
       <header class="sticky top-0 bg-background/80 backdrop-blur z-10 -mx-6 px-6 py-3 border-b">
-        <h1 class="text-lg font-medium">設定</h1>
+        <div class="flex items-center justify-between gap-3">
+          <h1 class="text-lg font-medium">設定</h1>
+          <button @click="resetToDefaults" class="px-2 py-1 text-sm rounded border bg-white">回復預設</button>
+        </div>
         <p class="text-xs text-[hsl(var(--muted-foreground))]">調整渲染體驗與效能參數。右側主視圖會即時套用。</p>
       </header>
 
@@ -38,6 +47,16 @@ const number = (e: Event, fallback: number) => {
               <label class="block mb-1">高清重渲染延遲（ms）</label>
               <input class="w-full border rounded px-2 py-1" :value="s.highQualityDelayMs" @input="s.highQualityDelayMs = number($event, s.highQualityDelayMs)" />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放停止後延遲再以新倍率請求高清渲染，預設 120ms。</p>
+            </div>
+            <div>
+              <label class="block mb-1">最佳符合最大輸出寬度（px）</label>
+              <input class="w-full border rounded px-2 py-1" :value="s.maxTargetWidth" @input="s.maxTargetWidth = number($event, s.maxTargetWidth)" />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">避免超寬容器時輸出位圖過大（預設 1920）。</p>
+            </div>
+            <div>
+              <label class="block mb-1">實際大小 DPI 上限</label>
+              <input class="w-full border rounded px-2 py-1" :value="s.actualDpiCap" @input="s.actualDpiCap = number($event, s.actualDpiCap)" />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">避免高倍縮放時 DPI 過大（預設 144）。</p>
             </div>
           </div>
         </div>
@@ -96,6 +115,26 @@ const number = (e: Event, fallback: number) => {
                 <label class="block mb-1">預加載延遲（ms）</label>
                 <input class="w-full border rounded px-2 py-1" :value="s.preloadIdleMs" @input="s.preloadIdleMs = number($event, s.preloadIdleMs)" />
                 <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">捲動或縮放穩定後延遲觸發背景預加載。</p>
+              </div>
+            </div>
+            <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label class="block mb-1">預加載批次大小</label>
+                <input class="w-full border rounded px-2 py-1" :value="s.preloadBatchSize" @input="s.preloadBatchSize = number($event, s.preloadBatchSize)" />
+                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">每次閒置處理的頁數（建議 2–3）。</p>
+              </div>
+              <div>
+                <label class="block mb-1">預加載啟動延遲（ms）</label>
+                <input class="w-full border rounded px-2 py-1" :value="s.preloadStartDelayMs" @input="s.preloadStartDelayMs = number($event, s.preloadStartDelayMs)" />
+                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">載入穩定後多久開始背景預載（建議 500）。</p>
+              </div>
+              <label class="flex items-center gap-2 mt-6 md:mt-0">
+                <input type="checkbox" v-model="s.pausePreloadOnInteraction" /> 互動時暫停預載（滾動、拖曳）
+              </label>
+              <div>
+                <label class="block mb-1">預載 DPR 上限</label>
+                <input class="w-full border rounded px-2 py-1" :value="s.preloadDprCap" @input="s.preloadDprCap = number($event, s.preloadDprCap)" />
+                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">背景預載時使用較保守的 DPR（預設 1.0）。</p>
               </div>
             </div>
           </div>
