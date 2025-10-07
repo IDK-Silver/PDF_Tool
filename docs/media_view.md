@@ -181,7 +181,9 @@ Rust 端檔案規劃：
   - `#[derive(Serialize)] struct MediaError { code: String, message: String }`
   - `#[tauri::command] fn analyze_media(path: String) -> Result<MediaDescriptor, MediaError>`
   - `#[tauri::command] fn pdf_info(path: String) -> Result<{ pages: number }, MediaError>`（骨架，lazy init）
-- `#[tauri::command] fn pdf_render_page(args: { path, pageIndex, scale|dpi, rotateDeg, format }) -> Result<PageRender, MediaError>`（統一：直接回傳 bytes）
+- `#[tauri::command] fn pdf_open(path: String) -> Result<{ docId: number, pages: number }, MediaError>`（讀取 PDF bytes 至記憶體，回傳識別與頁數）
+- `#[tauri::command] fn pdf_close(docId: number) -> Result<(), MediaError>`（釋放記憶體快取）
+- `#[tauri::command] fn pdf_render_page(args: { docId: number, pageIndex: number, targetWidth?|scale|dpi, rotateDeg?, format?('png'|'jpeg'|'webp'), quality?: number }) -> Result<PageRender, MediaError>`（統一回傳 bytes；必須提供 `docId`；`quality`：JPEG 1–100；PNG 以數值門檻切換 fast/default）
   - Lazy init `Pdfium`：首次呼叫 `pdf_*` 指令時嘗試從 `resource_dir()/pdfium/<platform>/` 綁定；找不到則回 `not_found` 並提示 `npm run pdfium:fetch`。
 
 ## 前端整合設計
@@ -201,9 +203,10 @@ Rust 端檔案規劃：
     - `loadDescriptor(path: string)`：`invoke('analyze_media')` → 更新 `descriptor`；若為 PDF，呼叫 `ensurePdfFirstPage()`
     - `ensurePdfFirstPage()`：`pdf_info` → `pdf_render_page(pageIndex=0)` 更新 `pdfFirstPage`
     - `clear()`：清空狀態
-- 服務封裝（建議）：`src/modules/media/service.ts`
+- 服務封裝：`src/modules/media/service.ts`
   - `analyzeMedia(path: string)` 封裝 `invoke`
-  - `toContentUrl(path: string)` 封裝 `convertFileSrc`
+  - `pdfOpen(path)`/`pdfClose(docId)` 管理文件 session
+  - `pdfRenderPage({ docId?, path, pageIndex, targetWidth?, format? })` 回傳 bytes 後以 `Blob` 呈現
 - UI 串接：
   - MediaFileListPane 綁定 `@item-click="mediaStore.select"`
     - 參考：`src/components/FileList/MediaFileListPane.vue:1`、`src/components/FileList/FileList.vue:1`
@@ -214,7 +217,7 @@ Rust 端檔案規劃：
 
 ## MediaView 渲染策略（MVP）
 - image：前端以 `@tauri-apps/plugin-fs.readFile` 讀檔 → `Blob` → `objectURL`（EXIF 方向以 CSS 處理）。
-- pdf：後端回傳渲染 bytes → `Blob` → `objectURL`；縮放時重新請求。
+- pdf：`pdfOpen` 後，懶載入可視頁，先低清（`lowQualityFormat`/`lowQualityScale`）再延遲補高清（`highQualityFormat`）；渲染目標寬度依容器寬 × `dprCap` 或 `baseWidth`。
 - unknown/錯誤：顯示錯誤訊息與「以系統開啟」按鈕（opener 插件）。
 
 ## 雙檢視與跨文件移頁
@@ -239,9 +242,17 @@ Rust 端檔案規劃：
 - 解析度：渲染輸出以螢幕像素為基準，輸出寬度等於版面寬度乘以縮放倍率乘以 `devicePixelRatio`，品質因子固定為 `1.0`；為避免超大輸出，`devicePixelRatio` 參與計算時上限採 2.0（可調）。
 
 ## 渲染與輸出（MVP）
-- 每次縮放或視圖變動時，僅渲染必要頁面；不做預取與持久快取。
-- 全面採 RAM bytes：圖片與 PDF 都不落地檔案；以 `Blob` 與 `objectURL` 呈現。
-- 完成後覆蓋當前顯示；釋放舊 `objectURL`（`URL.revokeObjectURL`）。
+- 僅渲染可視與附近頁；`prefetchPx` 控制預抓距離。
+- 全面採 RAM bytes；完成後釋放舊 `objectURL`（`URL.revokeObjectURL`）。
+- 控制最大並行數 `maxConcurrentRenders`，順滑優先。
+
+## 設定頁（Settings）
+- Route：`/settings`（雙欄 named views）。
+- Store：`src/modules/settings/store.ts`；型別與預設：`src/modules/settings/types.ts`。
+- 參數影響：
+  - 顯示策略：`lowQualityFirst`、`lowQualityFormat`、`lowQualityScale`、`highQualityDelayMs`、`highQualityFormat`、`dprCap`。
+  - 寬度：`targetWidthPolicy`（container/scale）、`baseWidth`。
+  - 效能：`maxConcurrentRenders`、`prefetchPx`（→ `prefetchRootMargin`）。
 
 ## 檔案安全與原子寫入
 - 修改操作一律以新檔寫入至同目錄暫存檔，完成與 `fsync` 後以原子換名覆蓋或輸出新檔。

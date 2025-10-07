@@ -17,7 +17,7 @@ export interface PageRender {
   heightPx: number
   scale?: number
   dpi?: number
-  format: 'png' | 'webp'
+  format: 'png' | 'webp' | 'jpeg'
   imagePath: string
   // helper
   contentUrl?: string
@@ -29,6 +29,11 @@ export interface PageRenderBytesRaw {
   heightPx: number
   scale?: number
   dpi?: number
-  format: 'png' | 'webp'
+  format: 'png' | 'webp' | 'jpeg'
   imageBytes: number[]
+}
+
+export interface PdfOpenResult {
+  docId: number
+  pages: number
 }

@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
 import type { MediaDescriptor, PageRender } from './types'
-import { analyzeMedia, pdfInfo, pdfRenderPage, toContentUrl } from './service'
+import { analyzeMedia, pdfRenderPage, pdfOpen, pdfClose } from './service'
+import { useSettingsStore } from '@/modules/settings/store'
 
 export const useMediaStore = defineStore('media', () => {
   const selected = ref<FileItem | null>(null)
@@ -16,11 +17,15 @@ export const useMediaStore = defineStore('media', () => {
   const imageUrl = computed(() => {
     const d = descriptor.value
     if (!d || d.type !== 'image') return null
-    return imageObjectUrl.value || toContentUrl(d.path)
+    return imageObjectUrl.value
   })
 
   const pdfFirstPage = ref<PageRender | null>(null)
   const pdfPages = ref<Array<PageRender | null>>([])
+  const docId = ref<number | null>(null)
+  const inflightCount = ref(0)
+  const queue = ref<Array<{ index: number; targetWidth?: number; format: 'png'|'jpeg'|'webp' }>>([])
+  const settings = useSettingsStore()
 
   async function select(item: FileItem) {
     selected.value = item
@@ -38,6 +43,11 @@ export const useMediaStore = defineStore('media', () => {
     descriptor.value = null
     pdfFirstPage.value = null
     pdfPages.value = []
+    // 關閉上一份文件 session
+    if (docId.value != null) {
+      try { await pdfClose(docId.value) } catch(_) {}
+      docId.value = null
+    }
     // 釋放舊 PDF blob URLs
     try {
       for (const p of pdfPages.value) {
@@ -56,9 +66,23 @@ export const useMediaStore = defineStore('media', () => {
         // 直接以 RAM bytes 建立 blob URL（避免 asset://）
         await fallbackLoadImageBlob()
       } else if (d.type === 'pdf') {
-        await ensurePdfFirstPage()
-        // 載入所有頁（簡版）：取得頁數後逐頁渲染
-        await loadAllPdfPages()
+        // 開啟 session
+        const opened = await pdfOpen(d.path)
+        docId.value = opened.docId
+        descriptor.value = { ...d, pages: opened.pages }
+        // 初始化頁框
+        pdfPages.value = Array.from({ length: opened.pages }, () => null)
+        // 預先載入第 0 頁（低清→高清依設定）
+        const containerWidth = 800 // 粗略預設，實際由 MediaView 觸發懶載入補上高清
+        if (settings.s.lowQualityFirst) {
+          const low = await pdfRenderPage({ path: d.path, docId: opened.docId, pageIndex: 0, targetWidth: Math.floor(containerWidth * settings.s.lowQualityScale), format: settings.s.lowQualityFormat })
+          pdfFirstPage.value = low
+          pdfPages.value[0] = low
+        } else {
+          const full = await pdfRenderPage({ path: d.path, docId: opened.docId, pageIndex: 0, targetWidth: containerWidth, format: settings.s.highQualityFormat })
+          pdfFirstPage.value = full
+          pdfPages.value[0] = full
+        }
       }
     } catch (e: any) {
       error.value = e?.message || String(e)
@@ -108,30 +132,44 @@ export const useMediaStore = defineStore('media', () => {
   async function ensurePdfFirstPage() {
     const d = descriptor.value
     if (!d || d.type !== 'pdf') return
-    // lazy init & basic fetch
-    const info = await pdfInfo(d.path)
-    descriptor.value = { ...d, pages: info.pages }
-    const page0 = await pdfRenderPage({ path: d.path, pageIndex: 0, scale: 1.0, format: 'png' })
-    pdfFirstPage.value = page0
+    // 已在 loadDescriptor 中處理 pdfOpen 與第 0 頁
   }
 
-  async function loadAllPdfPages() {
+  const pdfInflight = new Set<number>()
+  async function renderPdfPage(index: number, targetWidth?: number, format: 'png'|'jpeg'|'webp' = 'png', _quality?: number) {
     const d = descriptor.value
     if (!d || d.type !== 'pdf') return
-    const total = d.pages ?? (await pdfInfo(d.path)).pages
-    pdfPages.value = Array.from({ length: total }, () => null)
+    if (index < 0) return
+    // 若已有且目標寬度不大於現有寬度則略過
+    if (pdfPages.value[index] && targetWidth && (pdfPages.value[index]!.widthPx >= targetWidth)) return
+    if (pdfInflight.has(index)) return
+    // 進入佇列由 processQueue 控制並行數
+    queue.value.push({ index, targetWidth, format })
+    processQueue()
+  }
 
-    // 簡單序列化載入，避免一次性佔用過多記憶體
-    for (let i = 0; i < total; i++) {
-      try {
-        const p = await pdfRenderPage({ path: d.path, pageIndex: i, scale: 1.0, format: 'png' })
-        // 仍保持第一頁引用
-        if (i === 0) pdfFirstPage.value = p
-        // 設定對應索引
-        pdfPages.value[i] = p
-      } catch (e: any) {
-        console.warn('渲染頁面失敗', i, e)
-      }
+  async function processQueue() {
+    const max = Math.max(1, settings.s.maxConcurrentRenders)
+    while (inflightCount.value < max && queue.value.length > 0) {
+      const job = queue.value.shift()!
+      const idx = job.index
+      if (pdfInflight.has(idx)) continue
+      const d = descriptor.value
+      if (!d || d.type !== 'pdf') return
+      pdfInflight.add(idx)
+      inflightCount.value++
+      const q = (job.format === 'jpeg') ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100)
+      pdfRenderPage({ path: d.path, docId: docId.value ?? undefined, pageIndex: idx, targetWidth: job.targetWidth, format: job.format, quality: q })
+        .then(p => {
+          pdfPages.value[idx] = p
+          if (idx === 0) pdfFirstPage.value = p
+        })
+        .catch(e => console.warn('渲染頁面失敗', idx, e))
+        .finally(() => {
+          pdfInflight.delete(idx)
+          inflightCount.value--
+          processQueue()
+        })
     }
   }
 
@@ -162,6 +200,9 @@ export const useMediaStore = defineStore('media', () => {
     error,
     pdfFirstPage,
     pdfPages,
+    docId,
+    inflightCount,
+    queue,
     // getters
     imageUrl,
     imageObjectUrl,
@@ -170,7 +211,8 @@ export const useMediaStore = defineStore('media', () => {
     selectPath,
     loadDescriptor,
     ensurePdfFirstPage,
-    loadAllPdfPages,
+    renderPdfPage,
+    processQueue,
     fallbackLoadImageBlob,
     clear,
   }

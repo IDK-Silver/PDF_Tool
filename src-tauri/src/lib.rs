@@ -12,10 +12,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|_app| { crate::media::init_pdf_worker(); Ok(()) })
         .invoke_handler(tauri::generate_handler![
             greet,
             media::analyze_media,
             media::pdf_info,
+            media::pdf_open,
+            media::pdf_close,
             media::pdf_render_page
         ])
         .run(tauri::generate_context!())

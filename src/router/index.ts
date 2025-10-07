@@ -19,12 +19,21 @@ const routes: RouteRecordRaw[] = [
       filelist: () => import('../components/FileList/PdfFileListPane.vue'),
     },
   },
+  {
+    path: '/settings',
+    name: 'settings',
+    components: {
+      default: () => import('../components/Settings/SettingsView.vue'),
+      filelist: () => import('../components/Settings/SettingsNav.vue'),
+    },
+  },
 ];
 
 
 const router = createRouter({
-    history: createWebHashHistory(),
-    routes
+  history: createWebHashHistory(),
+  routes,
+  scrollBehavior() { return { top: 0 } }
 })
 
 

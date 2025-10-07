@@ -1,19 +1,9 @@
 <script setup lang="ts">
-import { defineEmits } from 'vue'
+import { useRouter } from 'vue-router'
 import { Cog6ToothIcon, Bars3Icon } from '@heroicons/vue/24/outline'
-
-const emit = defineEmits<{
-  (e: 'toggle-settings'): void
-  (e: 'toggle-collapse'): void
-}>()
-
-function onSettings() {
-  emit('toggle-settings')
-}
-
-function onCollapse() {
-  emit('toggle-collapse')
-}
+const router = useRouter()
+function onSettings() { router.push({ name: 'settings' }) }
+function onCollapse() { /* 保留按鈕，不實作側欄收合 */ }
 </script>
 
 <template>

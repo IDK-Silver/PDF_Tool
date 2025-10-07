@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
+use std::collections::HashMap;
+use std::sync::{Mutex, atomic::{AtomicU64, Ordering}, mpsc};
+use once_cell::sync::Lazy;
+use image::ImageEncoder;
 use std::fs;
 use std::path::{Path, PathBuf};
 // no timestamp usage currently
@@ -133,6 +137,65 @@ fn get_pdfium() -> Result<pdfium_render::prelude::Pdfium, MediaError> {
     ))
 }
 
+// 單執行緒 Worker：長駐 Pdfium 與 PdfDocument（避免跨執行緒 Send/Sync 問題）
+static WORKER_TX: Lazy<Mutex<Option<mpsc::Sender<PdfRequest>>>> = Lazy::new(|| Mutex::new(None));
+static NEXT_DOC_ID: AtomicU64 = AtomicU64::new(1);
+
+enum PdfRequest {
+    Open { path: String, reply: mpsc::Sender<Result<PdfOpenResult, MediaError>> },
+    Close { doc_id: u64, reply: mpsc::Sender<Result<(), MediaError>> },
+    Render { args: PdfRenderArgs, reply: mpsc::Sender<Result<PageRender, MediaError>> },
+}
+
+pub fn init_pdf_worker() {
+    let (tx, rx) = mpsc::channel::<PdfRequest>();
+    *WORKER_TX.lock().unwrap() = Some(tx);
+    std::thread::spawn(move || {
+        use pdfium_render::prelude::*;
+        let pdfium = match get_pdfium() {
+            Ok(p) => p,
+            Err(e) => {
+                // 無法載入 PDFium，工作執行緒退場
+                eprintln!("PDF worker init failed: {}", e.message);
+                return;
+            }
+        };
+        let mut docs: HashMap<u64, PdfDocument> = HashMap::new();
+        loop {
+            match rx.recv() {
+                Ok(PdfRequest::Open { path, reply }) => {
+                    let res = (|| {
+                        let document = pdfium
+                            .load_pdf_from_file(&path, None)
+                            .map_err(|e| MediaError::new("parse_error", format!("開啟 PDF 失敗: {e}")))?;
+                        let pages = document.pages().len() as usize;
+                        let id = NEXT_DOC_ID.fetch_add(1, Ordering::SeqCst);
+                        docs.insert(id, document);
+                        Ok(PdfOpenResult { doc_id: id, pages })
+                    })();
+                    let _ = reply.send(res);
+                }
+                Ok(PdfRequest::Close { doc_id, reply }) => {
+                    let _ = docs.remove(&doc_id);
+                    let _ = reply.send(Ok(()));
+                }
+                Ok(PdfRequest::Render { args, reply }) => {
+                    let res = (|| -> Result<PageRender, MediaError> {
+                        let doc = if let Some(id) = args.doc_id {
+                            docs.get(&id).ok_or_else(|| MediaError::new("not_found", format!("未知的 docId: {}", id)))?
+                        } else {
+                            return Err(MediaError::new("invalid_input", "缺少 docId"));
+                        };
+                        render_page_for_document(doc, &args)
+                    })();
+                    let _ = reply.send(res);
+                }
+                Err(_) => break,
+            }
+        }
+    });
+}
+
 #[tauri::command]
 pub fn analyze_media(path: String) -> Result<MediaDescriptor, MediaError> {
     let p = Path::new(&path);
@@ -167,10 +230,37 @@ pub fn pdf_info(path: String) -> Result<PdfInfo, MediaError> {
     Ok(PdfInfo { pages })
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfOpenResult { pub doc_id: u64, pub pages: usize }
+
+#[tauri::command]
+pub fn pdf_open(path: String) -> Result<PdfOpenResult, MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    WORKER_TX
+        .lock().unwrap().as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::Open { path, reply: rtx })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+}
+
+#[tauri::command]
+pub fn pdf_close(doc_id: u64) -> Result<(), MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    WORKER_TX
+        .lock().unwrap().as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::Close { doc_id, reply: rtx })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PdfRenderArgs {
-    pub path: String,
+    pub path: Option<String>,
+    pub doc_id: Option<u64>,
     #[serde(alias = "page_index")]
     pub page_index: u32,
     #[serde(alias = "rotate_deg")]
@@ -178,30 +268,37 @@ pub struct PdfRenderArgs {
     pub scale: Option<f32>,
     pub dpi: Option<f32>,
     pub format: Option<String>,
+    pub target_width: Option<u32>,
+    pub quality: Option<u8>,
 }
 
 #[tauri::command]
 pub fn pdf_render_page(args: PdfRenderArgs) -> Result<PageRender, MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    WORKER_TX
+        .lock().unwrap().as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::Render { args, reply: rtx })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+}
+
+fn render_page_for_document(
+    document: &pdfium_render::prelude::PdfDocument,
+    args: &PdfRenderArgs,
+) -> Result<PageRender, MediaError> {
     use pdfium_render::prelude::*;
-
-    let pdfium = get_pdfium()?;
-
-    let document = pdfium
-        .load_pdf_from_file(&args.path, None)
-        .map_err(|e| MediaError::new("parse_error", format!("開啟 PDF 失敗: {e}")))?;
 
     let page_index_u16: u16 = args
         .page_index
         .try_into()
         .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", args.page_index)))?;
-
     let page = document
         .pages()
         .get(page_index_u16)
         .map_err(|_| MediaError::new("not_found", format!("頁索引不存在: {}", args.page_index)))?;
 
     let mut cfg = PdfRenderConfig::new();
-
     let rotation = match args.rotate_deg.unwrap_or(0) {
         90 => PdfPageRenderRotation::Degrees90,
         180 => PdfPageRenderRotation::Degrees180,
@@ -210,13 +307,16 @@ pub fn pdf_render_page(args: PdfRenderArgs) -> Result<PageRender, MediaError> {
     };
     cfg = cfg.rotate(rotation, true);
 
-    if let Some(dpi_val) = args.dpi {
+    if let Some(w) = args.target_width {
+        let width_px_i32 = i32::try_from(w.max(1)).unwrap_or(i32::MAX);
+        cfg = cfg.set_target_width(width_px_i32);
+    } else if let Some(dpi_val) = args.dpi {
         let w_pt = page.width().value as f32;
         let width_px = ((w_pt * dpi_val / 72.0).ceil() as u32).max(1);
         let width_px_i32 = i32::try_from(width_px).unwrap_or(i32::MAX);
         cfg = cfg.set_target_width(width_px_i32);
     } else {
-        let base = 1600.0_f32;
+        let base = 1200.0_f32;
         let s = args.scale.unwrap_or(1.0).max(0.1);
         let width_px = (base * s).round() as u32;
         let width_px_i32 = i32::try_from(width_px).unwrap_or(i32::MAX);
@@ -232,17 +332,34 @@ pub fn pdf_render_page(args: PdfRenderArgs) -> Result<PageRender, MediaError> {
 
     let fmt = args
         .format
+        .as_ref()
+        .cloned()
         .unwrap_or_else(|| "png".to_string())
         .to_lowercase();
-    let out_fmt = if fmt == "webp" { "webp" } else { "png" };
+    let out_fmt = if fmt == "webp" { "webp" } else if fmt == "jpeg" || fmt == "jpg" { "jpeg" } else { "png" };
 
     let mut buf: Vec<u8> = Vec::new();
     if out_fmt == "png" {
-        img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
+        use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+        use image::ColorType;
+        let rgba = img.to_rgba8();
+        let comp = if args.quality.unwrap_or(100) <= 50 { CompressionType::Fast } else { CompressionType::Default };
+        let mut enc = PngEncoder::new_with_quality(Cursor::new(&mut buf), comp, FilterType::NoFilter);
+        enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
             .map_err(|e| MediaError::new("io_error", format!("編碼 PNG 失敗: {e}")))?;
+    } else if out_fmt == "jpeg" {
+        use image::codecs::jpeg::JpegEncoder;
+        use image::ColorType;
+        let mut enc = JpegEncoder::new_with_quality(Cursor::new(&mut buf), args.quality.unwrap_or(82));
+        let rgba = img.to_rgba8();
+        enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
+            .map_err(|e| MediaError::new("io_error", format!("編碼 JPEG 失敗: {e}")))?;
     } else {
-        // 簡化：若需 webp，暫時回退 PNG 以避免缺少編碼器
-        img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
+        use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+        use image::ColorType;
+        let rgba = img.to_rgba8();
+        let mut enc = PngEncoder::new_with_quality(Cursor::new(&mut buf), CompressionType::Default, FilterType::NoFilter);
+        enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
             .map_err(|e| MediaError::new("io_error", format!("編碼 PNG 失敗: {e}")))?;
     }
 
