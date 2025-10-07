@@ -3,25 +3,8 @@
 本頁說明 `src/components/Settings/SettingsView.vue` 之設定項目，包含用途、建議預設與影響範圍。
 
 ## 渲染策略（Rendering）
-- 低清先顯示（`lowQualityFirst`）
-  - 用途：先呈現較低解析度的頁面，迅速回饋使用者，再以高清替換。
-  - 建議：開啟。能顯著改善「秒開」體感。
-  - 影響：前端於頁面進入可視時觸發兩次渲染（低清→高清）。
-
-- 低清格式（`lowQualityFormat`: `jpeg` | `png`）
-  - 用途：低清圖像格式。JPEG 快且檔小；PNG 無損但慢且大。
-  - 建議：`jpeg`。
-
-- 低清寬度比例（`lowQualityScale`: number）
-  - 用途：低清階段相對目標寬度之比例（如 0.5 = 一半寬度）。
-  - 建議：`0.5`。
-
-- 高清延遲（`highQualityDelayMs`: ms）
-  - 用途：低清顯示後等待多少毫秒再請求高清，避免捲動中浪費渲染。
-  - 建議：`120`～`200`。
-
-- 高清格式（`highQualityFormat`: `png` | `jpeg`）
-  - 用途：高清階段格式。文字/向量頁常用 `png`；掃描影像可用 `jpeg`。
+- 輸出格式（`highQualityFormat`: `png` | `jpeg`）
+  - 用途：單階段輸出格式。文字/向量頁常用 `png`；掃描影像可用 `jpeg`（較快）。
   - 建議：`png`。
 
 - DPR 上限（`dprCap`: number）
@@ -30,7 +13,7 @@
 
 ## 目標寬度（Width Policy）
 - 目標寬度策略（`targetWidthPolicy`: `container` | `scale`）
-  - 用途：決定渲染寬度的來源：容器寬度，或基準寬 × 倍率（低清比例/縮放）。
+  - 用途：決定渲染寬度的來源：容器寬度，或基準寬 × 倍率。
   - 建議：`container`。
 
 - 基準寬（`baseWidth`: px）
@@ -69,8 +52,7 @@
   - 說明：釋放指定 docId 的 PdfDocument。
 
 ## 建議使用流程
-1. 使用 `/settings` 調整策略與效能；建議先啟用「低清先顯示」。
+1. 使用 `/settings` 調整輸出格式、DPR 上限與效能參數。
 2. 於媒體頁開啟 PDF 時呼叫 `pdf_open` 取得 `docId`。
-3. 懶載入可視頁面：先低清（`lowQualityFormat`/`lowQualityScale`/`jpegQuality`），穩定後再補高清（`highQualityFormat`/`pngFast`）。
+3. 懶載入可視頁面：直接渲染單階段高品質（`highQualityFormat`/`jpegQuality` 或 `pngFast`）。
 4. 未使用之文件呼叫 `pdf_close`，保持記憶體健康。
-

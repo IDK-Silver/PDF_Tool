@@ -24,7 +24,7 @@ export const useMediaStore = defineStore('media', () => {
   const pdfPages = ref<Array<PageRender | null>>([])
   const docId = ref<number | null>(null)
   const inflightCount = ref(0)
-  const queue = ref<Array<{ index: number; targetWidth?: number; format: 'png'|'jpeg'|'webp' }>>([])
+  const queue = ref<Array<{ index: number; targetWidth?: number; dpi?: number; format: 'png'|'jpeg'|'webp' }>>([])
   const settings = useSettingsStore()
   const pdfInflight = new Set<number>()
   const pageGen = ref<Record<number, number>>({})
@@ -35,10 +35,10 @@ export const useMediaStore = defineStore('media', () => {
     return g
   }
 
-  function enqueueJob(index: number, targetWidth: number | undefined, format: 'png'|'jpeg'|'webp') {
-    // 若同頁已有較小需求，替換為較大需求；避免同頁重複入隊
-    queue.value = queue.value.filter(j => !(j.index === index && (targetWidth || 0) >= (j.targetWidth || 0)))
-    queue.value.push({ index, targetWidth, format })
+  function enqueueJob(index: number, targetWidth: number | undefined, format: 'png'|'jpeg'|'webp', dpi?: number) {
+    // 同頁只保留最新需求（無論寬度或 dpi），避免重複入隊
+    queue.value = queue.value.filter(j => j.index !== index)
+    queue.value.push({ index, targetWidth, dpi, format })
     // 控制隊列上限，避免暴增
     if (queue.value.length > 100) {
       queue.value.splice(0, queue.value.length - 100)
@@ -94,17 +94,11 @@ export const useMediaStore = defineStore('media', () => {
         descriptor.value = { ...d, pages: opened.pages }
         // 初始化頁框
         pdfPages.value = Array.from({ length: opened.pages }, () => null)
-        // 預先載入第 0 頁（低清→高清依設定）
-        const containerWidth = 800 // 粗略預設，實際由 MediaView 觸發懶載入補上高清
-        if (settings.s.lowQualityFirst) {
-          const low = await pdfRenderPage({ path: d.path, docId: opened.docId, pageIndex: 0, targetWidth: Math.floor(containerWidth * settings.s.lowQualityScale), format: settings.s.lowQualityFormat })
-          pdfFirstPage.value = low
-          pdfPages.value[0] = low
-        } else {
-          const full = await pdfRenderPage({ path: d.path, docId: opened.docId, pageIndex: 0, targetWidth: containerWidth, format: settings.s.highQualityFormat })
-          pdfFirstPage.value = full
-          pdfPages.value[0] = full
-        }
+        // 預先載入第 0 頁（單階段高品質）
+        const containerWidth = 800 // 粗略預設，實際由 MediaView 觸發懶載入補上
+        const full = await pdfRenderPage({ docId: opened.docId, pageIndex: 0, targetWidth: containerWidth, format: settings.s.highQualityFormat })
+        pdfFirstPage.value = full
+        pdfPages.value[0] = full
       }
     } catch (e: any) {
       error.value = e?.message || String(e)
@@ -157,7 +151,7 @@ export const useMediaStore = defineStore('media', () => {
     // 已在 loadDescriptor 中處理 pdfOpen 與第 0 頁
   }
 
-  async function renderPdfPage(index: number, targetWidth?: number, format: 'png'|'jpeg'|'webp' = 'png', _quality?: number) {
+  async function renderPdfPage(index: number, targetWidth?: number, format: 'png'|'jpeg'|'webp' = 'png', _quality?: number, dpi?: number) {
     const d = descriptor.value
     if (!d || d.type !== 'pdf') return
     if (index < 0) return
@@ -165,7 +159,7 @@ export const useMediaStore = defineStore('media', () => {
     if (pdfPages.value[index] && targetWidth && (pdfPages.value[index]!.widthPx >= targetWidth)) return
     if (pdfInflight.has(index)) return
     // 進入佇列由 processQueue 控制並行數（去重與較大優先）
-    enqueueJob(index, targetWidth, format)
+    enqueueJob(index, targetWidth, format, dpi)
     processQueue()
   }
 
@@ -181,18 +175,19 @@ export const useMediaStore = defineStore('media', () => {
       inflightCount.value++
       const q = (job.format === 'jpeg') ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100)
       const gen = nextGen(idx)
-      pdfRenderPage({ path: d.path, docId: docId.value ?? undefined, pageIndex: idx, targetWidth: job.targetWidth, format: job.format, quality: q })
+      pdfRenderPage({ docId: docId.value ?? undefined, pageIndex: idx, targetWidth: job.targetWidth, dpi: job.dpi, format: job.format, quality: q })
         .then(p => {
           // 只在世代一致時套用，避免過期回應覆蓋
           if (pageGen.value[idx] === gen) {
-            // 若已有更大寬度的圖片，避免回退
-            if (!pdfPages.value[idx] || (p.widthPx >= (pdfPages.value[idx]!.widthPx || 0))) {
-              pdfPages.value[idx] = p
-              if (idx === 0) pdfFirstPage.value = p
-            } else if (p.contentUrl) {
-              URL.revokeObjectURL(p.contentUrl)
+            // 釋放舊的 blob，避免記憶體泄漏
+            const old = pdfPages.value[idx]
+            if (old?.contentUrl && old.contentUrl !== p.contentUrl) {
+              URL.revokeObjectURL(old.contentUrl)
             }
+            pdfPages.value[idx] = p
+            if (idx === 0) pdfFirstPage.value = p
           } else if (p.contentUrl) {
+            // 過期回應，釋放本次 blob
             URL.revokeObjectURL(p.contentUrl)
           }
         })

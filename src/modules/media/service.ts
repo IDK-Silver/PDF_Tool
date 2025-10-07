@@ -12,7 +12,6 @@ export async function pdfInfo(path: string): Promise<{ pages: number }> {
 }
 
 export async function pdfRenderPage(opts: {
-  path: string
   docId?: number
   pageIndex: number
   scale?: number

@@ -259,7 +259,6 @@ pub fn pdf_close(doc_id: u64) -> Result<(), MediaError> {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PdfRenderArgs {
-    pub path: Option<String>,
     pub doc_id: Option<u64>,
     #[serde(alias = "page_index")]
     pub page_index: u32,
@@ -350,9 +349,10 @@ fn render_page_for_document(
     } else if out_fmt == "jpeg" {
         use image::codecs::jpeg::JpegEncoder;
         use image::ColorType;
-        let mut enc = JpegEncoder::new_with_quality(Cursor::new(&mut buf), args.quality.unwrap_or(82));
-        let rgba = img.to_rgba8();
-        enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
+        // JPEG 不支援帶 alpha 的 RGBA；需轉為 RGB 並丟棄 alpha
+        let rgb = img.to_rgb8();
+        let enc = JpegEncoder::new_with_quality(Cursor::new(&mut buf), args.quality.unwrap_or(82));
+        enc.write_image(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
             .map_err(|e| MediaError::new("io_error", format!("編碼 JPEG 失敗: {e}")))?;
     } else {
         use image::codecs::png::{CompressionType, FilterType, PngEncoder};

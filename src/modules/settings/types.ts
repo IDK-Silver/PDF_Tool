@@ -1,11 +1,7 @@
 export type TargetWidthPolicy = 'container' | 'scale'
 
 export interface SettingsState {
-  // Rendering strategy
-  lowQualityFirst: boolean
-  lowQualityFormat: 'jpeg' | 'png'
-  lowQualityScale: number // relative to container width
-  highQualityDelayMs: number
+  // Rendering
   highQualityFormat: 'png' | 'jpeg'
   dprCap: number
 
@@ -24,16 +20,11 @@ export interface SettingsState {
   jpegQuality: number // 1-100
   pngFast: boolean
 
-  // Warm window prefetch radii
-  lowRadius: number
+  // Warm window prefetch radius (high-quality only)
   highRadius: number
 }
 
 export const defaultSettings: SettingsState = {
-  lowQualityFirst: true,
-  lowQualityFormat: 'jpeg',
-  lowQualityScale: 0.5,
-  highQualityDelayMs: 120,
   highQualityFormat: 'png',
   dprCap: 2.0,
 
@@ -47,7 +38,5 @@ export const defaultSettings: SettingsState = {
 
   jpegQuality: 82,
   pngFast: true,
-
-  lowRadius: 8,
   highRadius: 2,
 }

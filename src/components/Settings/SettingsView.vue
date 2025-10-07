@@ -20,38 +20,14 @@ const number = (e: Event, fallback: number) => {
       <section id="rendering" class="space-y-3">
         <h2 class="font-medium">渲染策略</h2>
         <div class="rounded-md border p-4 space-y-3">
-          <label class="flex items-center gap-2">
-            <input type="checkbox" v-model="s.lowQualityFirst" />
-            低清先顯示
-          </label>
-          <p class="text-xs text-[hsl(var(--muted-foreground))]">先以較低解析度快速顯示頁面，待捲動穩定後替換為高清，提升「秒開」體感。</p>
-
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="block mb-1">低清格式</label>
-              <select v-model="s.lowQualityFormat" class="w-full border rounded px-2 py-1">
-                <option value="jpeg">JPEG（速度快、檔小）</option>
-                <option value="png">PNG（無損）</option>
-              </select>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">建議使用 JPEG 以加速低清階段的渲染與傳輸。</p>
-            </div>
-            <div>
-              <label class="block mb-1">低清寬度比例</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.lowQualityScale" @input="s.lowQualityScale = number($event, s.lowQualityScale)" />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">相對於目標寬度的比例（例如 0.5 = 一半寬度）。</p>
-            </div>
-            <div>
-              <label class="block mb-1">高清延遲（毫秒）</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.highQualityDelayMs" @input="s.highQualityDelayMs = number($event, s.highQualityDelayMs)" />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">低清顯示後等待多久再補高清，避免連續捲動時不必要的重算。</p>
-            </div>
-            <div>
-              <label class="block mb-1">高清格式</label>
+              <label class="block mb-1">輸出格式（單階段）</label>
               <select v-model="s.highQualityFormat" class="w-full border rounded px-2 py-1">
                 <option value="png">PNG（無損，文字清晰）</option>
                 <option value="jpeg">JPEG（有損，速度較快）</option>
               </select>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">文字/矢量頁面建議 PNG；掃描影像可用 JPEG。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">不再使用低清→高清兩段；一律直接輸出單一格式。</p>
             </div>
             <div>
               <label class="block mb-1">DPR 上限</label>
@@ -96,6 +72,11 @@ const number = (e: Event, fallback: number) => {
               <label class="block mb-1">預抓距離（px）</label>
               <input class="w-full border rounded px-2 py-1" :value="s.prefetchPx" @input="s.prefetchPx = number($event, s.prefetchPx)" />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">可視區域上下的預抓距離（越大越早渲染）。</p>
+            </div>
+            <div>
+              <label class="block mb-1">預抓半徑（高品質）</label>
+              <input class="w-full border rounded px-2 py-1" :value="s.highRadius" @input="s.highRadius = number($event, s.highRadius)" />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">以目前頁為中心，向上下預抓的頁數（預設 2）。</p>
             </div>
           </div>
         </div>
