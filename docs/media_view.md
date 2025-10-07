@@ -184,6 +184,7 @@ Rust 端檔案規劃：
 - `#[tauri::command] fn pdf_open(path: String) -> Result<{ docId: number, pages: number }, MediaError>`（讀取 PDF bytes 至記憶體，回傳識別與頁數）
 - `#[tauri::command] fn pdf_close(docId: number) -> Result<(), MediaError>`（釋放記憶體快取）
 - `#[tauri::command] fn pdf_render_page(args: { docId: number, pageIndex: number, targetWidth?|scale|dpi, rotateDeg?, format?('png'|'jpeg'|'webp'), quality?: number }) -> Result<PageRender, MediaError>`（統一回傳 bytes；必須提供 `docId`；`quality`：JPEG 1–100；PNG 以數值門檻切換 fast/default）
+ - `#[tauri::command] fn pdf_page_size(docId: number, pageIndex: number) -> Result<{ widthPt: number, heightPt: number }, MediaError>`（回傳頁尺寸點數，供前端換算 96dpi 寬度與縮放百分比）
   - Lazy init `Pdfium`：首次呼叫 `pdf_*` 指令時嘗試從 `resource_dir()/pdfium/<platform>/` 綁定；找不到則回 `not_found` 並提示 `npm run pdfium:fetch`。
 
 ## 前端整合設計
@@ -240,6 +241,9 @@ Rust 端檔案規劃：
 - 即時平滑：先以 CSS 轉換在當前圖片上進行即時縮放，轉換原點為指標位置，確保連續且順滑。
 - 重新渲染：縮放穩定 120 毫秒後向後端請求新倍率的高解析渲染，替換當前圖片並以淡入交替，避免清晰度落差。
 - 解析度：渲染輸出以螢幕像素為基準，輸出寬度等於版面寬度乘以縮放倍率乘以 `devicePixelRatio`，品質因子固定為 `1.0`；為避免超大輸出，`devicePixelRatio` 參與計算時上限採 2.0（可調）。
+ - 百分比顯示：
+   - 「實際大小」顯示 `zoom`（100% 為 96dpi）。
+   - 「最佳符合」依據容器寬度與 `pdf_page_size` 回傳之頁寬（pt）換算 96dpi 的 CSS 寬，顯示其等效實際大小百分比（避免受 `devicePixelRatio` 影響顯示 200% 的誤差）。
 
 ## 渲染與輸出（MVP）
 - 僅渲染可視與附近頁；`prefetchPx` 控制預抓距離。

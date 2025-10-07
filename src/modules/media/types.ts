@@ -37,3 +37,8 @@ export interface PdfOpenResult {
   docId: number
   pages: number
 }
+
+export interface PdfPageSize {
+  widthPt: number
+  heightPt: number
+}

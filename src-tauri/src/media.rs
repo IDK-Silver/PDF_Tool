@@ -145,6 +145,7 @@ enum PdfRequest {
     Open { path: String, reply: mpsc::Sender<Result<PdfOpenResult, MediaError>> },
     Close { doc_id: u64, reply: mpsc::Sender<Result<(), MediaError>> },
     Render { args: PdfRenderArgs, reply: mpsc::Sender<Result<PageRender, MediaError>> },
+    Size { doc_id: u64, page_index: u32, reply: mpsc::Sender<Result<PdfPageSize, MediaError>> },
 }
 
 pub fn init_pdf_worker() {
@@ -187,6 +188,18 @@ pub fn init_pdf_worker() {
                             return Err(MediaError::new("invalid_input", "缺少 docId"));
                         };
                         render_page_for_document(doc, &args)
+                    })();
+                    let _ = reply.send(res);
+                }
+                Ok(PdfRequest::Size { doc_id, page_index, reply }) => {
+                    let res = (|| -> Result<PdfPageSize, MediaError> {
+                        let doc = docs.get(&doc_id).ok_or_else(|| MediaError::new("not_found", format!("未知的 docId: {}", doc_id)))?;
+                        use pdfium_render::prelude::*;
+                        let idx_u16: u16 = page_index
+                            .try_into()
+                            .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", page_index)))?;
+                        let page = doc.pages().get(idx_u16).map_err(|_| MediaError::new("not_found", format!("頁索引不存在: {}", page_index)))?;
+                        Ok(PdfPageSize { width_pt: page.width().value as f32, height_pt: page.height().value as f32 })
                     })();
                     let _ = reply.send(res);
                 }
@@ -234,6 +247,10 @@ pub fn pdf_info(path: String) -> Result<PdfInfo, MediaError> {
 #[serde(rename_all = "camelCase")]
 pub struct PdfOpenResult { pub doc_id: u64, pub pages: usize }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfPageSize { pub width_pt: f32, pub height_pt: f32 }
+
 #[tauri::command]
 pub fn pdf_open(path: String) -> Result<PdfOpenResult, MediaError> {
     let (rtx, rrx) = mpsc::channel();
@@ -252,6 +269,17 @@ pub fn pdf_close(doc_id: u64) -> Result<(), MediaError> {
         .lock().unwrap().as_ref()
         .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
         .send(PdfRequest::Close { doc_id, reply: rtx })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+}
+
+#[tauri::command]
+pub fn pdf_page_size(doc_id: u64, page_index: u32) -> Result<PdfPageSize, MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    WORKER_TX
+        .lock().unwrap().as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::Size { doc_id, page_index, reply: rtx })
         .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
     rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
 }

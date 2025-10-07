@@ -9,7 +9,9 @@ const totalPages = computed(() => media.descriptor?.pages ?? 0)
 // 檢視模式與縮放
 const viewMode = ref<'fit'|'actual'>('fit')
 const zoom = ref(100)
-const displayZoom = computed(() => viewMode.value === 'fit' ? Math.round(dprForMode() * 100) : zoom.value)
+// 顯示用百分比：fit 以容器寬相對 96dpi 的等效百分比顯示
+const displayFitPercent = ref<number | null>(null)
+const displayZoom = computed(() => viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoom.value)
 function dprForMode() {
   return viewMode.value === 'fit' ? Math.min((window.devicePixelRatio || 1), settings.s.dprCap) : 1
 }
@@ -57,6 +59,7 @@ const refs = new Map<Element, number>()
 let rafScheduled = false
 const pendingIdx = new Set<number>()
 const visibleIdx = new Set<number>()
+const containerW = ref(0)
 
 function observe(el: Element | null, idx: number) {
   if (!el) return
@@ -86,12 +89,13 @@ function scheduleProcess() {
 
     for (const idx of list) {
       const el = [...refs.entries()].find(([, i]) => i === idx)?.[0] as HTMLElement | undefined
-      const containerW = Math.max(200, el?.clientWidth || 800)
+      const cW = Math.max(200, el?.clientWidth || 800)
+      if (idx === centerIndex.value) containerW.value = cW
       if (viewMode.value === 'actual') {
         media.renderPdfPage(idx, undefined, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100), dpiForActual())
       } else {
         const dpr = dprForMode()
-        const baseW = settings.s.targetWidthPolicy === 'container' ? containerW : settings.s.baseWidth
+        const baseW = settings.s.targetWidthPolicy === 'container' ? cW : settings.s.baseWidth
         const hiW = Math.floor(baseW * dpr)
         media.renderPdfPage(idx, hiW, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100))
       }
@@ -104,14 +108,15 @@ function scheduleProcess() {
         indicesHigh.push(i)
       }
       const anyEl = [...refs.keys()][0] as HTMLElement | undefined
-      const containerW = Math.max(200, anyEl?.clientWidth || 800)
+      const cW = Math.max(200, anyEl?.clientWidth || 800)
+      containerW.value = cW
       if (viewMode.value === 'actual') {
         for (const i of indicesHigh) {
           media.renderPdfPage(i, undefined, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100), dpiForActual())
         }
       } else {
         const dpr = dprForMode()
-        const baseW = settings.s.targetWidthPolicy === 'container' ? containerW : settings.s.baseWidth
+        const baseW = settings.s.targetWidthPolicy === 'container' ? cW : settings.s.baseWidth
         const hiW = Math.floor(baseW * dpr)
         for (const i of indicesHigh) {
           media.renderPdfPage(i, hiW, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100))
@@ -153,6 +158,46 @@ onBeforeUnmount(() => {
 watch(viewMode, () => {
   pendingIdx.clear(); [...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleProcess()
 })
+
+// 動態計算「最佳符合」對應的實際大小百分比（以 96dpi 為 100% 基準）
+async function updateFitPercent() {
+  if (viewMode.value !== 'fit') return
+  const d = media.descriptor
+  if (!d) return
+  // 需要中心頁與容器寬度
+  const cW = containerW.value
+  if (!cW) return
+  // 圖片：以原始像素寬為 100% 基準
+  if (d.type === 'image') {
+    try {
+      const imgEl = document.querySelector('[data-image-view] img') as HTMLImageElement | null
+      if (imgEl && imgEl.naturalWidth > 0) {
+        displayFitPercent.value = Math.max(5, Math.min(400, Math.round((cW / imgEl.naturalWidth) * 100)))
+      }
+    } catch {}
+    return
+  }
+  // PDF：查詢頁面點數寬並換算 96dpi 的 CSS 寬
+  if (d.type === 'pdf') {
+    const idx = centerIndex.value
+    const cachedBase = media.baseCssWidthAt100(idx)
+    if (cachedBase && cachedBase > 0) {
+      displayFitPercent.value = Math.max(5, Math.min(400, Math.round((cW / cachedBase) * 100)))
+      return
+    }
+    // 若未快取，嘗試抓取一次並更新
+    const sz = await media.getPageSizePt(idx)
+    if (sz) {
+      const base = sz.widthPt * (96 / 72)
+      if (base > 0) {
+        displayFitPercent.value = Math.max(5, Math.min(400, Math.round((cW / base) * 100)))
+      }
+    }
+  }
+}
+
+watch([viewMode, centerIndex, containerW], () => { updateFitPercent() })
+onMounted(() => { updateFitPercent() })
 </script>
 
 <template>
@@ -178,7 +223,7 @@ watch(viewMode, () => {
         </div>
       </div>
 
-      <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-20 pb-10">
+      <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-20 pb-10" data-image-view>
         <div class="w-full flex justify-center">
           <div :class="['mx-auto px-6', viewMode==='fit' ? 'max-w-3xl w-full' : 'max-w-none w-auto']">
             <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto">

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
 import type { MediaDescriptor, PageRender } from './types'
-import { analyzeMedia, pdfRenderPage, pdfOpen, pdfClose } from './service'
+import { analyzeMedia, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize } from './service'
 import { useSettingsStore } from '@/modules/settings/store'
 
 export const useMediaStore = defineStore('media', () => {
@@ -23,6 +23,7 @@ export const useMediaStore = defineStore('media', () => {
   const pdfFirstPage = ref<PageRender | null>(null)
   const pdfPages = ref<Array<PageRender | null>>([])
   const docId = ref<number | null>(null)
+  const pageSizesPt = ref<Record<number, { widthPt: number; heightPt: number }>>({})
   const inflightCount = ref(0)
   const queue = ref<Array<{ index: number; targetWidth?: number; dpi?: number; format: 'png'|'jpeg'|'webp' }>>([])
   const settings = useSettingsStore()
@@ -217,6 +218,30 @@ export const useMediaStore = defineStore('media', () => {
     error.value = null
     loading.value = false
     pdfPages.value = []
+    pageSizesPt.value = {}
+  }
+
+  async function getPageSizePt(index: number): Promise<{ widthPt: number; heightPt: number } | null> {
+    const d = descriptor.value
+    if (!d || d.type !== 'pdf') return null
+    if (index < 0) return null
+    const cached = pageSizesPt.value[index]
+    if (cached) return cached
+    if (docId.value == null) return null
+    try {
+      const res = await pdfPageSize(docId.value, index)
+      pageSizesPt.value[index] = { widthPt: res.widthPt, heightPt: res.heightPt }
+      return pageSizesPt.value[index]
+    } catch (_) {
+      return null
+    }
+  }
+
+  function baseCssWidthAt100(index: number): number | null {
+    const size = pageSizesPt.value[index]
+    if (!size) return null
+    // 96 dpi CSS width = points * 96 / 72
+    return size.widthPt * (96 / 72)
   }
 
   return {
@@ -243,5 +268,8 @@ export const useMediaStore = defineStore('media', () => {
     processQueue,
     fallbackLoadImageBlob,
     clear,
+    pageSizesPt,
+    getPageSizePt,
+    baseCssWidthAt100,
   }
 })
