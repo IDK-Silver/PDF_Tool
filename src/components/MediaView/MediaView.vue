@@ -510,9 +510,7 @@ function onImageLoad(e: Event) {
 </script>
 
 <template>
-  <div ref="scrollRootEl"
-    class="h-full overflow-y-scroll overflow-x-hidden scrollbar-visible overscroll-y-contain"
-    style="scrollbar-gutter: stable;">
+  <div class="h-full flex flex-col">
     <div v-if="settings.s.devPerfOverlay"
       class="fixed bottom-2 right-2 z-50 pointer-events-none bg-black/75 text-white text-xs px-2 py-1 rounded shadow">
       <span v-if="isPdf">p {{ currentPage }} / {{ totalPages }} · </span>
@@ -520,7 +518,7 @@ function onImageLoad(e: Event) {
     </div>
 
     <!-- 工具列：黏在 MediaView 頂部（不覆蓋左側欄），永遠貼齊頂端 -->
-    <div class="sticky top-0 z-20 bg-background/90 backdrop-blur border-b">
+    <div class="sticky top-0 z-20 bg-background/90 backdrop-blur border-b shrink-0">
       <div class="px-4 py-2 flex items-center justify-between gap-3 min-w-0">
         <div class="text-sm text-[hsl(var(--muted-foreground))]">檢視</div>
         <div class="flex items-center gap-4 pr-4 flex-wrap justify-end min-w-0">
@@ -558,40 +556,44 @@ function onImageLoad(e: Event) {
       </div>
     </div>
 
-    <div class="p-4 space-y-3">
-      <div v-if="media.loading">讀取中…</div>
-      <div v-else-if="media.error" class="text-red-600">{{ media.error }}</div>
-      <div v-else>
-        <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-4 pb-10" data-image-view>
-          <div class="w-full flex justify-center">
-            <div :class="['mx-auto px-6', viewMode === 'fit' ? 'max-w-none w-full' : 'max-w-none w-auto']">
-              <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto" :style="pageCardStyle(0)">
-                <img :src="media.imageUrl" alt="image" :class="viewMode === 'fit' ? 'w-full block' : 'block'"
-                  :style="imgTransformStyle()" ref="imageEl" @load="onImageLoad" @error="media.fallbackLoadImageBlob()"
-                  draggable="false" />
+    <div ref="scrollRootEl"
+      class="flex-1 overflow-y-scroll overflow-x-hidden scrollbar-visible overscroll-y-contain"
+      style="scrollbar-gutter: stable;">
+      <div class="p-4 space-y-3">
+        <div v-if="media.loading">讀取中…</div>
+        <div v-else-if="media.error" class="text-red-600">{{ media.error }}</div>
+        <div v-else>
+          <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-4 pb-10" data-image-view>
+            <div class="w-full flex justify-center">
+              <div :class="['mx-auto px-6', viewMode === 'fit' ? 'max-w-none w-full' : 'max-w-none w-auto']">
+                <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto" :style="pageCardStyle(0)">
+                  <img :src="media.imageUrl" alt="image" :class="viewMode === 'fit' ? 'w-full block' : 'block'"
+                    :style="imgTransformStyle()" ref="imageEl" @load="onImageLoad" @error="media.fallbackLoadImageBlob()"
+                    draggable="false" />
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div v-else-if="totalPages" class="w-full min-h-full bg-neutral-200 pt-4 pb-10">
-          <div :style="{ height: topSpacerHeight + 'px' }"></div>
-          <div v-for="idx in renderIndices" :key="idx" class="w-full mb-10 flex justify-center"
-            :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomApplied / 100)) + 'px' } : undefined"
-            :data-pdf-page="idx" :ref="el => observe(el as Element, idx)">
-            <div :class="['mx-auto px-6', viewMode === 'fit' ? 'max-w-none w-full' : 'max-w-none w-auto']">
-              <div
-                :class="['bg-white rounded-md shadow border border-neutral-200', viewMode === 'fit' ? 'overflow-hidden' : 'overflow-visible']"
-                :style="pageCardStyle(idx)">
-                <img v-if="media.pdfPages[idx]?.contentUrl" :src="media.pdfPages[idx]!.contentUrl" :alt="`page-` + idx"
-                  :class="viewMode === 'fit' ? 'w-full block' : 'block'" :style="imgTransformStyle()" decoding="async"
-                  loading="lazy" draggable="false" />
-                <div v-else class="w-full aspect-[1/1.414] bg-gray-100 animate-pulse"></div>
+          <div v-else-if="totalPages" class="w-full min-h-full bg-neutral-200 pt-4 pb-10">
+            <div :style="{ height: topSpacerHeight + 'px' }"></div>
+            <div v-for="idx in renderIndices" :key="idx" class="w-full mb-10 flex justify-center"
+              :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomApplied / 100)) + 'px' } : undefined"
+              :data-pdf-page="idx" :ref="el => observe(el as Element, idx)">
+              <div :class="['mx-auto px-6', viewMode === 'fit' ? 'max-w-none w-full' : 'max-w-none w-auto']">
+                <div
+                  :class="['bg-white rounded-md shadow border border-neutral-200', viewMode === 'fit' ? 'overflow-hidden' : 'overflow-visible']"
+                  :style="pageCardStyle(idx)">
+                  <img v-if="media.pdfPages[idx]?.contentUrl" :src="media.pdfPages[idx]!.contentUrl" :alt="`page-` + idx"
+                    :class="viewMode === 'fit' ? 'w-full block' : 'block'" :style="imgTransformStyle()" decoding="async"
+                    loading="lazy" draggable="false" />
+                  <div v-else class="w-full aspect-[1/1.414] bg-gray-100 animate-pulse"></div>
+                </div>
+                <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
               </div>
-              <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
             </div>
+            <div :style="{ height: bottomSpacerHeight + 'px' }"></div>
           </div>
-          <div :style="{ height: bottomSpacerHeight + 'px' }"></div>
         </div>
       </div>
     </div>

@@ -55,14 +55,7 @@ const filtered = computed(() => {
 </script>
 
 <template>
-  <!-- <div class="w-full border-b border-[hsl(var(--border))] p-[8px]">
-  </div> -->
-
-  <!-- <div p-[8px]>
-
-  </div> -->
-
-  <div class="grid grid-cols-10 gap-1 h-auto min-h-8 max-w-[17]">
+  <div class="grid grid-cols-10 gap-1 h-auto min-h-10 max-w-[17] pb-2">
     <input v-model="q" class="col-span-8 border rounded text-sm pl-2" placeholder="搜尋檔名或路徑" />
     <button class="col-span-2 border rounded  text-sm" @click="addFiles">＋</button>
   </div>
