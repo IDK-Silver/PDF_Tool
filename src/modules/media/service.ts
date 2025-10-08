@@ -14,13 +14,42 @@ export async function pdfRenderPage(opts: {
   pageIndex: number
   scale?: number
   dpi?: number
-  format?: 'png'|'webp'|'jpeg'
+  format?: 'png'|'webp'|'jpeg'|'raw'
   targetWidth?: number
   quality?: number
   gen?: number
 }): Promise<PageRender> {
-  // Rust 端以單一參數結構接收，回傳 bytes
-  const raw = await invoke<PageRenderBytesRaw>('pdf_render_page', { args: opts })
+  // ⚡ 使用異步命令（真正並行渲染）
+  const raw = await invoke<PageRenderBytesRaw>('pdf_render_page_async', { args: opts })
+  
+  // ⚡ Raw bitmap 模式：直接繪製到 Canvas（零解碼開銷）
+  if (raw.format === 'raw') {
+    const canvas = document.createElement('canvas')
+    canvas.width = raw.widthPx
+    canvas.height = raw.heightPx
+    const ctx = canvas.getContext('2d')!
+    
+    const imageData = new ImageData(
+      new Uint8ClampedArray(raw.imageBytes),
+      raw.widthPx,
+      raw.heightPx
+    )
+    ctx.putImageData(imageData, 0, 0)
+    
+    const url = canvas.toDataURL('image/png', 0.9)  // 快速 PNG 編碼（可選）
+    return {
+      pageIndex: raw.pageIndex,
+      widthPx: raw.widthPx,
+      heightPx: raw.heightPx,
+      scale: raw.scale,
+      dpi: raw.dpi,
+      format: 'raw',
+      imagePath: '',
+      contentUrl: url,
+    }
+  }
+  
+  // 原有格式（WebP/JPEG/PNG）
   const bytes = new Uint8Array(raw.imageBytes)
   const mime = raw.format === 'webp' ? 'image/webp' : (raw.format === 'jpeg' ? 'image/jpeg' : 'image/png')
   const blob = new Blob([bytes], { type: mime })

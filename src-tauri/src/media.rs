@@ -483,6 +483,25 @@ pub fn pdf_render_page(args: PdfRenderArgs) -> Result<PageRender, MediaError> {
     rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
 }
 
+// ⚡ 新增：異步版本（真正並行渲染）
+#[tauri::command]
+pub async fn pdf_render_page_async(args: PdfRenderArgs) -> Result<PageRender, MediaError> {
+    // 使用 Tokio 阻塞執行緒池，避免阻塞主執行緒
+    tokio::task::spawn_blocking(move || -> Result<PageRender, MediaError> {
+        // 複用現有的同步邏輯
+        let (rtx, rrx) = mpsc::channel();
+        WORKER_TX
+            .lock().unwrap().as_ref()
+            .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+            .send(PdfRequest::Render { args, reply: rtx })
+            .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+        
+        rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))? // 加上 ? 展開
+    })
+    .await
+    .map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
+}
+
 #[tauri::command]
 pub fn pdf_render_cancel(doc_id: u64, page_index: u32, min_gen: u64) -> Result<(), MediaError> {
     let (rtx, rrx) = mpsc::channel();
@@ -540,10 +559,22 @@ fn render_page_for_document(
         .cloned()
         .unwrap_or_else(|| "png".to_string())
         .to_lowercase();
-    let out_fmt = if fmt == "webp" { "webp" } else if fmt == "jpeg" || fmt == "jpg" { "jpeg" } else { "png" };
+    let out_fmt = if fmt == "raw" { 
+        "raw"  // ⚡ 新增：直接傳 raw RGBA bitmap
+    } else if fmt == "webp" { 
+        "webp" 
+    } else if fmt == "jpeg" || fmt == "jpg" { 
+        "jpeg" 
+    } else { 
+        "png" 
+    };
 
     let mut buf: Vec<u8> = Vec::new();
-    if out_fmt == "webp" {
+    if out_fmt == "raw" {
+        // ⚡ 直接傳 RGBA raw bytes（無需編碼）
+        let rgba = img.to_rgba8();
+        buf = rgba.into_raw();  // 零開銷：直接取得底層 Vec<u8>
+    } else if out_fmt == "webp" {
         // 使用 webp crate 支援有損編碼
         let rgba = img.to_rgba8();
         let quality = args.quality.unwrap_or(85).clamp(1, 100) as f32;

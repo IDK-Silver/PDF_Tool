@@ -17,7 +17,7 @@ export interface PageRender {
   heightPx: number
   scale?: number
   dpi?: number
-  format: 'png' | 'webp' | 'jpeg'
+  format: 'png' | 'webp' | 'jpeg' | 'raw'
   imagePath: string
   // helper
   contentUrl?: string
@@ -33,7 +33,7 @@ export interface PageRenderBytesRaw {
   heightPx: number
   scale?: number
   dpi?: number
-  format: 'png' | 'webp' | 'jpeg'
+  format: 'png' | 'webp' | 'jpeg' | 'raw'
   imageBytes: number[]
 }
 

@@ -11,7 +11,17 @@ export interface SettingsState {
   insertCustomHeightMm: number
 
   // === 渲染品質 ===
+  // 低清渲染（快速預覽）
+  enableLowRes: boolean                   // 🔵 是否啟用低清渲染（關閉則直接高清）
+  lowResDpi: number                       // 🔵 一般頁面低清 DPI
+  largePageLowResDpi: number              // 🔵 大頁面專用低清 DPI（A3/A2 降級）
+  useLowResDpr: boolean                   // 🔵 低清是否考慮 DPR（Retina 螢幕適配）
+  lowResDprMultiplier: number             // 🔵 低清 DPR 倍數（預設 1.0，Retina 可用 1.5）
+  
+  // 高清渲染（精細品質）
   renderFormat: 'png' | 'jpeg' | 'webp'  // 統一格式（新增 WebP 支援）
+  useRawForHighRes: boolean               // 🚀 高清也用 Raw（零編解碼，激進模式）
+  highResDpiCap: number                  // 🎯 高清渲染 DPI 上限（fit 模式用，防卡頓）
   dprCap: number                          // DPR 上限（避免超高清輸出）
   maxOutputWidth: number                  // 最大輸出寬度（px）
   actualModeDpiCap: number               // 實際大小模式 DPI 上限
@@ -20,6 +30,7 @@ export interface SettingsState {
   // === 效能控制 ===
   maxConcurrentRenders: number      // 最大並行渲染數
   visibleMarginPages: number        // 可見區上下預渲染頁數
+  rawHighResCacheSize: number       // 🚀 Raw 高清快取上限（激進模式用，預設 10）
 
   // === 編碼品質 ===
   jpegQuality: number               // 1-100
@@ -40,7 +51,17 @@ export const defaultSettings: SettingsState = {
   insertCustomHeightMm: 297,
 
   // 渲染品質
+  // 低清渲染
+  enableLowRes: true,         // 🔵 啟用低清渲染（關閉則直接高清，更清晰但首次顯示慢）
+  lowResDpi: 60,              // 🔵 一般頁面低清 DPI（A4: 0.6M像素，90ms）
+  largePageLowResDpi: 48,     // 🔵 大頁面低清 DPI（A3: 0.44M像素，80ms）
+  useLowResDpr: false,        // 🔵 低清是否考慮 DPR（Retina 適配，預設關閉保持快速）
+  lowResDprMultiplier: 1.0,   // 🔵 低清 DPR 倍數（開啟時建議 1.0-1.5，避免過大）
+  
+  // 高清渲染
   renderFormat: 'webp',
+  useRawForHighRes: false,    // 🚀 預設保守（WebP/JPEG），開啟後全用 Raw
+  highResDpiCap: 96,          // 🎯 高清 DPI 上限（A3: 96dpi=1.78M像素=300ms，144dpi=4M像素=700ms）
   dprCap: 2.0,
   maxOutputWidth: 1920,
   actualModeDpiCap: 144,
@@ -49,6 +70,7 @@ export const defaultSettings: SettingsState = {
   // 效能控制
   maxConcurrentRenders: 2,    // 激進降至 2（大檔案單頁 500ms）
   visibleMarginPages: 0,      // 只渲染可見頁面（無預載）
+  rawHighResCacheSize: 10,    // 🚀 Raw 模式快取（10 頁約 30-120MB）
 
   // 編碼品質
   jpegQuality: 85,
@@ -68,7 +90,17 @@ export function migrateFromV1(old: any): SettingsState {
     insertCustomWidthMm: old.insertCustomWidthMm ?? defaultSettings.insertCustomWidthMm,
     insertCustomHeightMm: old.insertCustomHeightMm ?? defaultSettings.insertCustomHeightMm,
     
+    // 低清渲染
+    enableLowRes: old.enableLowRes ?? defaultSettings.enableLowRes,
+    lowResDpi: old.lowResDpi ?? defaultSettings.lowResDpi,
+    largePageLowResDpi: old.largePageLowResDpi ?? defaultSettings.largePageLowResDpi,
+    useLowResDpr: old.useLowResDpr ?? defaultSettings.useLowResDpr,
+    lowResDprMultiplier: old.lowResDprMultiplier ?? defaultSettings.lowResDprMultiplier,
+    
+    // 高清渲染
     renderFormat: old.highQualityFormat ?? defaultSettings.renderFormat,
+    useRawForHighRes: old.useRawForHighRes ?? defaultSettings.useRawForHighRes,
+    highResDpiCap: old.highResDpiCap ?? defaultSettings.highResDpiCap,
     dprCap: old.dprCap ?? defaultSettings.dprCap,
     maxOutputWidth: old.maxTargetWidth ?? defaultSettings.maxOutputWidth,
     actualModeDpiCap: old.actualDpiCap ?? defaultSettings.actualModeDpiCap,
@@ -76,6 +108,7 @@ export function migrateFromV1(old: any): SettingsState {
     
     maxConcurrentRenders: old.maxConcurrentRenders ?? defaultSettings.maxConcurrentRenders,
     visibleMarginPages: old.highRadius ?? old.preloadRange ?? defaultSettings.visibleMarginPages,
+    rawHighResCacheSize: old.rawHighResCacheSize ?? defaultSettings.rawHighResCacheSize,
     
     jpegQuality: old.jpegQuality ?? defaultSettings.jpegQuality,
     pngCompression: old.pngFast ? 'fast' : 'balanced',

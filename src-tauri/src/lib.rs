@@ -19,6 +19,7 @@ pub fn run() {
             media::pdf_open,
             media::pdf_close,
             media::pdf_render_page,
+            media::pdf_render_page_async,
             media::pdf_page_size,
             media::pdf_render_cancel,
             media::pdf_insert_blank,

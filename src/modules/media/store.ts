@@ -26,14 +26,14 @@ export const useMediaStore = defineStore('media', () => {
   const dirty = ref(false)
   const pageSizesPt = ref<Record<number, { widthPt: number; heightPt: number }>>({})
   const inflightCount = ref(0)
-  const queue = ref<Array<{ index: number; targetWidth?: number; dpi?: number; format: 'png'|'jpeg'|'webp'; isLowRes?: boolean }>>([])
+  const queue = ref<Array<{ index: number; targetWidth?: number; dpi?: number; format: 'png'|'jpeg'|'webp'|'raw'; isLowRes?: boolean }>>([])
   const settings = useSettingsStore()
   const pdfInflight = new Set<number>()
   const pageGen = ref<Record<number, number>>({})
   const priorityIndex = ref(0)
-  // 雙快取策略：追蹤高解析度頁面用於 LRU 淘汰
+  // 雙快取策略：追蹤高解析度頁面用於 LRU 淘汰（動態上限）
   const highResPages = new Set<number>()
-  const MAX_HIRES_CACHE = 50 // 提升快取上限（原 30）減少頻繁淘汰
+  const getMaxHiResCache = () => settings.s.useRawForHighRes ? settings.s.rawHighResCacheSize : 50
   let evictCounter = 0  // 批次淘汰計數器
   
   // Batch DOM-reactive updates to next animation frame to reduce jank
@@ -90,7 +90,7 @@ export const useMediaStore = defineStore('media', () => {
     return g
   }
 
-  function enqueueJob(index: number, targetWidth: number | undefined, format: 'png'|'jpeg'|'webp', dpi?: number, isLowRes = false) {
+  function enqueueJob(index: number, targetWidth: number | undefined, format: 'png'|'jpeg'|'webp'|'raw', dpi?: number, isLowRes = false) {
     // 同頁只保留最新需求（無論寬度或 dpi），避免重複入隊
     queue.value = queue.value.filter(j => j.index !== index || j.isLowRes !== isLowRes)
     queue.value.push({ index, targetWidth, dpi, format, isLowRes })
@@ -270,45 +270,84 @@ export const useMediaStore = defineStore('media', () => {
     // 已在 loadDescriptor 中處理 pdfOpen 與第 0 頁
   }
 
-  async function renderPdfPage(index: number, targetWidth?: number, format: 'png'|'jpeg'|'webp' = 'png', _quality?: number, dpi?: number) {
+  async function renderPdfPage(index: number, targetWidth?: number, format?: 'png'|'jpeg'|'webp'|'raw', _quality?: number, dpi?: number) {
     const d = descriptor.value
     if (!d || d.type !== 'pdf') return
     if (index < 0) return
     
     const existing = pdfPages.value[index]
     
-    // 1. 若無低解析度，立即請求（動態降級 DPI）
-    if (!existing?.lowResUrl && !pdfInflight.has(index)) {
+    // 1. 若無低解析度，立即請求（可選關閉低清，直接高清）
+    if (settings.s.enableLowRes && !existing?.lowResUrl && !pdfInflight.has(index)) {
       const size = pageSizesPt.value[index] || await getPageSizePt(index)
       
-      // ⚡ 超大尺寸頁面激進降級（A3/A2 圖片 PDF）
+      // 🔵 從 Settings 讀取低清 DPI（大頁面用專屬設定）
       const isLargePage = size && (size.widthPt > 650 || size.heightPt > 900) // A3: 842×1191pt
-      const lowResDpi = isLargePage ? 48 : 60  // 大頁面降至 48dpi
-      const lowResWidth = size ? Math.floor(size.widthPt * lowResDpi / 72) : 500
+      let baseLowResDpi = isLargePage ? settings.s.largePageLowResDpi : settings.s.lowResDpi
       
-      enqueueJob(index, lowResWidth, 'jpeg', undefined, true)  // 低清固定用 JPEG
+      // 🔵 可選：低清也考慮 DPR（Retina 螢幕適配）
+      if (settings.s.useLowResDpr) {
+        const dpr = Math.min(window.devicePixelRatio || 1, settings.s.dprCap)
+        const dprMultiplier = settings.s.lowResDprMultiplier || 1.0
+        baseLowResDpi = Math.round(baseLowResDpi * Math.min(dpr, dprMultiplier))
+      }
+      
+      const lowResWidth = size ? Math.floor(size.widthPt * baseLowResDpi / 72) : 500
+      
+      enqueueJob(index, lowResWidth, 'raw', undefined, true)  // ⚡ 低清固定用 raw（零編碼）
     }
     
     // 2. 若已有高解析度且解析度足夠則略過
     let requiredWidth: number | null = null
     if (typeof targetWidth === 'number' && targetWidth > 0) {
-      requiredWidth = targetWidth
+      const size = pageSizesPt.value[index] || await getPageSizePt(index)
+      if (size) {
+        // 🎯 從 targetWidth 反推 DPI，並套用 DPI 上限
+        const impliedDpi = (targetWidth * 72) / size.widthPt
+        let cappedDpi = Math.min(impliedDpi, settings.s.highResDpiCap)
+        
+        // ⚡ 大頁面額外限制
+        const isLargePage = size.widthPt > 650 || size.heightPt > 900
+        if (isLargePage) {
+          cappedDpi = Math.min(cappedDpi, 96)
+        }
+        
+        requiredWidth = Math.floor(size.widthPt * cappedDpi / 72)
+      } else {
+        requiredWidth = targetWidth
+      }
     } else if (typeof dpi === 'number' && dpi > 0) {
       const size = pageSizesPt.value[index] || await getPageSizePt(index)
       if (size) {
-        // ⚡ 大頁面限制高清 DPI 上限（避免 6M 像素爆炸）
+        // ⚡ 套用高清 DPI 上限（防卡頓）
+        let cappedDpi = Math.min(dpi, settings.s.highResDpiCap)
+        
+        // ⚡ 大頁面額外限制（雙重保險）
         const isLargePage = size && (size.widthPt > 650 || size.heightPt > 900)
-        const cappedDpi = isLargePage ? Math.min(dpi, 96) : dpi  // 大頁面最高 96dpi
+        if (isLargePage) {
+          cappedDpi = Math.min(cappedDpi, 96)  // 大頁面絕對不超過 96dpi
+        }
+        
         requiredWidth = Math.max(1, Math.floor(size.widthPt * cappedDpi / 72))
       }
     }
     if (existing?.highResUrl && requiredWidth != null && (existing.widthPx >= requiredWidth)) return
     
-    // 3. 請求高解析度（大頁面強制用 JPEG）
+    // 3. 請求高解析度（根據設定選擇格式）
     if (!pdfInflight.has(index)) {
       const size = pageSizesPt.value[index] || await getPageSizePt(index)
       const isLargePage = size && (size.widthPt > 650 || size.heightPt > 900)
-      const finalFormat = isLargePage ? 'jpeg' : format  // 大頁面高清也用 JPEG
+      
+      // 🚀 激進模式：高清也用 raw（零編解碼，記憶體換速度）
+      let finalFormat: 'png'|'jpeg'|'webp'|'raw'
+      if (settings.s.useRawForHighRes) {
+        finalFormat = 'raw'  // 激進：全 raw
+      } else {
+        // 保守：用戶指定格式 or Settings，大頁面強制 JPEG
+        const userFormat = format ?? settings.s.renderFormat
+        finalFormat = isLargePage ? 'jpeg' : userFormat
+      }
+      
       enqueueJob(index, targetWidth, finalFormat, dpi, false)
     }
     
@@ -371,7 +410,8 @@ export const useMediaStore = defineStore('media', () => {
   
   // LRU 淘汰高解析度快取
   function evictHighResCache() {
-    if (highResPages.size <= MAX_HIRES_CACHE) return
+    const maxCache = getMaxHiResCache()
+    if (highResPages.size <= maxCache) return
     
     // 計算每頁與優先索引的距離
     const sorted = Array.from(highResPages).sort((a, b) => {
@@ -381,7 +421,7 @@ export const useMediaStore = defineStore('media', () => {
     })
     
     // 移除距離最遠的頁面，直到符合快取上限
-    const toRemove = sorted.slice(0, sorted.length - MAX_HIRES_CACHE)
+    const toRemove = sorted.slice(0, sorted.length - maxCache)
     for (const idx of toRemove) {
       const page = pdfPages.value[idx]
       if (page?.highResUrl) {
