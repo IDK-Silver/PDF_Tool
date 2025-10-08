@@ -800,20 +800,20 @@ function onImageLoad(e: Event) {
 
     <!-- Tool Bar-->
     <div class="sticky top-0 z-20 bg-background/90 backdrop-blur border-b shrink-0">
-      <div class="px-4 py-2 flex items-center justify-between gap-3 min-w-0">
-        <div class="flex items-center gap-4 pr-4 flex-wrap justify-end min-w-0">
-          <!-- 儲存（即時編輯後可按，亮起） -->
+      <div class="px-4 py-2 flex items-center justify-between gap-4">
+        <!-- 左側：檔案操作 -->
+        <div class="flex items-center gap-3">
           <button @click="onSaveNow" :disabled="saving || !media.dirty"
-            class="rounded border w-8 h-8 flex items-center justify-center"
-            :class="media.dirty ? 'bg-green-600 text-white' : 'bg-white text-gray-400 opacity-60 cursor-not-allowed'"
+            class="rounded border w-8 h-8 flex items-center justify-center transition-colors"
+            :class="media.dirty ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-white text-gray-400 opacity-60 cursor-not-allowed'"
             title="儲存">
             💾
           </button>
+        </div>
 
-          <!-- 即時編輯：其餘工具稍後擴充 -->
-
-          <!-- 頁碼顯示  -->
-          <div class="flex items-center text-sm tabular-nums text-[hsl(var(--muted-foreground))] whitespace-nowrap">
+        <!-- 中間：頁碼導覽 -->
+        <div class="flex items-center gap-3">
+          <div class="flex items-center text-sm tabular-nums text-[hsl(var(--muted-foreground))]">
             <template v-if="isPdf && totalPages > 0">
               <input type="text" inputmode="numeric" pattern="[0-9]*"
                 class="w-16 px-2 py-1 text-sm text-center rounded border bg-white text-[hsl(var(--foreground))]"
@@ -823,29 +823,33 @@ function onImageLoad(e: Event) {
               <span>{{ totalPages }}</span>
             </template>
             <template v-else>
-              <span>0</span>
-              <span class="mx-1">/</span>
-              <span>0</span>
+              <span>0 / 0</span>
             </template>
           </div>
+        </div>
 
-          <!-- 顯示模式按鈕 -->
-          <div class="flex items-center gap-2 shrink-0">
+        <!-- 右側：檢視控制 -->
+        <div class="flex items-center gap-3">
+          <!-- 顯示模式 -->
+          <div class="flex items-center gap-1 bg-white rounded border p-0.5">
             <button @click="setFitMode"
-              class="text-sm rounded border whitespace-nowrap w-16 h-8 flex items-center justify-center"
-              :class="viewMode === 'fit' ? 'bg-[hsl(var(--accent))]' : 'bg-white'">最佳符合</button>
+              class="text-xs rounded px-2 h-7 flex items-center justify-center transition-colors whitespace-nowrap"
+              :class="viewMode === 'fit' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-gray-50'">
+              符合寬度
+            </button>
             <button @click="resetZoom"
-              class="text-sm rounded border whitespace-nowrap w-16 h-8 flex items-center justify-center"
-              :class="viewMode === 'actual' ? 'bg-[hsl(var(--accent))]' : 'bg-white'">實際大小</button>
+              class="text-xs rounded px-2 h-7 flex items-center justify-center transition-colors whitespace-nowrap"
+              :class="viewMode === 'actual' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-gray-50'">
+              實際大小
+            </button>
           </div>
 
-          <!-- 縮放控制按鈕 -->
-          <div class="flex items-center gap-2">
-            <button @click="zoomOut" class="px-2 py-1 text-sm rounded border bg-white">-</button>
-            <div class="min-w-[56px] text-center text-sm">{{ displayZoom }}%</div>
-            <button @click="zoomIn" class="px-2 py-1 text-sm rounded border bg-white">+</button>
+          <!-- 縮放控制 -->
+          <div class="flex items-center gap-1 bg-white rounded border px-1">
+            <button @click="zoomOut" class="w-7 h-7 text-sm rounded hover:bg-gray-50 transition-colors flex items-center justify-center">−</button>
+            <div class="min-w-[48px] text-center text-xs tabular-nums px-1">{{ displayZoom }}%</div>
+            <button @click="zoomIn" class="w-7 h-7 text-sm rounded hover:bg-gray-50 transition-colors flex items-center justify-center">+</button>
           </div>
-
         </div>
       </div>
     </div>
