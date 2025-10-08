@@ -1,6 +1,8 @@
 export type TargetWidthPolicy = 'container' | 'scale'
 
 export interface SettingsState {
+  // File operations
+  deleteBehavior: 'saveAsNew' | 'overwrite'
   // Rendering
   highQualityFormat: 'png' | 'jpeg'
   dprCap: number
@@ -38,6 +40,7 @@ export interface SettingsState {
 }
 
 export const defaultSettings: SettingsState = {
+  deleteBehavior: 'saveAsNew',
   highQualityFormat: 'png',
   dprCap: 2.0,
   highQualityDelayMs: 120,

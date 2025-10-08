@@ -7,17 +7,13 @@ export async function analyzeMedia(path: string): Promise<MediaDescriptor> {
   return res
 }
 
-export async function pdfInfo(path: string): Promise<{ pages: number }> {
-  const res = await invoke<{ pages: number }>('pdf_info', { path })
-  return res
-}
+// 已移除：請改用 pdf_open() 回傳的 pages 或 pdf_page_size()
 
 export async function pdfRenderPage(opts: {
-  docId?: number
+  docId: number
   pageIndex: number
   scale?: number
   dpi?: number
-  rotateDeg?: 0|90|180|270
   format?: 'png'|'webp'|'jpeg'
   targetWidth?: number
   quality?: number
@@ -57,4 +53,18 @@ export async function pdfPageSize(docId: number, pageIndex: number): Promise<Pdf
 
 export async function pdfRenderCancel(docId: number, pageIndex: number, minGen: number): Promise<void> {
   await invoke('pdf_render_cancel', { docId, pageIndex, minGen })
+}
+
+// 舊的以路徑直接刪頁 API 已移除
+
+// New docId-based API for immediate, stateful deletion.
+export async function pdfDeletePagesDoc(opts: { docId: number, indices: number[] }): Promise<{ pages: number }> {
+  const { docId, indices } = opts
+  return invoke<{ pages: number }>('pdf_delete_pages', { docId, indices })
+}
+
+// Save current document to path (overwrite when destPath omitted and overwrite=true)
+export async function pdfSave(opts: { docId: number, destPath?: string, overwrite?: boolean }): Promise<{ path: string, pages: number }> {
+  const { docId, destPath, overwrite } = opts
+  return invoke<{ path: string, pages: number }>('pdf_save', { docId, destPath, overwrite })
 }

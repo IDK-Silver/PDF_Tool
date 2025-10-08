@@ -165,6 +165,26 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
+      <section id="fileops" class="space-y-3">
+        <h2 class="font-medium">檔案操作</h2>
+        <div class="rounded-md border p-4 space-y-3">
+          <div>
+            <label class="block mb-2">刪除頁面時的行為</label>
+            <div class="flex items-center gap-6">
+              <label class="flex items-center gap-2">
+                <input type="radio" value="saveAsNew" v-model="s.deleteBehavior" /> 另存新檔（預設）
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="radio" value="overwrite" v-model="s.deleteBehavior" /> 覆蓋原檔（需確認）
+              </label>
+            </div>
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              「移除此頁」右鍵功能會依此行為執行；建議使用「另存新檔」以降低風險。
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section id="encoding" class="space-y-3">
         <h2 class="font-medium">編碼品質</h2>
         <div class="rounded-md border p-4 space-y-3">

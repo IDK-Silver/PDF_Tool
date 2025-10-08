@@ -16,12 +16,16 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             media::analyze_media,
-            media::pdf_info,
             media::pdf_open,
             media::pdf_close,
             media::pdf_render_page,
             media::pdf_page_size,
-            media::pdf_render_cancel
+            media::pdf_render_cancel,
+            media::pdf_insert_blank,
+            media::pdf_delete_pages,
+            media::pdf_rotate_page,
+            media::pdf_copy_page,
+            media::pdf_save,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

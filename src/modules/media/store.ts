@@ -23,6 +23,7 @@ export const useMediaStore = defineStore('media', () => {
   const pdfFirstPage = ref<PageRender | null>(null)
   const pdfPages = ref<Array<PageRender | null>>([])
   const docId = ref<number | null>(null)
+  const dirty = ref(false)
   const pageSizesPt = ref<Record<number, { widthPt: number; heightPt: number }>>({})
   const inflightCount = ref(0)
   const queue = ref<Array<{ index: number; targetWidth?: number; dpi?: number; format: 'png'|'jpeg'|'webp' }>>([])
@@ -147,6 +148,16 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
+  async function closeDoc() {
+    if (docId.value != null) {
+      try { await pdfClose(docId.value) } catch (_) {}
+      docId.value = null
+    }
+  }
+
+  function markDirty() { dirty.value = true }
+  function clearDirty() { dirty.value = false }
+
   function guessMime(path: string): string {
     const ext = path.split('.').pop()?.toLowerCase()
     switch (ext) {
@@ -229,11 +240,12 @@ export const useMediaStore = defineStore('media', () => {
       if (pdfInflight.has(idx)) continue
       const d = descriptor.value
       if (!d || d.type !== 'pdf') return
+      if (docId.value == null) { continue }
       pdfInflight.add(idx)
       inflightCount.value++
       const q = (job.format === 'jpeg') ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100)
       const gen = nextGen(idx)
-      pdfRenderPage({ docId: docId.value ?? undefined, pageIndex: idx, targetWidth: job.targetWidth, dpi: job.dpi, format: job.format, quality: q, gen })
+      pdfRenderPage({ docId: docId.value!, pageIndex: idx, targetWidth: job.targetWidth, dpi: job.dpi, format: job.format, quality: q, gen })
         .then(p => {
           // 只在世代一致時套用，避免過期回應覆蓋
           if (pageGen.value[idx] === gen) {
@@ -309,6 +321,7 @@ export const useMediaStore = defineStore('media', () => {
     pdfFirstPage,
     pdfPages,
     docId,
+    dirty,
     inflightCount,
     queue,
     // getters
@@ -327,8 +340,11 @@ export const useMediaStore = defineStore('media', () => {
     setPriorityIndex,
     fallbackLoadImageBlob,
     clear,
+    closeDoc,
     pageSizesPt,
     getPageSizePt,
     baseCssWidthAt100,
+    markDirty,
+    clearDirty,
   }
 })

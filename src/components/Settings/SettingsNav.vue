@@ -29,6 +29,7 @@ function go(hash: string) {
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#rendering" @click.prevent="go('#rendering')">渲染策略</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#width" @click.prevent="go('#width')">目標寬度</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#performance" @click.prevent="go('#performance')">效能</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#fileops" @click.prevent="go('#fileops')">檔案操作</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#encoding" @click.prevent="go('#encoding')">編碼品質</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#debug" @click.prevent="go('#debug')">除錯與輔助</a>
   </nav>

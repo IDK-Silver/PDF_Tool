@@ -1931,6 +1931,7 @@ name = "kano_pdf_tool"
 version = "0.1.0"
 dependencies = [
  "image",
+ "indexmap 2.11.4",
  "once_cell",
  "pdfium-render",
  "serde",
