@@ -5,10 +5,13 @@ import { useFileListStore } from '@/modules/filelist/store'
 import { useSettingsStore } from '@/modules/settings/store'
 import { pdfDeletePagesDoc, pdfSave } from '@/modules/media/service'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
+import { useExportSettings } from '@/modules/export/settings'
+import { pdfExportPageImage } from '@/modules/media/service'
 
 const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
+const exportSettings = useExportSettings()
 // 儲存狀態（即時編輯後可點擊）
 const saving = ref(false)
 
@@ -204,6 +207,32 @@ async function deletePageFromMenu(pageIndex: number) {
     media.pageSizesPt = oldSizes as any
     media.descriptor = oldDescriptor as any
     centerIndex.value = oldCenter
+    alert(e?.message || String(e))
+  }
+}
+
+async function exportPageAsImage(pageIndex: number) {
+  closeMenu()
+  const d = media.descriptor
+  const id = media.docId
+  if (!d || d.type !== 'pdf' || id == null) return
+  const fmt = exportSettings.s.imageFormat
+  const dpi = Math.max(24, Math.floor(exportSettings.s.imageDpi))
+  // 推算建議寬度（若可取得頁寬 pt）
+  const sz = await media.getPageSizePt(pageIndex)
+  let targetWidth: number | undefined = undefined
+  if (sz) {
+    targetWidth = Math.max(1, Math.round(sz.widthPt * dpi / 72))
+  }
+  const page1 = String(pageIndex + 1).padStart(3, '0')
+  const base = (d.name?.replace(/\.pdf$/i, '') || 'page') + ` - page ${page1}.${fmt}`
+  const picked = await saveDialog({ defaultPath: base, filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }] })
+  if (!picked) return
+  try {
+    const res = await pdfExportPageImage({ docId: id, pageIndex, destPath: picked, format: fmt, targetWidth, dpi, quality: fmt === 'jpeg' ? exportSettings.s.imageQuality : undefined })
+    // 可選：提示成功
+    // alert(`已匯出：\n${res.path}`)
+  } catch (e: any) {
     alert(e?.message || String(e))
   }
 }
@@ -767,6 +796,10 @@ function onImageLoad(e: Event) {
         <button class="block w-full text-left px-3 py-2 opacity-50 cursor-not-allowed">在此處插入空白頁…（稍後提供）</button>
         <button class="block w-full text-left px-3 py-2 opacity-50 cursor-not-allowed">旋轉 90°（稍後提供）</button>
         <button class="block w-full text-left px-3 py-2 opacity-50 cursor-not-allowed">複製至後方（稍後提供）</button>
+        <div class="border-t my-1"></div>
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="exportPageAsImage(menu.pageIndex)">
+          匯出此頁為圖片…
+        </button>
       </div>
     </teleport>
   </div>

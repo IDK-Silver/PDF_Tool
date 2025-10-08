@@ -26,6 +26,7 @@ pub fn run() {
             media::pdf_rotate_page,
             media::pdf_copy_page,
             media::pdf_save,
+            media::pdf_export_page_image,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -144,6 +144,7 @@ enum PdfRequest {
     Render { args: PdfRenderArgs, reply: mpsc::Sender<Result<PageRender, MediaError>> },
     Size { doc_id: u64, page_index: u32, reply: mpsc::Sender<Result<PdfPageSize, MediaError>> },
     Cancel { doc_id: u64, page_index: u32, min_gen: u64, reply: mpsc::Sender<Result<(), MediaError>> },
+    ExportImage { doc_id: u64, page_index: u32, dest_path: String, format: String, target_width: Option<u32>, dpi: Option<f32>, quality: Option<u8>, reply: mpsc::Sender<Result<(String, u32, u32, String), MediaError>> },
     InsertBlank { doc_id: u64, index: u32, width_pt: f32, height_pt: f32, reply: mpsc::Sender<Result<usize, MediaError>> },
     DeletePages { doc_id: u64, indices: Vec<u32>, reply: mpsc::Sender<Result<usize, MediaError>> },
     RotatePage { doc_id: u64, index: u32, rotate_deg: u16, reply: mpsc::Sender<Result<(), MediaError>> },
@@ -220,6 +221,17 @@ pub fn init_pdf_worker() {
                     let entry = min_gen.entry(key).or_insert(0);
                     if g > *entry { *entry = g; }
                     let _ = reply.send(Ok(()));
+                }
+                Ok(PdfRequest::ExportImage { doc_id, page_index, dest_path, format, target_width, dpi, quality, reply }) => {
+                    let res = (|| -> Result<(String, u32, u32, String), MediaError> {
+                        let doc = docs.get(&doc_id).ok_or_else(|| MediaError::new("not_found", format!("未知的 docId: {}", doc_id)))?;
+                        let fmt = match format.to_lowercase().as_str() { "jpeg" | "jpg" => "jpeg", _ => "png" };
+                        let args = PdfRenderArgs { doc_id, page_index, scale: None, dpi, format: Some(fmt.to_string()), target_width, quality, r#gen: None };
+                        let page = render_page_for_document(doc, &args)?;
+                        std::fs::write(&dest_path, &page.image_bytes).map_err(|e| MediaError::new("io_error", format!("寫入影像失敗: {e}")))?;
+                        Ok((dest_path, page.width_px, page.height_px, page.format))
+                    })();
+                    let _ = reply.send(res);
                 }
                 Ok(PdfRequest::InsertBlank { doc_id, index, width_pt, height_pt, reply }) => {
                     let res = (|| -> Result<usize, MediaError> {
@@ -543,6 +555,10 @@ pub struct PdfPagesResult { pub pages: usize }
 #[serde(rename_all = "camelCase")]
 pub struct PdfSaveResult { pub path: String, pub pages: usize }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfExportImageResult { pub path: String, pub width_px: u32, pub height_px: u32, pub format: String }
+
 #[tauri::command]
 pub fn pdf_insert_blank(doc_id: u64, index: u32, width_pt: f32, height_pt: f32) -> Result<PdfPagesResult, MediaError> {
     let (rtx, rrx) = mpsc::channel();
@@ -601,4 +617,17 @@ pub fn pdf_save(doc_id: u64, dest_path: Option<String>, overwrite: Option<bool>)
         .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
     let (path, pages) = rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))??;
     Ok(PdfSaveResult { path, pages })
+}
+
+#[tauri::command]
+pub fn pdf_export_page_image(doc_id: u64, page_index: u32, dest_path: String, format: Option<String>, target_width: Option<u32>, dpi: Option<f32>, quality: Option<u8>) -> Result<PdfExportImageResult, MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    let fmt = format.unwrap_or_else(|| "png".to_string());
+    WORKER_TX
+        .lock().unwrap().as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::ExportImage { doc_id, page_index, dest_path, format: fmt, target_width, dpi, quality, reply: rtx })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    let (path, w, h, fmt) = rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))??;
+    Ok(PdfExportImageResult { path, width_px: w, height_px: h, format: fmt })
 }

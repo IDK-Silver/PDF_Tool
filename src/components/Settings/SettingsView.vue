@@ -2,6 +2,7 @@
 import { useSettingsStore } from '@/modules/settings/store'
 import { onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import ExportSettings from './parts/ExportSettings.vue'
 const settings = useSettingsStore()
 const s = settings.s
 const route = useRoute()
@@ -165,8 +166,8 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="fileops" class="space-y-3">
-        <h2 class="font-medium">檔案操作</h2>
+  <section id="fileops" class="space-y-3">
+    <h2 class="font-medium">檔案操作</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
             <label class="block mb-2">刪除頁面時的行為</label>
@@ -183,7 +184,14 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             </p>
           </div>
         </div>
-      </section>
+  </section>
+
+  <section id="export" class="space-y-3">
+    <h2 class="font-medium">匯出設定</h2>
+    <div class="rounded-md border p-4 space-y-3">
+      <ExportSettings />
+    </div>
+  </section>
 
       <section id="encoding" class="space-y-3">
         <h2 class="font-medium">編碼品質</h2>
@@ -216,9 +224,9 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <footer class="text-xs text-[hsl(var(--muted-foreground))] py-4">
-        詳細說明請見 <code>docs/settings.md</code>。
-      </footer>
+  <footer class="text-xs text-[hsl(var(--muted-foreground))] py-4">
+    詳細說明請見 <code>docs/settings.md</code>。
+  </footer>
     </div>
   </div>
 </template>

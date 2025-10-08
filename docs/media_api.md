@@ -110,6 +110,16 @@
 
 ---
 
+### pdf_export_page_image
+- 用途：將指定頁匯出為圖片檔。
+- 參數：`{ docId: number, pageIndex: number, destPath: string, format?: 'png'|'jpeg', targetWidth?: number, dpi?: number, quality?: number }`
+  - `format` 預設 `png`；若為 `jpeg` 可提供 `quality`（1–100）。
+  - `targetWidth` 與 `dpi` 擇一提供，優先 `targetWidth`；若皆省略則以預設寬度輸出。
+- 回傳：`{ path: string, widthPx: number, heightPx: number, format: string }`
+- 失敗：`not_found`, `invalid_input`, `io_error`
+
+---
+
 ## 行為與約定
 
 - 單位與索引

@@ -68,3 +68,18 @@ export async function pdfSave(opts: { docId: number, destPath?: string, overwrit
   const { docId, destPath, overwrite } = opts
   return invoke<{ path: string, pages: number }>('pdf_save', { docId, destPath, overwrite })
 }
+
+export async function pdfExportPageImage(opts: {
+  docId: number
+  pageIndex: number
+  destPath: string
+  format?: 'png'|'jpeg'
+  targetWidth?: number
+  dpi?: number
+  quality?: number
+}): Promise<{ path: string, widthPx: number, heightPx: number, format: string }> {
+  const { docId, pageIndex, destPath, format, targetWidth, dpi, quality } = opts
+  return invoke<{ path: string, widthPx: number, heightPx: number, format: string }>('pdf_export_page_image', {
+    docId, pageIndex, destPath, format, targetWidth, dpi, quality
+  })
+}
