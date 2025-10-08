@@ -394,32 +394,40 @@ async function commitPageInput() {
   pageInput.value = String(clamped)
   if (clamped !== currentPage.value) await gotoPage(clamped)
 }
-function currentCenterCssWidth(): number {
-  const d = media.descriptor
-  if (!d) return containerW.value || 800
-  if (viewMode.value === 'fit') return containerW.value || 800
-  if (d.type === 'pdf') {
-    const base = media.baseCssWidthAt100(centerIndex.value)
-    if (base) return Math.max(50, base * (zoomApplied.value / 100))
-    return containerW.value || 800
-  }
-  if (d.type === 'image') {
-    return Math.max(50, imageNaturalWidth.value ? imageNaturalWidth.value * (zoomApplied.value / 100) : (containerW.value || 800))
-  }
-  return containerW.value || 800
-}
 
+// 使用穩定的估算高度，避免因中心頁變化而跳動
 const estimateHeight = computed(() => {
-  const anyEl = [...refs.keys()][0] as HTMLElement | undefined
-  const cw = currentCenterCssWidth() || Math.max(200, anyEl?.clientWidth || 800)
-  return Math.round(cw * 1.414) + 24 // A4 比例 + 頁間 padding 預估
+  const d = media.descriptor
+  const cW = containerW.value || 800
+  
+  // 基於容器寬度和當前檢視模式計算穩定的估算高度
+  if (viewMode.value === 'fit') {
+    // fit 模式：使用容器寬度
+    return Math.round(cW * 1.414) + 24 // A4 比例 + 頁間 padding
+  } else {
+    // actual 模式：使用穩定的基準寬度
+    const baseWidth = d?.type === 'pdf' 
+      ? (media.baseCssWidthAt100(0) || cW) // 使用第一頁作為基準，更穩定
+      : (imageNaturalWidth.value || cW)
+    const actualWidth = Math.max(50, baseWidth * (zoomApplied.value / 100))
+    return Math.round(actualWidth * 1.414) + Math.round(40 * (zoomApplied.value / 100))
+  }
 })
 const renderStart = computed(() => Math.max(0, centerIndex.value - renderRadius.value))
 const renderEnd = computed(() => Math.min((totalPages.value || 1) - 1, centerIndex.value + renderRadius.value))
 const renderCount = computed(() => Math.max(0, renderEnd.value - renderStart.value + 1))
 const renderIndices = computed(() => Array.from({ length: renderCount.value }, (_, i) => renderStart.value + i))
-const topSpacerHeight = computed(() => renderStart.value * estimateHeight.value)
-const bottomSpacerHeight = computed(() => Math.max(0, (totalPages.value - renderEnd.value - 1)) * estimateHeight.value)
+
+// 使用固定的估算高度避免 spacer 跳動
+const topSpacerHeight = computed(() => {
+  const h = estimateHeight.value
+  return renderStart.value * h
+})
+const bottomSpacerHeight = computed(() => {
+  const h = estimateHeight.value
+  const tp = totalPages.value
+  return Math.max(0, (tp - renderEnd.value - 1)) * h
+})
 
 let io: IntersectionObserver | null = null
 let resizeObs: ResizeObserver | null = null
@@ -440,6 +448,11 @@ let preloadingPaused = false
 const visibleStart = ref(0)
 const visibleEnd = ref(0)
 let scrollRaf = 0 as number | 0
+let lastScrollTime = 0
+let isScrolling = false
+let scrollEndTimer: number | null = null
+let scrollAnchor: { index: number, offset: number } | null = null
+
 function updateVisibleByScroll() {
   const root = scrollRootEl.value
   const tp = totalPages.value || 0
@@ -449,6 +462,10 @@ function updateVisibleByScroll() {
   const mid = top + root.clientHeight / 2
   const last = tp - 1
   const ci = Math.max(0, Math.min(last, Math.floor(mid / est)))
+  
+  // 儲存滾動錨點，用於防止跳動
+  scrollAnchor = { index: ci, offset: top - (ci * est) }
+  
   centerIndex.value = ci
   media.setPriorityIndex(ci)
   // 可見區域 + 小範圍 overscan
@@ -456,15 +473,46 @@ function updateVisibleByScroll() {
   const end = Math.min(last, Math.floor((top + root.clientHeight) / est) + HIREZ_OVERSCAN)
   visibleStart.value = start
   visibleEnd.value = end
-  // 強制限制隊列在可見區間附近
-  media.enforceVisibleRange(start, end)
+  // 強制限制隊列在可見區間附近（降低頻率）
+  const now = Date.now()
+  if (now - lastScrollTime > 100) {
+    media.enforceVisibleRange(start, end)
+    lastScrollTime = now
+  }
 }
+
 function onScroll() {
   if (scrollRaf) return
+  
+  // 標記正在滾動，暫停預載
+  if (!isScrolling) {
+    isScrolling = true
+    if (settings.s.pausePreloadOnInteraction) {
+      preloadingPaused = true
+      cancelIdle()
+    }
+  }
+  
+  // 清除滾動結束計時器
+  if (scrollEndTimer) {
+    clearTimeout(scrollEndTimer)
+  }
+  
   scrollRaf = requestAnimationFrame(() => {
     scrollRaf = 0 as any
     updateVisibleByScroll()
-    scheduleHiResRerender()
+    
+    // 滾動時不立即觸發高清重繪，等待滾動結束
+    if (scrollEndTimer) clearTimeout(scrollEndTimer)
+    scrollEndTimer = window.setTimeout(() => {
+      isScrolling = false
+      if (settings.s.pausePreloadOnInteraction) {
+        preloadingPaused = false
+        schedulePreloadStart()
+      }
+      scheduleHiResRerender()
+      scrollEndTimer = null
+    }, 150) // 150ms 無滾動後才觸發高清重繪
   })
 }
 
@@ -620,7 +668,9 @@ onMounted(() => {
       const w = scrollRootEl.value?.clientWidth || 0
       if (w > 0) containerW.value = w
       scheduleUpdateFitPercent()
-      scheduleHiResRerender()
+      // Resize 時不需要立即高清重繪，延遲處理
+      if (hiResTimer) clearTimeout(hiResTimer)
+      scheduleHiResRerender(300)
     })
     resizeObs.observe(scrollRootEl.value)
   }
@@ -650,6 +700,7 @@ onMounted(() => {
   })
   // 預載互動暫停/恢復
   const root = scrollRootEl.value
+  // 移除重複的 scroll 監聽，因為主要的 onScroll 已經處理暫停邏輯
   const pausePreload = () => {
     if (!settings.s.pausePreloadOnInteraction) return
     preloadingPaused = true
@@ -667,30 +718,52 @@ onMounted(() => {
   }
   root?.addEventListener('wheel', pausePreload, { passive: true })
   root?.addEventListener('pointerdown', pausePreload, { passive: true })
-  root?.addEventListener('scroll', pausePreload, { passive: true })
+  // 移除 scroll 事件監聽，避免重複處理
   root?.addEventListener('pointerup', resumePreload, { passive: true })
   // 初始排程背景預加載（延遲）
   schedulePreloadStart()
 })
 
-// 當估高變動較大時，嘗試以比例補償 scrollTop，降低「突然位移」感受
+// 當估高變動較大時，使用滾動錨點補償，降低「突然位移」感受
+// 但在滾動時禁用，避免跳動
 const lastEstimate = ref<number | null>(null)
 watch(estimateHeight, (h) => {
   const root = scrollRootEl.value
   const prev = lastEstimate.value
   lastEstimate.value = h
+  
+  // 滾動時不調整 scrollTop，避免跳動
+  if (isScrolling) return
+  
   if (!root || !prev || !Number.isFinite(prev) || !Number.isFinite(h)) return
   const ratio = h / prev
-  if (Math.abs(ratio - 1) < 0.03) return // 小於 3% 的變化忽略
-  const top = root.scrollTop
-  const newTop = Math.max(0, Math.round(top * ratio))
-  if (Number.isFinite(newTop)) root.scrollTop = newTop
+  if (Math.abs(ratio - 1) < 0.05) return // 提高閾值到 5%，減少觸發頻率
+  
+  // 使用滾動錨點來更精確地計算新位置
+  if (scrollAnchor) {
+    const { index, offset } = scrollAnchor
+    const newTop = Math.max(0, Math.round(index * h + offset * ratio))
+    if (Number.isFinite(newTop) && Math.abs(newTop - root.scrollTop) > 5) {
+      root.scrollTop = newTop
+    }
+  } else {
+    // 回退到簡單比例補償
+    const top = root.scrollTop
+    const newTop = Math.max(0, Math.round(top * ratio))
+    if (Number.isFinite(newTop) && Math.abs(newTop - top) > 5) {
+      root.scrollTop = newTop
+    }
+  }
 })
 
 onBeforeUnmount(() => {
   io?.disconnect()
   refs.clear()
   cancelIdle()
+  if (scrollEndTimer) clearTimeout(scrollEndTimer)
+  if (hiResTimer) clearTimeout(hiResTimer)
+  if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer)
+  if (fitTimer) clearTimeout(fitTimer)
   scrollRootEl.value?.removeEventListener('scroll', onScroll)
   try { resizeObs?.disconnect() } catch { }
 })
@@ -855,8 +928,8 @@ function onImageLoad(e: Event) {
     </div>
 
     <div ref="scrollRootEl" class="flex-1 overflow-y-scroll overflow-x-hidden scrollbar-visible overscroll-y-contain"
-      style="scrollbar-gutter: stable;">
-      <div class="p-4 space-y-3">
+      style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: auto;">
+      <div class="p-4 space-y-3" style="will-change: contents;">
 
         <div v-if="media.loading">讀取中…</div>
 
