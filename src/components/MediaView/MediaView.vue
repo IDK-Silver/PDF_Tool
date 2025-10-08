@@ -15,12 +15,6 @@ const exportSettings = useExportSettings()
 // 儲存狀態（即時編輯後可點擊）
 const saving = ref(false)
 
-function withTimeout<T>(p: Promise<T>, ms: number, label = '作業') {
-  return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error(`${label}逾時（${ms}ms）`)), ms)
-    p.then(v => { clearTimeout(t); resolve(v) }, e => { clearTimeout(t); reject(e) })
-  })
-}
 // 移除舊的標記刪除流程，改為即時操作
 
 const totalPages = computed(() => media.descriptor?.pages ?? 0)
@@ -162,8 +156,16 @@ function onPageContextMenu(idx: number, e: MouseEvent) {
   menu.value = { open: true, x: e.clientX, y: e.clientY, pageIndex: idx, aboveHalf }
   exportMenu.value.open = false
 }
-function closeMenu() { menu.value.open = false }
-function onGlobalClick() { if (menu.value.open) closeMenu() }
+function closeMenu() { menu.value.open = false; exportMenu.value.open = false }
+function onGlobalClick(e: MouseEvent) {
+  // 檢查點擊是否在選單區域內
+  const target = e.target as HTMLElement
+  const inMainMenu = target.closest('[data-context-menu]')
+  const inExportMenu = target.closest('[data-export-submenu]')
+  if (!inMainMenu && !inExportMenu && menu.value.open) {
+    closeMenu()
+  }
+}
 function onEsc(e: KeyboardEvent) { if (e.key === 'Escape') closeMenu() }
 onMounted(() => { window.addEventListener('click', onGlobalClick, { capture: true }); window.addEventListener('keydown', onEsc) })
 onBeforeUnmount(() => { window.removeEventListener('click', onGlobalClick, { capture: true }); window.removeEventListener('keydown', onEsc) })
@@ -238,9 +240,8 @@ async function exportPageAsImage(pageIndex: number) {
   const picked = await saveDialog({ defaultPath: base, filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }] })
   if (!picked) return
   try {
-    const res = await pdfExportPageImage({ docId: id, pageIndex, destPath: picked, format: fmt, targetWidth, dpi, quality: fmt === 'jpeg' ? exportSettings.s.imageQuality : undefined })
+    await pdfExportPageImage({ docId: id, pageIndex, destPath: picked, format: fmt, targetWidth, dpi, quality: fmt === 'jpeg' ? exportSettings.s.imageQuality : undefined })
     // 可選：提示成功
-    // alert(`已匯出：\n${res.path}`)
   } catch (e: any) {
     alert(e?.message || String(e))
   }
@@ -896,19 +897,19 @@ function onImageLoad(e: Event) {
       </div>
     </div>
     <teleport to="body">
-      <div v-if="menu.open" class="fixed z-[2000] bg-white border rounded shadow text-sm min-w-[220px]"
-        :style="{ left: menu.x + 'px', top: menu.y + 'px' }" @click.stop>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="deletePageFromMenu(menu.pageIndex)">
-          刪除此頁（即時）
+      <div v-if="menu.open" data-context-menu class="fixed z-[2000] bg-white border rounded shadow text-sm w-max"
+        :style="{ left: menu.x + 'px', top: menu.y + 'px' }">
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="deletePageFromMenu(menu.pageIndex)">
+          刪除此頁
         </button>
         <div class="border-t my-1"></div>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="insertBlankQuick(menu.pageIndex)">
-          插入空白頁（預設，{{ menu.aboveHalf ? '之前' : '之後' }}）
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="insertBlankQuick(menu.pageIndex)">
+          插入空白頁（{{ menu.aboveHalf ? '之前' : '之後' }}）
         </button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="rotatePlus90(menu.pageIndex)">旋轉 +90°</button>
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="rotatePlus90(menu.pageIndex)">旋轉 +90°</button>
         <div class="border-t my-1"></div>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] flex items-center justify-between"
-          @pointerenter="(ev:any) => { cancelExportClose(); const r=(ev.currentTarget as HTMLElement).getBoundingClientRect(); exportMenu.value={ open: true, x: Math.round(r.right + 4), y: Math.round(r.top) } }"
+        <button class="w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] flex items-center justify-between gap-4 whitespace-nowrap"
+          @pointerenter="(ev:any) => { cancelExportClose(); const r=(ev.currentTarget as HTMLElement).getBoundingClientRect(); exportMenu.x = Math.round(r.right + 2); exportMenu.y = Math.round(r.top); exportMenu.open = true }"
           @pointerleave="() => scheduleExportClose(180)">
           <span>匯出</span>
           <span class="opacity-60">▸</span>
@@ -916,11 +917,11 @@ function onImageLoad(e: Event) {
       </div>
     </teleport>
     <teleport to="body">
-      <div v-if="exportMenu.open" class="fixed z-[2010] bg-white border rounded shadow text-sm min-w-[180px]"
+      <div v-if="exportMenu.open" data-export-submenu class="fixed z-[2010] bg-white border rounded shadow text-sm w-max"
         :style="{ left: exportMenu.x + 'px', top: exportMenu.y + 'px' }"
         @pointerenter="cancelExportClose" @pointerleave="() => scheduleExportClose(120)">
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="exportPageAsImage(menu.pageIndex)">圖片…</button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="exportPageAsPdf(menu.pageIndex)">PDF…</button>
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="exportPageAsImage(menu.pageIndex)">圖片…</button>
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="exportPageAsPdf(menu.pageIndex)">PDF…</button>
       </div>
     </teleport>
   </div>
