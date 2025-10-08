@@ -3,6 +3,7 @@ import { useSettingsStore } from '@/modules/settings/store'
 import { onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ExportSettings from './parts/ExportSettings.vue'
+import InsertDefaults from './parts/InsertDefaults.vue'
 const settings = useSettingsStore()
 const s = settings.s
 const route = useRoute()
@@ -184,6 +185,13 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             </p>
           </div>
         </div>
+  </section>
+
+  <section id="insert-defaults" class="space-y-3">
+    <h2 class="font-medium">插入空白頁預設</h2>
+    <div class="rounded-md border p-4 space-y-3">
+      <InsertDefaults />
+    </div>
   </section>
 
   <section id="export" class="space-y-3">

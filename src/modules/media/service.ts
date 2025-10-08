@@ -83,3 +83,23 @@ export async function pdfExportPageImage(opts: {
     docId, pageIndex, destPath, format, targetWidth, dpi, quality
   })
 }
+
+export async function pdfExportPagePdf(opts: { docId: number, pageIndex: number, destPath: string }): Promise<{ path: string }> {
+  const { docId, pageIndex, destPath } = opts
+  return invoke<{ path: string }>('pdf_export_page_pdf', { docId, pageIndex, destPath })
+}
+
+export async function pdfInsertBlank(opts: { docId: number, index: number, widthPt: number, heightPt: number}): Promise<{ pages: number }> {
+  const { docId, index, widthPt, heightPt } = opts
+  return invoke<{ pages: number }>('pdf_insert_blank', { docId, index, widthPt, heightPt })
+}
+
+export async function pdfRotatePage(opts: { docId: number, index: number, rotateDeg: 0|90|180|270 }): Promise<void> {
+  const { docId, index, rotateDeg } = opts
+  await invoke('pdf_rotate_page', { docId, index, rotateDeg })
+}
+
+export async function pdfRotatePageRelative(opts: { docId: number, index: number, deltaDeg: number }): Promise<number> {
+  const { docId, index, deltaDeg } = opts
+  return invoke<number>('pdf_rotate_page_relative', { docId, index, deltaDeg })
+}

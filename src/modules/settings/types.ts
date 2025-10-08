@@ -3,6 +3,11 @@ export type TargetWidthPolicy = 'container' | 'scale'
 export interface SettingsState {
   // File operations
   deleteBehavior: 'saveAsNew' | 'overwrite'
+  // Insert defaults
+  insertPaper: 'A4' | 'Letter' | 'A5' | 'Legal' | 'Tabloid' | 'Custom'
+  insertOrientation: 'portrait' | 'landscape'
+  insertCustomWidthMm: number
+  insertCustomHeightMm: number
   // Rendering
   highQualityFormat: 'png' | 'jpeg'
   dprCap: number
@@ -41,6 +46,10 @@ export interface SettingsState {
 
 export const defaultSettings: SettingsState = {
   deleteBehavior: 'saveAsNew',
+  insertPaper: 'A4',
+  insertOrientation: 'portrait',
+  insertCustomWidthMm: 210, // A4 width mm
+  insertCustomHeightMm: 297, // A4 height mm
   highQualityFormat: 'png',
   dprCap: 2.0,
   highQualityDelayMs: 120,

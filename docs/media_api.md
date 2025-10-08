@@ -120,6 +120,14 @@
 
 ---
 
+### pdf_export_page_pdf
+- 用途：將指定頁匯出為單頁 PDF 檔（保留向量內容，不修改原文件）。
+- 參數：`{ docId: number, pageIndex: number, destPath: string }`
+- 回傳：`{ path: string }`
+- 失敗：`not_found`, `invalid_input`, `io_error`
+
+---
+
 ## 行為與約定
 
 - 單位與索引

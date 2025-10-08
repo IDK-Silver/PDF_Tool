@@ -3,10 +3,10 @@ import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { useMediaStore } from '@/modules/media/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useSettingsStore } from '@/modules/settings/store'
-import { pdfDeletePagesDoc, pdfSave } from '@/modules/media/service'
+import { pdfDeletePagesDoc, pdfSave, pdfInsertBlank, pdfRotatePageRelative } from '@/modules/media/service'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useExportSettings } from '@/modules/export/settings'
-import { pdfExportPageImage } from '@/modules/media/service'
+import { pdfExportPageImage, pdfExportPagePdf } from '@/modules/media/service'
 
 const media = useMediaStore()
 const settings = useSettingsStore()
@@ -148,10 +148,19 @@ watch([() => media.descriptor?.path, currentPage, isPdf], ([p, cp, pdf]) => {
 })
 
 // Context menu
-const menu = ref<{ open: boolean; x: number; y: number; pageIndex: number }>({ open: false, x: 0, y: 0, pageIndex: -1 })
+const menu = ref<{ open: boolean; x: number; y: number; pageIndex: number; aboveHalf: boolean }>({ open: false, x: 0, y: 0, pageIndex: -1, aboveHalf: true })
+// Export submenu (hover)
+const exportMenu = ref<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
+let exportCloseTimer: number | null = null
+function scheduleExportClose(delay = 150) { if (exportCloseTimer) clearTimeout(exportCloseTimer); exportCloseTimer = window.setTimeout(() => { exportMenu.value.open = false }, delay) }
+function cancelExportClose() { if (exportCloseTimer) { clearTimeout(exportCloseTimer); exportCloseTimer = null } }
 function onPageContextMenu(idx: number, e: MouseEvent) {
   if (!isPdf.value) return
-  menu.value = { open: true, x: e.clientX, y: e.clientY, pageIndex: idx }
+  const target = (e.currentTarget as HTMLElement) || (e.target as HTMLElement)
+  const rect = target?.getBoundingClientRect()
+  const aboveHalf = rect ? (e.clientY < (rect.top + rect.height / 2)) : true
+  menu.value = { open: true, x: e.clientX, y: e.clientY, pageIndex: idx, aboveHalf }
+  exportMenu.value.open = false
 }
 function closeMenu() { menu.value.open = false }
 function onGlobalClick() { if (menu.value.open) closeMenu() }
@@ -232,6 +241,107 @@ async function exportPageAsImage(pageIndex: number) {
     const res = await pdfExportPageImage({ docId: id, pageIndex, destPath: picked, format: fmt, targetWidth, dpi, quality: fmt === 'jpeg' ? exportSettings.s.imageQuality : undefined })
     // 可選：提示成功
     // alert(`已匯出：\n${res.path}`)
+  } catch (e: any) {
+    alert(e?.message || String(e))
+  }
+}
+
+// Insert blank (defaults)
+function mmToPt(mm: number): number { return Math.round(mm * 72 / 25.4) }
+function insertDefaultDimsPt(): { widthPt: number; heightPt: number } {
+  const p = settings.s.insertPaper
+  const orient = settings.s.insertOrientation
+  // base mm sizes (portrait)
+  let wmm = 210, hmm = 297
+  if (p === 'Letter') { wmm = 215.9; hmm = 279.4 }
+  else if (p === 'A5') { wmm = 148; hmm = 210 }
+  else if (p === 'Legal') { wmm = 215.9; hmm = 355.6 }
+  else if (p === 'Tabloid') { wmm = 279.4; hmm = 431.8 }
+  else if (p === 'Custom') { wmm = Math.max(1, settings.s.insertCustomWidthMm); hmm = Math.max(1, settings.s.insertCustomHeightMm) }
+  let wpt = mmToPt(wmm), hpt = mmToPt(hmm)
+  if (orient === 'landscape') { const t = wpt; wpt = hpt; hpt = t }
+  return { widthPt: wpt, heightPt: hpt }
+}
+
+async function insertBlankAt(pageIndex: number, before: boolean) {
+  closeMenu()
+  const d = media.descriptor
+  const id = media.docId
+  if (!d || d.type !== 'pdf' || id == null) return
+  const { widthPt, heightPt } = insertDefaultDimsPt()
+  const insertIndex = before ? pageIndex : (pageIndex + 1)
+  // optimistic update
+  const oldPagesArr = media.pdfPages.slice()
+  const oldDescriptor = { ...d }
+  const oldSizes: Record<number, { widthPt: number; heightPt: number }> = { ...media.pageSizesPt }
+  const oldCenter = centerIndex.value
+  try {
+    media.pdfPages.splice(insertIndex, 0, null)
+    // shift sizes >= insertIndex by +1
+    const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
+    for (const k of Object.keys(oldSizes)) {
+      const idx = Number(k)
+      const v = oldSizes[idx]
+      if (idx < insertIndex) shifted[idx] = v
+      else shifted[idx + 1] = v
+    }
+    shifted[insertIndex] = { widthPt, heightPt }
+    media.pageSizesPt = shifted as any
+    media.descriptor = { ...d, pages: Math.max(0, (d.pages || 0) + 1) } as any
+    if (insertIndex <= oldCenter) centerIndex.value = oldCenter + 1
+    media.markDirty()
+    // backend
+    const res = await pdfInsertBlank({ docId: id, index: insertIndex, widthPt, heightPt })
+    media.descriptor = { ...media.descriptor!, pages: res.pages } as any
+    // re-render affected range
+    pendingIdx.clear();
+    const tp = res.pages
+    for (let i = insertIndex; i < Math.min(tp, insertIndex + 6); i++) pendingIdx.add(i)
+    scheduleHiResRerender(0)
+  } catch (e: any) {
+    media.pdfPages = oldPagesArr as any
+    media.pageSizesPt = oldSizes as any
+    media.descriptor = oldDescriptor as any
+    centerIndex.value = oldCenter
+    alert(e?.message || String(e))
+  }
+}
+
+async function insertBlankQuick(pageIndex: number) {
+  const before = !!menu.value.aboveHalf
+  await insertBlankAt(pageIndex, before)
+}
+
+// Rotate: relative +90
+async function rotatePlus90(pageIndex: number) {
+  closeMenu()
+  const d = media.descriptor
+  const id = media.docId
+  if (!d || d.type !== 'pdf' || id == null) return
+  try {
+    await pdfRotatePageRelative({ docId: id, index: pageIndex, deltaDeg: 90 })
+    media.markDirty()
+    try { media.cancelInflight(pageIndex) } catch {}
+    media.pdfPages[pageIndex] = null as any
+    pendingIdx.add(pageIndex)
+    scheduleHiResRerender(0)
+  } catch (e: any) {
+    alert(e?.message || String(e))
+  }
+}
+
+async function exportPageAsPdf(pageIndex: number) {
+  closeMenu()
+  const d = media.descriptor
+  const id = media.docId
+  if (!d || d.type !== 'pdf' || id == null) return
+  const page1 = String(pageIndex + 1).padStart(3, '0')
+  const base = (d.name?.replace(/\.pdf$/i, '') || 'page') + ` - page ${page1}.pdf`
+  const picked = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+  if (!picked) return
+  try {
+    await pdfExportPagePdf({ docId: id, pageIndex, destPath: picked })
+    // 可選：提示已匯出成功
   } catch (e: any) {
     alert(e?.message || String(e))
   }
@@ -786,20 +896,31 @@ function onImageLoad(e: Event) {
       </div>
     </div>
     <teleport to="body">
-      <div v-if="menu.open" class="fixed z-[2000] bg-white border rounded shadow text-sm min-w-[200px]"
+      <div v-if="menu.open" class="fixed z-[2000] bg-white border rounded shadow text-sm min-w-[220px]"
         :style="{ left: menu.x + 'px', top: menu.y + 'px' }" @click.stop>
         <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="deletePageFromMenu(menu.pageIndex)">
           刪除此頁（即時）
         </button>
         <div class="border-t my-1"></div>
-        <!-- 預留未來操作：插入、旋轉、複製 -->
-        <button class="block w-full text-left px-3 py-2 opacity-50 cursor-not-allowed">在此處插入空白頁…（稍後提供）</button>
-        <button class="block w-full text-left px-3 py-2 opacity-50 cursor-not-allowed">旋轉 90°（稍後提供）</button>
-        <button class="block w-full text-left px-3 py-2 opacity-50 cursor-not-allowed">複製至後方（稍後提供）</button>
-        <div class="border-t my-1"></div>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="exportPageAsImage(menu.pageIndex)">
-          匯出此頁為圖片…
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="insertBlankQuick(menu.pageIndex)">
+          插入空白頁（預設，{{ menu.aboveHalf ? '之前' : '之後' }}）
         </button>
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="rotatePlus90(menu.pageIndex)">旋轉 +90°</button>
+        <div class="border-t my-1"></div>
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] flex items-center justify-between"
+          @pointerenter="(ev:any) => { cancelExportClose(); const r=(ev.currentTarget as HTMLElement).getBoundingClientRect(); exportMenu.value={ open: true, x: Math.round(r.right + 4), y: Math.round(r.top) } }"
+          @pointerleave="() => scheduleExportClose(180)">
+          <span>匯出</span>
+          <span class="opacity-60">▸</span>
+        </button>
+      </div>
+    </teleport>
+    <teleport to="body">
+      <div v-if="exportMenu.open" class="fixed z-[2010] bg-white border rounded shadow text-sm min-w-[180px]"
+        :style="{ left: exportMenu.x + 'px', top: exportMenu.y + 'px' }"
+        @pointerenter="cancelExportClose" @pointerleave="() => scheduleExportClose(120)">
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="exportPageAsImage(menu.pageIndex)">圖片…</button>
+        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))]" @click="exportPageAsPdf(menu.pageIndex)">PDF…</button>
       </div>
     </teleport>
   </div>
