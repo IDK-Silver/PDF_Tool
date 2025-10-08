@@ -220,9 +220,9 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">同時間最多渲染頁面數，避免 CPU 滿載（預設 2）。</p>
             </div>
             <div>
-              <label class="block mb-1">可見區域擴展頁數</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.visibleMarginPages" @input="s.visibleMarginPages = number($event, s.visibleMarginPages)" />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">以目前頁為中心，向上下預載的頁數（預設 0）。</p>
+              <label class="block mb-1">高清預載範圍</label>
+              <input class="w-full border rounded px-2 py-1" :value="s.highResOverscan" @input="s.highResOverscan = number($event, s.highResOverscan)" />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">向可見區域上下預載的頁數（預設 2）。</p>
             </div>
           </div>
         </div>

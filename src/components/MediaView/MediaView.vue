@@ -23,9 +23,20 @@ function getRenderQuality() {
   const fmt = settings.s.renderFormat
   if (fmt === 'jpeg') return settings.s.jpegQuality
   if (fmt === 'webp') return 85  // WebP 預設品質 85（最佳平衡）
-  // PNG: fast=25, balanced=50, best=100
-  const comp = settings.s.pngCompression
-  return comp === 'fast' ? 25 : comp === 'best' ? 100 : 50
+  return 75  // PNG 無 quality，回傳預設值
+}
+// 取得頁面顯示的 URL（尊重 enableLowRes 設定）
+function getPageDisplayUrl(idx: number): string | undefined {
+  const page = media.pdfPages[idx]
+  if (!page) return undefined
+  
+  // 優先使用高清
+  if (page.highResUrl) return page.highResUrl
+  
+  // 如果啟用低清渲染，才回退到低清
+  if (settings.s.enableLowRes && page.lowResUrl) return page.lowResUrl
+  
+  return undefined
 }
 
 // 移除舊的標記刪除流程，改為即時操作
@@ -99,29 +110,24 @@ function setFitMode() {
   }
 }
 const centerIndex = ref(0)
+// 用於 toolbar 顯示的實時頁碼（滾動時立即更新）
+const displayPageIndex = ref(0)
 // 減少一次掛載的頁面數量（固定小範圍 overscan，與 highRadius 解耦）
 const RENDER_OVERSCAN = 3
-const HIREZ_OVERSCAN = 2
 const renderRadius = computed(() => RENDER_OVERSCAN)
 const currentPage = computed(() => {
   const tp = totalPages.value
   if (!tp || tp <= 0) return 0
-  return Math.min(tp, Math.max(1, centerIndex.value + 1))
+  // 使用 displayPageIndex 讓 toolbar 即時響應
+  return Math.min(tp, Math.max(1, displayPageIndex.value + 1))
 })
-
-// 可編輯的頁碼輸入（僅在有 totalPages 時顯示）
-const pageInput = ref<string>('1')
-const pageEditing = ref(false)
-watch(currentPage, (p) => {
-  if (!pageEditing.value) pageInput.value = String(p || 1)
-})
-onMounted(() => { pageInput.value = String(currentPage.value || 1) })
 
 async function gotoPage(page: number) {
   const tp = totalPages.value || 0
   if (tp <= 0) return
   const idx = Math.min(tp - 1, Math.max(0, Math.floor(page) - 1))
   centerIndex.value = idx
+  displayPageIndex.value = idx // 同步顯示頁碼
   await nextTick()
   const root = scrollRootEl.value
   const el = root?.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
@@ -396,18 +402,6 @@ async function onSaveNow() {
 
 // 移除舊的存檔套用刪除流程（已改為即時操作）
 
-async function commitPageInput() {
-  pageEditing.value = false
-  const tp = totalPages.value || 0
-  if (tp <= 0) return
-  const raw = (pageInput.value || '').replace(/[^0-9]/g, '')
-  const n = parseInt(raw, 10)
-  if (!Number.isFinite(n)) { pageInput.value = String(currentPage.value || 1); return }
-  const clamped = Math.max(1, Math.min(tp, n))
-  pageInput.value = String(clamped)
-  if (clamped !== currentPage.value) await gotoPage(clamped)
-}
-
 // 使用穩定的估算高度，避免因中心頁變化而跳動
 const estimateHeight = computed(() => {
   const d = media.descriptor
@@ -419,25 +413,42 @@ const estimateHeight = computed(() => {
     return Math.round(cW * 1.414) + 24 // A4 比例 + 頁間 padding
   } else {
     // actual 模式：使用穩定的基準寬度
+    // 嘗試使用已知頁面中的最大高度，避免跨頁位移
+    let maxHeight = 0
+    if (d?.type === 'pdf') {
+      const sizes = media.pageSizesPt
+      for (const size of Object.values(sizes)) {
+        const h = Math.round(size.heightPt * (zoomApplied.value / 100) * 96 / 72) + Math.round(40 * (zoomApplied.value / 100))
+        if (h > maxHeight) maxHeight = h
+      }
+    }
+    
+    // 如果有已知頁面尺寸，使用最大值；否則回退到第一頁估算
+    if (maxHeight > 0) return maxHeight
+    
     const baseWidth = d?.type === 'pdf' 
-      ? (media.baseCssWidthAt100(0) || cW) // 使用第一頁作為基準，更穩定
+      ? (media.baseCssWidthAt100(0) || cW) // 使用第一頁作為基準
       : (imageNaturalWidth.value || cW)
     const actualWidth = Math.max(50, baseWidth * (zoomApplied.value / 100))
     return Math.round(actualWidth * 1.414) + Math.round(40 * (zoomApplied.value / 100))
   }
 })
+
+// 使用穩定的估算高度，避免滾動時突變導致跳動
+const stableEstimateHeight = ref(0)
+
 const renderStart = computed(() => Math.max(0, centerIndex.value - renderRadius.value))
 const renderEnd = computed(() => Math.min((totalPages.value || 1) - 1, centerIndex.value + renderRadius.value))
 const renderCount = computed(() => Math.max(0, renderEnd.value - renderStart.value + 1))
 const renderIndices = computed(() => Array.from({ length: renderCount.value }, (_, i) => renderStart.value + i))
 
-// 使用固定的估算高度避免 spacer 跳動
+// 使用穩定的估算高度避免 spacer 跳動
 const topSpacerHeight = computed(() => {
-  const h = estimateHeight.value
+  const h = stableEstimateHeight.value
   return renderStart.value * h
 })
 const bottomSpacerHeight = computed(() => {
-  const h = estimateHeight.value
+  const h = stableEstimateHeight.value
   const tp = totalPages.value
   return Math.max(0, (tp - renderEnd.value - 1)) * h
 })
@@ -457,37 +468,52 @@ let zoomDebounceTimer: number | null = null
 const visibleStart = ref(0)
 const visibleEnd = ref(0)
 let scrollRaf = 0 as number | 0
-let lastScrollTime = 0
 let isScrolling = false
 let scrollEndTimer: number | null = null
-let scrollAnchor: { index: number, offset: number } | null = null
 
 function updateVisibleByScroll() {
   const root = scrollRootEl.value
   const tp = totalPages.value || 0
   if (!root || tp <= 0) return
+  
+  // 🎯 使用 DOM 實際位置判斷中心頁（精確方案）
+  const viewportTop = root.scrollTop
+  const viewportMid = viewportTop + root.clientHeight / 2
+  
+  // 遍歷已渲染的頁面元素，找出最接近視窗中心的頁面
+  let closestIndex = displayPageIndex.value // 預設保持當前值
+  let minDistance = Infinity
+  
+  root.querySelectorAll('[data-pdf-page]').forEach((el) => {
+    const idx = Number((el as HTMLElement).dataset.pdfPage)
+    if (!Number.isFinite(idx)) return
+    
+    const rect = el.getBoundingClientRect()
+    const scrollOffset = root.scrollTop
+    const elTop = rect.top + scrollOffset - root.getBoundingClientRect().top
+    const elMid = elTop + rect.height / 2
+    const distance = Math.abs(elMid - viewportMid)
+    
+    if (distance < minDistance) {
+      minDistance = distance
+      closestIndex = idx
+    }
+  })
+  
+  // 滾動時只更新 displayPageIndex（用於 toolbar 顯示）
+  // centerIndex 保持不變，避免觸發 renderStart/renderEnd 重新計算
+  displayPageIndex.value = closestIndex
+  media.setPriorityIndex(closestIndex)
+  
+  // 可見區域計算（使用估算值，僅用於 overscan）
   const est = Math.max(1, estimateHeight.value)
-  const top = root.scrollTop
-  const mid = top + root.clientHeight / 2
-  const last = tp - 1
-  const ci = Math.max(0, Math.min(last, Math.floor(mid / est)))
-  
-  // 儲存滾動錨點，用於防止跳動
-  scrollAnchor = { index: ci, offset: top - (ci * est) }
-  
-  centerIndex.value = ci
-  media.setPriorityIndex(ci)
-  // 可見區域 + 小範圍 overscan
-  const start = Math.max(0, Math.floor(top / est) - HIREZ_OVERSCAN)
-  const end = Math.min(last, Math.floor((top + root.clientHeight) / est) + HIREZ_OVERSCAN)
+  const overscan = settings.s.highResOverscan
+  const start = Math.max(0, Math.floor(viewportTop / est) - overscan)
+  const end = Math.min(tp - 1, Math.floor((viewportTop + root.clientHeight) / est) + overscan)
   visibleStart.value = start
   visibleEnd.value = end
-  // 強制限制隊列在可見區間附近（降低頻率）
-  const now = Date.now()
-  if (now - lastScrollTime > 100) {
-    media.enforceVisibleRange(start, end)
-    lastScrollTime = now
-  }
+  // 每次滾動都更新可見範圍（移除節流限制，由 RAF 保護即可）
+  media.enforceVisibleRange(start, end)
 }
 
 function onScroll() {
@@ -508,15 +534,17 @@ function onScroll() {
     if (scrollEndTimer) clearTimeout(scrollEndTimer)
     scrollEndTimer = window.setTimeout(() => {
       isScrolling = false
+      // 滾動停止後，同步 centerIndex 到 displayPageIndex
+      centerIndex.value = displayPageIndex.value
       scheduleHiResRerender()
       scrollEndTimer = null
-    }, 500) // 500ms 無滾動後才觸發高清重繪（大檔案需更長穩定）
+    }, 200) // 200ms 無滾動後才觸發高清重繪（更快響應）
   })
 }
 
 function scheduleHiResRerender(delay?: number) {
   if (hiResTimer) { clearTimeout(hiResTimer); hiResTimer = null }
-  const ms = typeof delay === 'number' ? delay : 1200  // 延長至 1200ms（大檔案需更長緩衝）
+  const ms = typeof delay === 'number' ? delay : 300  // 預設 300ms（快速響應與效能平衡）
   hiResTimer = window.setTimeout(() => {
     // 僅針對「可見 + 小範圍 overscan」發出高清重繪請求
     const tp = totalPages.value || 0
@@ -546,13 +574,13 @@ function scheduleProcess() {
     const list = Array.from(pendingIdx)
     pendingIdx.clear()
     rafScheduled = false
-    // 依據可見區間 + visibleMarginPages 計算實際要處理的集合
+    // 依據可見區間 + highResOverscan 計算實際要處理的集合
     const tp = totalPages.value || 0
     if (tp <= 0) return
     const center = centerIndex.value
-    const margin = settings.s.visibleMarginPages
-    const start = Math.max(0, Math.min(visibleStart.value, center - margin))
-    const end = Math.min(tp - 1, Math.max(visibleEnd.value, center + margin))
+    const overscan = settings.s.highResOverscan
+    const start = Math.max(0, Math.min(visibleStart.value, center - overscan))
+    const end = Math.min(tp - 1, Math.max(visibleEnd.value, center + overscan))
     media.enforceVisibleRange(start, end)
     const allowed = new Set<number>()
     for (let i = start; i <= end; i++) allowed.add(i)
@@ -589,15 +617,16 @@ onMounted(() => {
         containerW.value = w
         scheduleUpdateFitPercent()
         
-        // ⚡ 只在視窗「顯著變大」時才重新渲染（避免無效重繪）
-        // fit 模式下，容器變小不需要重繪（既有解析度已足夠）
-        // 容器變大超過 20% 才重繪（避免微調觸發）
-        const shouldRerender = viewMode.value === 'fit' && w > oldW && (w - oldW) / oldW > 0.2
+        // ⚡ 視窗大小變化超過 10% 時重新渲染（支援放大與縮小）
+        // fit 模式：容器變大需要更高解析度，變小可降低解析度節省資源
+        // actual 模式：容器變化不影響 DPI，但仍需更新可見範圍
+        const sizeDiff = Math.abs(w - oldW)
+        const shouldRerender = oldW > 0 && (sizeDiff / oldW) > 0.1
         
         if (shouldRerender && w !== lastResizeWidth) {
           lastResizeWidth = w
           if (hiResTimer) clearTimeout(hiResTimer)
-          scheduleHiResRerender(800)  // 延長至 800ms（避免調整中頻繁觸發）
+          scheduleHiResRerender(500)  // 視窗調整後 500ms 重渲染（平衡響應速度與效能）
         }
       }
     })
@@ -629,36 +658,29 @@ onMounted(() => {
   })
 })
 
+// 設置穩定估算高度的 watch（需要在 isScrolling 定義後）
+watch(estimateHeight, (newVal) => {
+  // 滾動時不更新穩定值，避免 spacer 高度變化導致跳動
+  if (!isScrolling) {
+    stableEstimateHeight.value = newVal
+  }
+}, { immediate: true }) // 立即執行一次以初始化
+
+// 滾動停止後更新到最新值
+watch(() => isScrolling, (scrolling) => {
+  if (!scrolling) {
+    stableEstimateHeight.value = estimateHeight.value
+  }
+})
+
 // 當估高變動較大時，使用滾動錨點補償，降低「突然位移」感受
 // 但在滾動時禁用，避免跳動
+// ⚠️ 完全禁用自動調整功能，因為會導致滾動跳頁問題
 const lastEstimate = ref<number | null>(null)
 watch(estimateHeight, (h) => {
-  const root = scrollRootEl.value
-  const prev = lastEstimate.value
   lastEstimate.value = h
-  
-  // 滾動時不調整 scrollTop，避免跳動
-  if (isScrolling) return
-  
-  if (!root || !prev || !Number.isFinite(prev) || !Number.isFinite(h)) return
-  const ratio = h / prev
-  if (Math.abs(ratio - 1) < 0.05) return // 提高閾值到 5%，減少觸發頻率
-  
-  // 使用滾動錨點來更精確地計算新位置
-  if (scrollAnchor) {
-    const { index, offset } = scrollAnchor
-    const newTop = Math.max(0, Math.round(index * h + offset * ratio))
-    if (Number.isFinite(newTop) && Math.abs(newTop - root.scrollTop) > 5) {
-      root.scrollTop = newTop
-    }
-  } else {
-    // 回退到簡單比例補償
-    const top = root.scrollTop
-    const newTop = Math.max(0, Math.round(top * ratio))
-    if (Number.isFinite(newTop) && Math.abs(newTop - top) > 5) {
-      root.scrollTop = newTop
-    }
-  }
+  // 禁用自動 scrollTop 調整，避免跳頁
+  // 現代瀏覽器已有良好的滾動錨定機制，不需要手動調整
 })
 
 onBeforeUnmount(() => {
@@ -789,10 +811,7 @@ function onImageLoad(e: Event) {
         <div class="flex items-center gap-3">
           <div class="flex items-center text-sm tabular-nums text-[hsl(var(--muted-foreground))]">
             <template v-if="isPdf && totalPages > 0">
-              <input type="text" inputmode="numeric" pattern="[0-9]*"
-                class="w-16 px-2 py-1 text-sm text-center rounded border bg-white text-[hsl(var(--foreground))]"
-                v-model="pageInput" @focus="pageEditing = true" @blur="commitPageInput"
-                @keydown.enter.prevent="commitPageInput" aria-label="頁碼" />
+              <span class="text-[hsl(var(--foreground))]">{{ currentPage }}</span>
               <span class="mx-1">/</span>
               <span>{{ totalPages }}</span>
             </template>
@@ -861,14 +880,14 @@ function onImageLoad(e: Event) {
                 <div
                   :class="['bg-white rounded-md shadow border border-neutral-200 relative', viewMode === 'fit' ? 'overflow-hidden' : 'overflow-visible']"
                   :style="pageCardStyle(idx)">
-                  <!-- 漸進式顯示：優先 highResUrl，回退 lowResUrl，最後才 placeholder -->
+                  <!-- 漸進式顯示：優先 highResUrl，enableLowRes 啟用時才回退 lowResUrl -->
                   <img 
-                    v-if="media.pdfPages[idx]?.highResUrl || media.pdfPages[idx]?.lowResUrl" 
-                    :src="media.pdfPages[idx]?.highResUrl || media.pdfPages[idx]?.lowResUrl"
+                    v-if="getPageDisplayUrl(idx)" 
+                    :src="getPageDisplayUrl(idx)"
                     :alt="`page-${idx}`" 
                     :class="[
                       viewMode === 'fit' ? 'w-full block' : 'block',
-                      media.pdfPages[idx]?.isLowRes && 'blur-[0.3px]'
+                      media.pdfPages[idx]?.isLowRes && settings.s.enableLowRes && 'blur-[0.3px]'
                     ]"
                     :style="imgTransformStyle()" 
                     decoding="async" 

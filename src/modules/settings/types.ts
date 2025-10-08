@@ -29,7 +29,7 @@ export interface SettingsState {
 
   // === 效能控制 ===
   maxConcurrentRenders: number      // 最大並行渲染數
-  visibleMarginPages: number        // 可見區上下預渲染頁數
+  highResOverscan: number           // 🎯 高清預載範圍（向上下預載的頁數，預設 2）
   rawHighResCacheSize: number       // 🚀 Raw 高清快取上限（激進模式用，預設 10）
 
   // === 編碼品質 ===
@@ -69,7 +69,7 @@ export const defaultSettings: SettingsState = {
 
   // 效能控制
   maxConcurrentRenders: 2,    // 激進降至 2（大檔案單頁 500ms）
-  visibleMarginPages: 0,      // 只渲染可見頁面（無預載）
+  highResOverscan: 2,         // 🎯 高清預載範圍（向上下預載 2 頁）
   rawHighResCacheSize: 10,    // 🚀 Raw 模式快取（10 頁約 30-120MB）
 
   // 編碼品質
@@ -107,7 +107,7 @@ export function migrateFromV1(old: any): SettingsState {
     zoomDebounceMs: old.highQualityDelayMs ?? defaultSettings.zoomDebounceMs,
     
     maxConcurrentRenders: old.maxConcurrentRenders ?? defaultSettings.maxConcurrentRenders,
-    visibleMarginPages: old.highRadius ?? old.preloadRange ?? defaultSettings.visibleMarginPages,
+    highResOverscan: old.highResOverscan ?? old.highRadius ?? old.preloadRange ?? defaultSettings.highResOverscan,
     rawHighResCacheSize: old.rawHighResCacheSize ?? defaultSettings.rawHighResCacheSize,
     
     jpegQuality: old.jpegQuality ?? defaultSettings.jpegQuality,
