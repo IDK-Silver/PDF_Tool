@@ -59,10 +59,13 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">輸出格式</label>
               <select v-model="s.renderFormat" class="w-full border rounded px-2 py-1">
-                <option value="png">PNG（無損，文字清晰）</option>
+                <option value="webp">WebP（推薦：檔案最小，文字清晰）</option>
+                <option value="png">PNG（無損，檔案較大）</option>
                 <option value="jpeg">JPEG（有損，速度較快）</option>
               </select>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">直接輸出單一格式，使用雙快取策略（低清+高清）。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                WebP 比 PNG 小 30%，比 JPEG 清晰，是雙快取策略的最佳選擇。
+              </p>
             </div>
             <div>
               <label class="block mb-1">DPR 上限</label>

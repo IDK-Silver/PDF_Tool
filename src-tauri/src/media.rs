@@ -543,7 +543,14 @@ fn render_page_for_document(
     let out_fmt = if fmt == "webp" { "webp" } else if fmt == "jpeg" || fmt == "jpg" { "jpeg" } else { "png" };
 
     let mut buf: Vec<u8> = Vec::new();
-    if out_fmt == "png" {
+    if out_fmt == "webp" {
+        // 使用 webp crate 支援有損編碼
+        let rgba = img.to_rgba8();
+        let quality = args.quality.unwrap_or(85).clamp(1, 100) as f32;
+        let encoder = webp::Encoder::from_rgba(&rgba, rgba.width(), rgba.height());
+        let encoded = encoder.encode(quality);
+        buf = encoded.to_vec();
+    } else if out_fmt == "png" {
         use image::codecs::png::{CompressionType, FilterType, PngEncoder};
         use image::ColorType;
         let rgba = img.to_rgba8();

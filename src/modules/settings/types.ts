@@ -11,11 +11,11 @@ export interface SettingsState {
   insertCustomHeightMm: number
 
   // === 渲染品質 ===
-  renderFormat: 'png' | 'jpeg'      // 統一格式（移除 highQuality 前綴）
-  dprCap: number                     // DPR 上限（避免超高清輸出）
-  maxOutputWidth: number             // 最大輸出寬度（px）
-  actualModeDpiCap: number          // 實際大小模式 DPI 上限
-  zoomDebounceMs: number            // 縮放停止後重渲染延遲
+  renderFormat: 'png' | 'jpeg' | 'webp'  // 統一格式（新增 WebP 支援）
+  dprCap: number                          // DPR 上限（避免超高清輸出）
+  maxOutputWidth: number                  // 最大輸出寬度（px）
+  actualModeDpiCap: number               // 實際大小模式 DPI 上限
+  zoomDebounceMs: number                 // 縮放停止後重渲染延遲
 
   // === 效能控制 ===
   maxConcurrentRenders: number      // 最大並行渲染數
@@ -40,19 +40,19 @@ export const defaultSettings: SettingsState = {
   insertCustomHeightMm: 297,
 
   // 渲染品質
-  renderFormat: 'png',
+  renderFormat: 'webp',
   dprCap: 2.0,
   maxOutputWidth: 1920,
   actualModeDpiCap: 144,
-  zoomDebounceMs: 180,
+  zoomDebounceMs: 300,
 
   // 效能控制
-  maxConcurrentRenders: 3,
-  visibleMarginPages: 2,
+  maxConcurrentRenders: 2,    // 激進降至 2（大檔案單頁 500ms）
+  visibleMarginPages: 0,      // 只渲染可見頁面（無預載）
 
   // 編碼品質
-  jpegQuality: 82,
-  pngCompression: 'fast',
+  jpegQuality: 85,
+  pngCompression: 'balanced',
 
   // 開發工具
   devPerfOverlay: false,

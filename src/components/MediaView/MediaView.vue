@@ -22,6 +22,7 @@ function getRenderFormat() {
 function getRenderQuality() {
   const fmt = settings.s.renderFormat
   if (fmt === 'jpeg') return settings.s.jpegQuality
+  if (fmt === 'webp') return 85  // WebP 預設品質 85（最佳平衡）
   // PNG: fast=25, balanced=50, best=100
   const comp = settings.s.pngCompression
   return comp === 'fast' ? 25 : comp === 'best' ? 100 : 50
@@ -503,19 +504,19 @@ function onScroll() {
     scrollRaf = 0 as any
     updateVisibleByScroll()
     
-    // 滾動時不立即觸發高清重繪，等待滾動結束
+    // 滾動時不立即觸發高清重繪，等待滾動完全停止
     if (scrollEndTimer) clearTimeout(scrollEndTimer)
     scrollEndTimer = window.setTimeout(() => {
       isScrolling = false
       scheduleHiResRerender()
       scrollEndTimer = null
-    }, 150) // 150ms 無滾動後才觸發高清重繪
+    }, 500) // 500ms 無滾動後才觸發高清重繪（大檔案需更長穩定）
   })
 }
 
 function scheduleHiResRerender(delay?: number) {
   if (hiResTimer) { clearTimeout(hiResTimer); hiResTimer = null }
-  const ms = typeof delay === 'number' ? delay : (settings.s.zoomDebounceMs || 120)
+  const ms = typeof delay === 'number' ? delay : 1200  // 延長至 1200ms（大檔案需更長緩衝）
   hiResTimer = window.setTimeout(() => {
     // 僅針對「可見 + 小範圍 overscan」發出高清重繪請求
     const tp = totalPages.value || 0
@@ -580,13 +581,25 @@ onMounted(() => {
   updateVisibleByScroll()
   // 容器寬度監控（避免在 scroll handler 中頻繁量測）
   if (scrollRootEl.value && 'ResizeObserver' in window) {
+    let lastResizeWidth = 0
     resizeObs = new ResizeObserver(() => {
       const w = scrollRootEl.value?.clientWidth || 0
-      if (w > 0) containerW.value = w
-      scheduleUpdateFitPercent()
-      // Resize 時不需要立即高清重繪，延遲處理
-      if (hiResTimer) clearTimeout(hiResTimer)
-      scheduleHiResRerender(300)
+      if (w > 0) {
+        const oldW = containerW.value
+        containerW.value = w
+        scheduleUpdateFitPercent()
+        
+        // ⚡ 只在視窗「顯著變大」時才重新渲染（避免無效重繪）
+        // fit 模式下，容器變小不需要重繪（既有解析度已足夠）
+        // 容器變大超過 20% 才重繪（避免微調觸發）
+        const shouldRerender = viewMode.value === 'fit' && w > oldW && (w - oldW) / oldW > 0.2
+        
+        if (shouldRerender && w !== lastResizeWidth) {
+          lastResizeWidth = w
+          if (hiResTimer) clearTimeout(hiResTimer)
+          scheduleHiResRerender(800)  // 延長至 800ms（避免調整中頻繁觸發）
+        }
+      }
     })
     resizeObs.observe(scrollRootEl.value)
   }
