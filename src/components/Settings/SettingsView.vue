@@ -57,12 +57,12 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         <div class="rounded-md border p-4 space-y-3">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="block mb-1">輸出格式（單階段）</label>
-              <select v-model="s.highQualityFormat" class="w-full border rounded px-2 py-1">
+              <label class="block mb-1">輸出格式</label>
+              <select v-model="s.renderFormat" class="w-full border rounded px-2 py-1">
                 <option value="png">PNG（無損，文字清晰）</option>
                 <option value="jpeg">JPEG（有損，速度較快）</option>
               </select>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">不再使用低清→高清兩段；一律直接輸出單一格式。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">直接輸出單一格式，使用雙快取策略（低清+高清）。</p>
             </div>
             <div>
               <label class="block mb-1">DPR 上限</label>
@@ -70,40 +70,24 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制裝置像素比對輸出寬度的放大，平衡清晰度與性能（預設 2.0）。</p>
             </div>
             <div>
-              <label class="block mb-1">高清重渲染延遲（ms）</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.highQualityDelayMs" @input="s.highQualityDelayMs = number($event, s.highQualityDelayMs)" />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放停止後延遲再以新倍率請求高清渲染，預設 120ms。</p>
+              <label class="block mb-1">縮放防抖延遲（ms）</label>
+              <input class="w-full border rounded px-2 py-1" :value="s.zoomDebounceMs" @input="s.zoomDebounceMs = number($event, s.zoomDebounceMs)" />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放停止後延遲再以新倍率請求高清渲染，預設 180ms。</p>
             </div>
             <div>
-              <label class="block mb-1">最佳符合最大輸出寬度（px）</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.maxTargetWidth" @input="s.maxTargetWidth = number($event, s.maxTargetWidth)" />
+              <label class="block mb-1">最大輸出寬度（px）</label>
+              <input class="w-full border rounded px-2 py-1" :value="s.maxOutputWidth" @input="s.maxOutputWidth = number($event, s.maxOutputWidth)" />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">避免超寬容器時輸出位圖過大（預設 1920）。</p>
             </div>
             <div>
               <label class="block mb-1">實際大小 DPI 上限</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.actualDpiCap" @input="s.actualDpiCap = number($event, s.actualDpiCap)" />
+              <input class="w-full border rounded px-2 py-1" :value="s.actualModeDpiCap" @input="s.actualModeDpiCap = number($event, s.actualModeDpiCap)" />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">避免高倍縮放時 DPI 過大（預設 144）。</p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="width" class="space-y-3">
-        <h2 class="font-medium">目標寬度</h2>
-        <div class="rounded-md border p-4 space-y-3">
-          <div class="flex items-center gap-4">
-            <label class="flex items-center gap-1">
-              <input type="radio" value="container" v-model="s.targetWidthPolicy" /> 容器寬
-            </label>
-            <label class="flex items-center gap-1">
-              <input type="radio" value="scale" v-model="s.targetWidthPolicy" /> 基準寬 × 倍率
-            </label>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="block mb-1">基準寬</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.baseWidth" @input="s.baseWidth = number($event, s.baseWidth)" />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">當選擇「基準寬 × 倍率」時使用，預設 1200。</p>
+              <label class="block mb-1">可見區域擴展頁數</label>
+              <input class="w-full border rounded px-2 py-1" :value="s.visibleMarginPages" @input="s.visibleMarginPages = number($event, s.visibleMarginPages)" />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">以目前頁為中心，向上下預載的頁數（預設 2）。</p>
             </div>
           </div>
         </div>
@@ -116,52 +100,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">最大並行渲染</label>
               <input class="w-full border rounded px-2 py-1" :value="s.maxConcurrentRenders" @input="s.maxConcurrentRenders = number($event, s.maxConcurrentRenders)" />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">同時間最多渲染頁面數，避免 CPU 滿載。</p>
-            </div>
-            <div>
-              <label class="block mb-1">預抓距離（px）</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.prefetchPx" @input="s.prefetchPx = number($event, s.prefetchPx)" />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">可視區域上下的預抓距離（越大越早渲染）。</p>
-            </div>
-            <div>
-              <label class="block mb-1">預抓半徑（高品質）</label>
-              <input class="w-full border rounded px-2 py-1" :value="s.highRadius" @input="s.highRadius = number($event, s.highRadius)" />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">以目前頁為中心，向上下預抓的頁數（預設 2）。</p>
-            </div>
-            <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label class="flex items-center gap-2">
-                <input type="checkbox" v-model="s.preloadAllPages" /> 前景穩定後背景預加載全部頁面
-              </label>
-              <div>
-                <label class="block mb-1">預加載頁數（中心半徑）</label>
-                <input class="w-full border rounded px-2 py-1" :disabled="s.preloadAllPages" :value="s.preloadRange" @input="s.preloadRange = number($event, s.preloadRange)" />
-                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">非「全部」時，以當前頁為中心預先加載的範圍。</p>
-              </div>
-              <div>
-                <label class="block mb-1">預加載延遲（ms）</label>
-                <input class="w-full border rounded px-2 py-1" :value="s.preloadIdleMs" @input="s.preloadIdleMs = number($event, s.preloadIdleMs)" />
-                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">捲動或縮放穩定後延遲觸發背景預加載。</p>
-              </div>
-            </div>
-            <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label class="block mb-1">預加載批次大小</label>
-                <input class="w-full border rounded px-2 py-1" :value="s.preloadBatchSize" @input="s.preloadBatchSize = number($event, s.preloadBatchSize)" />
-                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">每次閒置處理的頁數（建議 2–3）。</p>
-              </div>
-              <div>
-                <label class="block mb-1">預加載啟動延遲（ms）</label>
-                <input class="w-full border rounded px-2 py-1" :value="s.preloadStartDelayMs" @input="s.preloadStartDelayMs = number($event, s.preloadStartDelayMs)" />
-                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">載入穩定後多久開始背景預載（建議 500）。</p>
-              </div>
-              <label class="flex items-center gap-2 mt-6 md:mt-0">
-                <input type="checkbox" v-model="s.pausePreloadOnInteraction" /> 互動時暫停預載（滾動、拖曳）
-              </label>
-              <div>
-                <label class="block mb-1">預載 DPR 上限</label>
-                <input class="w-full border rounded px-2 py-1" :value="s.preloadDprCap" @input="s.preloadDprCap = number($event, s.preloadDprCap)" />
-                <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">背景預載時使用較保守的 DPR（預設 1.0）。</p>
-              </div>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">同時間最多渲染頁面數，避免 CPU 滿載（預設 4）。</p>
             </div>
           </div>
         </div>
@@ -211,11 +150,13 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">越高越清晰（檔案越大）。建議 80–85。</p>
             </div>
             <div>
-              <label class="block mb-1">PNG 快速壓縮</label>
-              <div class="flex items-center gap-2">
-                <input type="checkbox" v-model="s.pngFast" /> 啟用（較快、檔較大）
-              </div>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">關閉時採較高壓縮（較慢、檔較小）。</p>
+              <label class="block mb-1">PNG 壓縮等級</label>
+              <select v-model="s.pngCompression" class="w-full border rounded px-2 py-1">
+                <option value="fast">快速（檔案較大）</option>
+                <option value="balanced">平衡</option>
+                <option value="best">最佳（檔案最小，較慢）</option>
+              </select>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">平衡速度與檔案大小。</p>
             </div>
           </div>
         </div>

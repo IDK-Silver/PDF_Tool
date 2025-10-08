@@ -451,6 +451,10 @@ const visibleIdx = new Set<number>()
 const containerW = ref(0)
 let hiResTimer: number | null = null
 let zoomDebounceTimer: number | null = null
+let preloadStartTimer: number | null = null
+let idleHandle: number | null = null
+let preloadQueue: number[] = []
+let preloadingPaused = false
 
 // 以 scrollTop 估算可見區域（O(1)）；避免逐一量測 DOM
 const visibleStart = ref(0)
@@ -492,7 +496,14 @@ function updateVisibleByScroll() {
 function onScroll() {
   if (scrollRaf) return
   
-  isScrolling = true
+  // 標記正在滾動，暫停預載
+  if (!isScrolling) {
+    isScrolling = true
+    if (settings.s.pausePreloadOnInteraction) {
+      preloadingPaused = true
+      cancelIdle()
+    }
+  }
   
   // 清除滾動結束計時器
   if (scrollEndTimer) {
@@ -507,6 +518,10 @@ function onScroll() {
     if (scrollEndTimer) clearTimeout(scrollEndTimer)
     scrollEndTimer = window.setTimeout(() => {
       isScrolling = false
+      if (settings.s.pausePreloadOnInteraction) {
+        preloadingPaused = false
+        schedulePreloadStart()
+      }
       scheduleHiResRerender()
       scrollEndTimer = null
     }, 150) // 150ms 無滾動後才觸發高清重繪
@@ -532,6 +547,87 @@ function scheduleHiResRerender(delay?: number) {
   }, ms)
 }
 
+function cancelIdle() {
+  if (idleHandle != null) {
+    const ric = (window as any).cancelIdleCallback as ((id: number) => void) | undefined
+    if (ric) ric(idleHandle)
+    else clearTimeout(idleHandle)
+    idleHandle = null
+  }
+}
+
+function buildPreloadQueue() {
+  preloadQueue = []
+  const tp = totalPages.value || 0
+  if (tp <= 0) return
+  if (settings.s.preloadAllPages) {
+    for (let i = 0; i < tp; i++) preloadQueue.push(i)
+  } else {
+    const r = Math.max(0, settings.s.preloadRange)
+    // 以中心為基準交錯擴散：c, c+1, c-1, c+2, c-2, ...
+    const c = Math.min(tp - 1, Math.max(0, centerIndex.value))
+    preloadQueue.push(c)
+    for (let k = 1; k <= r; k++) {
+      const a = c + k
+      const b = c - k
+      if (a < tp) preloadQueue.push(a)
+      if (b >= 0) preloadQueue.push(b)
+    }
+    // 去重後保序
+    const seen = new Set<number>()
+    preloadQueue = preloadQueue.filter(i => (seen.has(i) ? false : (seen.add(i), true)))
+  }
+}
+
+function schedulePreloadStart() {
+  if (!totalPages.value || media.loading) return
+  if (preloadStartTimer) { clearTimeout(preloadStartTimer); preloadStartTimer = null }
+  preloadStartTimer = window.setTimeout(() => {
+    buildPreloadQueue()
+    scheduleIdle()
+  }, Math.max(0, settings.s.preloadStartDelayMs || 0))
+}
+
+function scheduleIdle() {
+  cancelIdle()
+  if (preloadingPaused) return
+  const ric = (window as any).requestIdleCallback as ((cb: any, opts?: { timeout: number }) => number) | undefined
+  const cb = (deadline: any) => processPreloadBatch(deadline)
+  if (ric) {
+    const timeout = Math.max(1000, settings.s.preloadIdleMs || 0)
+    idleHandle = ric(cb, { timeout })
+  } else {
+    idleHandle = window.setTimeout(() => cb({ timeRemaining: () => 12, didTimeout: true }), 16)
+  }
+}
+
+function processPreloadBatch(deadline: { timeRemaining?: () => number, didTimeout?: boolean }) {
+  if (!preloadQueue.length || preloadingPaused) return
+  const fmt = settings.s.highQualityFormat
+  const q = (fmt === 'jpeg') ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100)
+  const batch = Math.max(1, settings.s.preloadBatchSize || 2)
+  const baseW = settings.s.targetWidthPolicy === 'container'
+    ? (containerW.value || settings.s.baseWidth || 1200)
+    : settings.s.baseWidth
+  const preloadDpr = Math.min(dprForMode(), Math.max(0.5, settings.s.preloadDprCap || 1.0))
+  const fitHiW = Math.min(
+    Math.max(200, Math.floor(baseW * preloadDpr)),
+    Math.max(320, settings.s.maxTargetWidth || 2147483647)
+  )
+  let n = 0
+  const canContinue = () => (deadline?.timeRemaining ? deadline.timeRemaining() > 8 : true) && n < batch
+  while (preloadQueue.length && canContinue() && !preloadingPaused) {
+    const i = preloadQueue.shift()!
+    if (viewMode.value === 'actual') {
+      media.renderPdfPage(i, undefined, fmt, q, dpiForActual())
+    } else {
+      media.renderPdfPage(i, fitHiW, fmt, q)
+    }
+    n++
+  }
+  if (preloadQueue.length && !preloadingPaused) scheduleIdle()
+}
+
 function observe(el: Element | null, idx: number) {
   if (!el) return
   refs.set(el, idx)
@@ -545,13 +641,13 @@ function scheduleProcess() {
     const list = Array.from(pendingIdx)
     pendingIdx.clear()
     rafScheduled = false
-    // 依據可見區間 + visibleMarginPages 計算實際要處理的集合
+    // 依據可見區間 + highRadius 計算實際要處理的集合
     const tp = totalPages.value || 0
     if (tp <= 0) return
     const center = centerIndex.value
-    const margin = settings.s.visibleMarginPages
-    const start = Math.max(0, Math.min(visibleStart.value, center - margin))
-    const end = Math.min(tp - 1, Math.max(visibleEnd.value, center + margin))
+    const rangeHigh = settings.s.highRadius
+    const start = Math.max(0, Math.min(visibleStart.value, center - rangeHigh))
+    const end = Math.min(tp - 1, Math.max(visibleEnd.value, center + rangeHigh))
     media.enforceVisibleRange(start, end)
     const allowed = new Set<number>()
     for (let i = start; i <= end; i++) allowed.add(i)
@@ -559,15 +655,15 @@ function scheduleProcess() {
     for (const idx of work) {
       const cW = containerW.value || 800
       if (viewMode.value === 'actual') {
-        media.renderPdfPage(idx, undefined, getRenderFormat(), getRenderQuality(), dpiForActual())
+        media.renderPdfPage(idx, undefined, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100), dpiForActual())
       } else {
         const dpr = dprForMode()
-        const baseW = cW
+        const baseW = settings.s.targetWidthPolicy === 'container' ? cW : settings.s.baseWidth
         const hiW = Math.min(
           Math.floor(baseW * dpr),
-          Math.max(320, settings.s.maxOutputWidth || 2147483647)
+          Math.max(320, settings.s.maxTargetWidth || 2147483647)
         )
-        media.renderPdfPage(idx, hiW, getRenderFormat(), getRenderQuality())
+        media.renderPdfPage(idx, hiW, settings.s.highQualityFormat, settings.s.highQualityFormat === 'jpeg' ? settings.s.jpegQuality : (settings.s.pngFast ? 25 : 100))
       }
     }
   })
@@ -605,7 +701,7 @@ onMounted(() => {
       }
     }
     scheduleProcess()
-  }, { root: scrollRootEl.value, rootMargin: '400px', threshold: 0.01 })
+  }, { root: scrollRootEl.value, rootMargin: settings.prefetchRootMargin, threshold: 0.01 })
   // 既有元素補 observe（限本容器）
   scrollRootEl.value?.querySelectorAll('[data-pdf-page]').forEach((el) => {
     const idx = Number((el as HTMLElement).dataset.pdfPage)
@@ -614,6 +710,30 @@ onMounted(() => {
       io?.observe(el as Element)
     }
   })
+  // 預載互動暫停/恢復
+  const root = scrollRootEl.value
+  // 移除重複的 scroll 監聽，因為主要的 onScroll 已經處理暫停邏輯
+  const pausePreload = () => {
+    if (!settings.s.pausePreloadOnInteraction) return
+    preloadingPaused = true
+    cancelIdle()
+    // 不清空佇列，僅暫停；避免來回浪費
+    // 立即優先處理當前可見頁，避免可見區域長時間灰階
+    pendingIdx.clear();
+    for (const i of visibleIdx) pendingIdx.add(i)
+    scheduleProcess()
+  }
+  const resumePreload = () => {
+    if (!settings.s.pausePreloadOnInteraction) return
+    preloadingPaused = false
+    schedulePreloadStart()
+  }
+  root?.addEventListener('wheel', pausePreload, { passive: true })
+  root?.addEventListener('pointerdown', pausePreload, { passive: true })
+  // 移除 scroll 事件監聽，避免重複處理
+  root?.addEventListener('pointerup', resumePreload, { passive: true })
+  // 初始排程背景預加載（延遲）
+  schedulePreloadStart()
 })
 
 // 當估高變動較大時，使用滾動錨點補償，降低「突然位移」感受
@@ -651,6 +771,7 @@ watch(estimateHeight, (h) => {
 onBeforeUnmount(() => {
   io?.disconnect()
   refs.clear()
+  cancelIdle()
   if (scrollEndTimer) clearTimeout(scrollEndTimer)
   if (hiResTimer) clearTimeout(hiResTimer)
   if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer)
@@ -661,6 +782,9 @@ onBeforeUnmount(() => {
 
 // 當檢視模式變更時，延遲請求高清重渲染，避免連續縮放卡頓
 watch(viewMode, () => { scheduleHiResRerender() })
+watch([viewMode, centerIndex, containerW, () => settings.s.preloadAllPages, () => settings.s.preloadRange, () => settings.s.preloadIdleMs, () => settings.s.preloadBatchSize, () => settings.s.preloadStartDelayMs], () => {
+  schedulePreloadStart()
+})
 
 // 動態計算「最佳符合」對應的實際大小百分比（以 96dpi 為 100% 基準）
 async function updateFitPercent() {
@@ -684,9 +808,9 @@ async function updateFitPercent() {
   if (d.type === 'pdf') {
     const idx = centerIndex.value
     const cachedBase = media.baseCssWidthAt100(idx)
-    // 以可用的實際輸出上限校正：有效 CSS 寬 = min(containerW, maxOutputWidth / dprUsed)
+    // 以可用的實際輸出上限校正：有效 CSS 寬 = min(containerW, maxTargetWidth / dprUsed)
     const dprUsed = Math.min((window.devicePixelRatio || 1), settings.s.dprCap)
-    const maxCssByCap = Math.max(1, Math.floor((settings.s.maxOutputWidth || Number.MAX_SAFE_INTEGER) / Math.max(0.5, dprUsed)))
+    const maxCssByCap = Math.max(1, Math.floor((settings.s.maxTargetWidth || Number.MAX_SAFE_INTEGER) / Math.max(0.5, dprUsed)))
     const effectiveCssW = Math.min(cW, maxCssByCap)
     if (cachedBase && cachedBase > 0) {
       displayFitPercent.value = Math.max(5, Math.min(400, Math.round((effectiveCssW / cachedBase) * 100)))
@@ -709,7 +833,7 @@ function scheduleUpdateFitPercent() {
   if (fitTimer) { clearTimeout(fitTimer); fitTimer = null }
   fitTimer = window.setTimeout(() => { fitTimer = null; updateFitPercent() }, 150)
 }
-watch([viewMode, centerIndex, containerW, () => settings.s.maxOutputWidth, () => settings.s.dprCap], () => { scheduleUpdateFitPercent() })
+watch([viewMode, centerIndex, containerW, () => settings.s.maxTargetWidth, () => settings.s.dprCap], () => { scheduleUpdateFitPercent() })
 onMounted(() => { scheduleUpdateFitPercent() })
 
 // 監看 zoomApplied 以影響估高與寬度布局（debounce 後才更新）
