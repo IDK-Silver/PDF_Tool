@@ -47,41 +47,31 @@ function zoomIn() {
     })
   } else if (root && img) {
     // 記錄縮放前的狀態
-    const newZoom = Math.min(400, zoomTarget.value + 10)
+    const oldZoom = zoomTarget.value
+    const newZoom = Math.min(400, oldZoom + 10)
+    const zoomRatio = newZoom / oldZoom
     
-    // 獲取圖片和視窗的實際位置
-    const rootRect = root.getBoundingClientRect()
-    const imgRect = img.getBoundingClientRect()
+    // 記錄當前滾動位置和視窗中心點
+    const oldScrollLeft = root.scrollLeft
+    const oldScrollTop = root.scrollTop
+    const viewportCenterX = root.clientWidth / 2
+    const viewportCenterY = root.clientHeight / 2
     
-    // 計算視窗中心點相對於圖片的位置（像素值）
-    const viewportCenterX = rootRect.left + rootRect.width / 2
-    const viewportCenterY = rootRect.top + rootRect.height / 2
-    const offsetX = viewportCenterX - imgRect.left
-    const offsetY = viewportCenterY - imgRect.top
-    
-    // 計算縮放比例
-    const zoomRatio = newZoom / zoomTarget.value
+    // 視窗中心點在內容中的位置
+    const contentCenterX = oldScrollLeft + viewportCenterX
+    const contentCenterY = oldScrollTop + viewportCenterY
     
     zoomTarget.value = newZoom
     
     nextTick(() => {
       requestAnimationFrame(() => {
-        // 縮放後重新獲取圖片位置
-        const newImgRect = img.getBoundingClientRect()
-        const newRootRect = root.getBoundingClientRect()
+        // 計算縮放後的內容中心點位置
+        const newContentCenterX = contentCenterX * zoomRatio
+        const newContentCenterY = contentCenterY * zoomRatio
         
-        // 計算縮放後，原本的點應該在哪裡
-        const newOffsetX = offsetX * zoomRatio
-        const newOffsetY = offsetY * zoomRatio
-        const targetCenterX = newImgRect.left + newOffsetX
-        const targetCenterY = newImgRect.top + newOffsetY
-        
-        // 調整滾動位置使中心點保持不變
-        const scrollAdjustX = targetCenterX - (newRootRect.left + newRootRect.width / 2)
-        const scrollAdjustY = targetCenterY - (newRootRect.top + newRootRect.height / 2)
-        
-        root.scrollLeft += scrollAdjustX
-        root.scrollTop += scrollAdjustY
+        // 計算新的滾動位置，使中心點保持不變
+        root.scrollLeft = newContentCenterX - viewportCenterX
+        root.scrollTop = newContentCenterY - viewportCenterY
       })
     })
     return
@@ -103,41 +93,31 @@ function zoomOut() {
     })
   } else if (root && img) {
     // 記錄縮放前的狀態
-    const newZoom = Math.max(10, zoomTarget.value - 10)
+    const oldZoom = zoomTarget.value
+    const newZoom = Math.max(10, oldZoom - 10)
+    const zoomRatio = newZoom / oldZoom
     
-    // 獲取圖片和視窗的實際位置
-    const rootRect = root.getBoundingClientRect()
-    const imgRect = img.getBoundingClientRect()
+    // 記錄當前滾動位置和視窗中心點
+    const oldScrollLeft = root.scrollLeft
+    const oldScrollTop = root.scrollTop
+    const viewportCenterX = root.clientWidth / 2
+    const viewportCenterY = root.clientHeight / 2
     
-    // 計算視窗中心點相對於圖片的位置（像素值）
-    const viewportCenterX = rootRect.left + rootRect.width / 2
-    const viewportCenterY = rootRect.top + rootRect.height / 2
-    const offsetX = viewportCenterX - imgRect.left
-    const offsetY = viewportCenterY - imgRect.top
-    
-    // 計算縮放比例
-    const zoomRatio = newZoom / zoomTarget.value
+    // 視窗中心點在內容中的位置
+    const contentCenterX = oldScrollLeft + viewportCenterX
+    const contentCenterY = oldScrollTop + viewportCenterY
     
     zoomTarget.value = newZoom
     
     nextTick(() => {
       requestAnimationFrame(() => {
-        // 縮放後重新獲取圖片位置
-        const newImgRect = img.getBoundingClientRect()
-        const newRootRect = root.getBoundingClientRect()
+        // 計算縮放後的內容中心點位置
+        const newContentCenterX = contentCenterX * zoomRatio
+        const newContentCenterY = contentCenterY * zoomRatio
         
-        // 計算縮放後，原本的點應該在哪裡
-        const newOffsetX = offsetX * zoomRatio
-        const newOffsetY = offsetY * zoomRatio
-        const targetCenterX = newImgRect.left + newOffsetX
-        const targetCenterY = newImgRect.top + newOffsetY
-        
-        // 調整滾動位置使中心點保持不變
-        const scrollAdjustX = targetCenterX - (newRootRect.left + newRootRect.width / 2)
-        const scrollAdjustY = targetCenterY - (newRootRect.top + newRootRect.height / 2)
-        
-        root.scrollLeft += scrollAdjustX
-        root.scrollTop += scrollAdjustY
+        // 計算新的滾動位置，使中心點保持不變
+        root.scrollLeft = newContentCenterX - viewportCenterX
+        root.scrollTop = newContentCenterY - viewportCenterY
       })
     })
     return
@@ -164,6 +144,66 @@ function setFitMode() {
     zoomTarget.value = baseline
   }
   scheduleUpdateFitPercent()
+}
+
+function handleWheel(e: WheelEvent) {
+  // 檢測觸控板縮放手勢（Ctrl + wheel 或 pinch）
+  if (!e.ctrlKey && !e.metaKey) return
+  
+  e.preventDefault()
+  
+  const root = scrollRootEl.value
+  const img = imageEl.value
+  if (!root || !img) return
+  
+  // 確保在 actual 模式
+  if (viewMode.value !== 'actual') {
+    viewMode.value = 'actual'
+    zoomTarget.value = fitPercentBaseline()
+  }
+  
+  // 計算縮放變化量（觸控板的 deltaY 通常較小，需要調整靈敏度）
+  const delta = -e.deltaY
+  const sensitivity = 0.5  // 調整靈敏度
+  let zoomChange = delta * sensitivity
+  
+  // 限制每次變化量
+  zoomChange = Math.max(-20, Math.min(20, zoomChange))
+  
+  const oldZoom = zoomTarget.value
+  const newZoom = Math.max(10, Math.min(400, oldZoom + zoomChange))
+  
+  // 如果沒有實際變化，直接返回
+  if (Math.abs(newZoom - oldZoom) < 0.1) return
+  
+  const zoomRatio = newZoom / oldZoom
+  
+  // 記錄當前滾動位置
+  const oldScrollLeft = root.scrollLeft
+  const oldScrollTop = root.scrollTop
+  
+  // 滑鼠在視窗中的位置（相對於 scrollRoot）
+  const rootRect = root.getBoundingClientRect()
+  const mouseViewportX = e.clientX - rootRect.left
+  const mouseViewportY = e.clientY - rootRect.top
+  
+  // 滑鼠在內容中的位置
+  const mouseContentX = oldScrollLeft + mouseViewportX
+  const mouseContentY = oldScrollTop + mouseViewportY
+  
+  zoomTarget.value = newZoom
+  
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      // 計算縮放後，滑鼠下的點在內容中的新位置
+      const newMouseContentX = mouseContentX * zoomRatio
+      const newMouseContentY = mouseContentY * zoomRatio
+      
+      // 計算新的滾動位置，使滑鼠下的點保持不變
+      root.scrollLeft = newMouseContentX - mouseViewportX
+      root.scrollTop = newMouseContentY - mouseViewportY
+    })
+  })
 }
 
 function onImageLoad(e: Event) {
@@ -250,6 +290,7 @@ defineExpose({
     :class="viewMode === 'fit' ? 'flex items-center justify-center' : ''"
     style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: none;"
     data-image-view
+    @wheel="handleWheel"
   >
     <div :class="viewMode === 'fit' ? 'w-full px-6 py-10' : 'px-6 py-10'">
       <div
