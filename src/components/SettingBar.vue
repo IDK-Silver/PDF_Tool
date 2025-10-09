@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { Cog6ToothIcon, Bars3Icon } from '@heroicons/vue/24/outline'
+import { Cog6ToothIcon, ChevronDoubleLeftIcon } from '@heroicons/vue/24/outline'
+import { useUiStore } from '@/modules/ui/store'
 const router = useRouter()
+const ui = useUiStore()
 function onSettings() { router.push({ name: 'settings' }) }
-function onCollapse() { /* 保留按鈕，不實作側欄收合 */ }
+function onCollapse() { ui.toggleSidebar() }
 </script>
 
 <template>
@@ -25,8 +27,9 @@ function onCollapse() { /* 保留按鈕，不實作側欄收合 */ }
         @click="onCollapse"
         aria-label="Toggle sidebar"
         class="icon-btn w-[32px] h-[32px] inline-flex items-center justify-center rounded-[6px] bg-transparent text-[hsl(var(--foreground))]"
+        title="收合側欄"
       >
-        <Bars3Icon />
+        <ChevronDoubleLeftIcon />
       </button>
     </div>
   </header>

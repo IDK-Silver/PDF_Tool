@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
-import { ArchiveBoxIcon } from '@heroicons/vue/24/outline'
+import { ArchiveBoxIcon, ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
+import { useUiStore } from '@/modules/ui/store'
 
 const props = defineProps({
   saving: { type: Boolean, default: false },
@@ -19,6 +20,8 @@ const emit = defineEmits<{
   (e: 'zoom-in'): void
   (e: 'zoom-out'): void
 }>()
+
+const ui = useUiStore()
 </script>
 
 <template>
@@ -26,8 +29,14 @@ const emit = defineEmits<{
     <div class="px-4 py-2 flex items-center justify-between gap-4">
       <!-- 左側：檔案操作 -->
       <div class="flex items-center gap-3">
+        <!-- 展開側欄（僅在側欄收合時顯示） -->
+        <button v-if="ui.sidebarCollapsed" @click="ui.setSidebarCollapsed(false)"
+          class="rounded border border-border w-8 h-8 flex items-center justify-center transition-colors bg-card hover:bg-hover"
+          title="展開側欄">
+          <ChevronDoubleRightIcon class="w-4 h-4" />
+        </button>
         <button @click="emit('save')" :disabled="props.saving || !props.canSave"
-          class="rounded border border-border w-8 h-8 flex items-center justify-center transition-colors"
+          class="rounded w-8 h-8 flex items-center justify-center transition-colors"
           :class="props.canSave ? 'bg-blue-400 text-white hover:bg-blue-700' : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
           title="儲存">
           <ArchiveBoxIcon class="w-4 h-4" />

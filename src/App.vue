@@ -2,14 +2,20 @@
 import ModeChooseList from './components/ModeChooseList.vue'
 import SettingBar from './components/SettingBar.vue'
 import { useGlobalFileDrop } from '@/modules/filedrop/useFileDrop'
+import { computed } from 'vue'
+import { useUiStore } from '@/modules/ui/store'
 
 const { isDragging } = useGlobalFileDrop()
+const ui = useUiStore()
+const asideClass = computed(() => ui.sidebarCollapsed ? 'hidden' : 'w-[260px]')
 </script>
 
 <template>
   <div class="flex flex-row h-screen w-screen">
     <aside
-      class="w-[260px] flex-shrink-0 bg-background flex flex-col border-r border-[hsl(var(--border))] pl-2 pr-4 relative z-50">
+      class="flex-shrink-0 bg-background flex flex-col border-r border-[hsl(var(--border))] pl-2 pr-4 relative z-50"
+      :class="asideClass"
+    >
       <SettingBar />
       <ModeChooseList />
       <section class="w-full border-t border-[hsl(var(--border))] pt-[6px] py-2"></section>
