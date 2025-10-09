@@ -60,8 +60,8 @@ export const defaultSettings: SettingsState = {
   // 高清渲染
   renderFormat: 'raw',
   highResDpiCap: 300,          // 高清 DPI 上限（A3: 96dpi=1.78M像素=300ms，144dpi=4M像素=700ms）
-  dprCap: 2.0,
-  maxOutputWidth: 1920,
+  dprCap: 1.0,
+  maxOutputWidth: 1200,
   actualModeDpiCap: 300,
   zoomDebounceMs: 10,
 
