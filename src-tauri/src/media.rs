@@ -209,7 +209,6 @@ pub fn init_pdf_worker() {
                 Ok(PdfRequest::Size { doc_id, page_index, reply }) => {
                     let res = (|| -> Result<PdfPageSize, MediaError> {
                         let doc = docs.get(&doc_id).ok_or_else(|| MediaError::new("not_found", format!("未知的 docId: {}", doc_id)))?;
-                        use pdfium_render::prelude::*;
                         let idx_u16: u16 = page_index
                             .try_into()
                             .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", page_index)))?;
@@ -237,7 +236,6 @@ pub fn init_pdf_worker() {
                 }
                 Ok(PdfRequest::ExportPdf { doc_id, page_index, dest_path, reply }) => {
                     let res = (|| -> Result<String, MediaError> {
-                        use pdfium_render::prelude::*;
                         let doc = docs.get(&doc_id).ok_or_else(|| MediaError::new("not_found", format!("未知的 docId: {}", doc_id)))?;
                         let idx_u16: u16 = page_index.try_into().map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", page_index)))?;
                         // 建立新 PDF 並以向量方式複製該頁，不變更原文件
@@ -330,7 +328,6 @@ pub fn init_pdf_worker() {
                 }
                 Ok(PdfRequest::CopyPage { src_doc_id, src_index, dest_doc_id, dest_index, reply }) => {
                     let res = (|| -> Result<usize, MediaError> {
-                        use pdfium_render::prelude::*;
                         if src_doc_id == dest_doc_id {
                             // 同文件複製：先取出文件所有權，避免 HashMap 借用衝突
                             let mut doc = docs.remove(&src_doc_id).ok_or_else(|| MediaError::new("not_found", format!("未知的 docId: {}", src_doc_id)))?;
@@ -586,7 +583,7 @@ fn render_page_for_document(
         use image::ColorType;
         let rgba = img.to_rgba8();
         let comp = if args.quality.unwrap_or(100) <= 50 { CompressionType::Fast } else { CompressionType::Default };
-        let mut enc = PngEncoder::new_with_quality(Cursor::new(&mut buf), comp, FilterType::NoFilter);
+        let enc = PngEncoder::new_with_quality(Cursor::new(&mut buf), comp, FilterType::NoFilter);
         enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
             .map_err(|e| MediaError::new("io_error", format!("編碼 PNG 失敗: {e}")))?;
     } else if out_fmt == "jpeg" {
@@ -601,7 +598,7 @@ fn render_page_for_document(
         use image::codecs::png::{CompressionType, FilterType, PngEncoder};
         use image::ColorType;
         let rgba = img.to_rgba8();
-        let mut enc = PngEncoder::new_with_quality(Cursor::new(&mut buf), CompressionType::Default, FilterType::NoFilter);
+        let enc = PngEncoder::new_with_quality(Cursor::new(&mut buf), CompressionType::Default, FilterType::NoFilter);
         enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
             .map_err(|e| MediaError::new("io_error", format!("編碼 PNG 失敗: {e}")))?;
     }

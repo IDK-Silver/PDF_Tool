@@ -1,11 +1,10 @@
 <script setup lang="ts">
+import ModeChooseList from './components/ModeChooseList.vue'
+import SettingBar from './components/SettingBar.vue'
+import { useGlobalFileDrop } from '@/modules/filedrop/useFileDrop'
 
-import ModeChooseList from './components/ModeChooseList.vue';
-import SettingBar from './components/SettingBar.vue';
-
+const { isDragging } = useGlobalFileDrop()
 </script>
-
-
 
 <template>
   <div class="flex flex-row h-screen w-screen">
@@ -21,5 +20,13 @@ import SettingBar from './components/SettingBar.vue';
         <RouterView />
       </div>
     </main>
+    <div
+      v-if="isDragging"
+      class="pointer-events-none fixed inset-0 z-[200] bg-black/40 flex items-center justify-center"
+    >
+      <div class="border-2 border-dashed border-[hsl(var(--primary))] bg-[hsl(var(--background))] px-8 py-6 rounded shadow text-lg text-[hsl(var(--foreground))]">
+        將 PDF 或圖片拖曳到這裡
+      </div>
+    </div>
   </div>
 </template>

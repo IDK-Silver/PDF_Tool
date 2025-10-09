@@ -2,8 +2,10 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
 import type { MediaDescriptor, PageRender } from './types'
-import { analyzeMedia, imageRead, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel } from './service'
+import { analyzeMedia, imageRead, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel, pdfSave } from './service'
 import { useSettingsStore } from '@/modules/settings/store'
+import { useFileListStore } from '@/modules/filelist/store'
+import { save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 
 export const useMediaStore = defineStore('media', () => {
   const selected = ref<FileItem | null>(null)
@@ -123,11 +125,14 @@ export const useMediaStore = defineStore('media', () => {
   }
 
   async function select(item: FileItem) {
+    const path = item.path
+    if (!(await ensureCanSwitch(path))) return
     selected.value = item
-    await loadDescriptor(item.path)
+    await loadDescriptor(path)
   }
 
   async function selectPath(path: string) {
+    if (!(await ensureCanSwitch(path))) return
     selected.value = { id: path, name: path.split('/').pop() || path, path }
     await loadDescriptor(path)
   }
@@ -138,6 +143,8 @@ export const useMediaStore = defineStore('media', () => {
     descriptor.value = null
     pdfFirstPage.value = null
     pdfPages.value = []
+    // 切換或重新載入文件時，未儲存變更不再有效（舊 session 會被關閉）
+    dirty.value = false
     // 關閉上一份文件 session
     if (docId.value != null) {
       try { await pdfClose(docId.value) } catch(_) {}
@@ -225,6 +232,62 @@ export const useMediaStore = defineStore('media', () => {
 
   function markDirty() { dirty.value = true }
   function clearDirty() { dirty.value = false }
+
+  // 儲存目前文件（若是 PDF 且有變更）。拋出例外代表使用者取消或失敗。
+  async function saveCurrentIfNeeded(): Promise<void> {
+    const d = descriptor.value
+    const id = docId.value
+    if (!dirty.value) return
+    if (!d || d.type !== 'pdf' || id == null) return
+    const filelist = useFileListStore()
+    const del = settings.s.deleteBehavior
+    if (del === 'saveAsNew') {
+      const base = (d.name?.replace(/\.pdf$/i, '') || 'output') + ' (edited).pdf'
+      const picked = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+      if (!picked) throw new Error('SAVE_CANCELLED')
+      const res = await pdfSave({ docId: id, destPath: picked, overwrite: true })
+      try { filelist.add(res.path) } catch {}
+      descriptor.value = { ...d, path: res.path, pages: res.pages } as any
+      dirty.value = false
+    } else {
+      const res = await pdfSave({ docId: id, overwrite: true })
+      descriptor.value = { ...d, path: res.path, pages: res.pages } as any
+      dirty.value = false
+    }
+  }
+
+  // 確認是否允許切換到另一個檔案/路徑。會處理儲存/放棄/取消三態。
+  async function ensureCanSwitch(nextPath: string): Promise<boolean> {
+    if (!dirty.value) return true
+    if (selected.value?.path === nextPath) return true
+    // Step 1: 詢問是否先儲存
+    const wantsSave = await confirmDialog('此文件有未儲存變更，是否先儲存？', {
+      title: '未儲存的變更',
+      okLabel: '儲存',
+      cancelLabel: '不儲存',
+    })
+    if (wantsSave) {
+      try {
+        await saveCurrentIfNeeded()
+        return true
+      } catch (e: any) {
+        // 使用者取消了存檔
+        return false
+      }
+    }
+    // Step 2: 不儲存 → 再次確認是否放棄變更
+    const discard = await confirmDialog('放棄變更並繼續切換？', {
+      title: '放棄變更',
+      okLabel: '放棄',
+      cancelLabel: '取消',
+    })
+    if (discard) {
+      // 放棄變更：直接清除 dirty
+      dirty.value = false
+      return true
+    }
+    return false
+  }
 
   // 從後端讀取圖片 bytes 並建立 blob URL
   async function fallbackLoadImageBlob() {
@@ -431,6 +494,7 @@ export const useMediaStore = defineStore('media', () => {
   function clear() {
     selected.value = null
     descriptor.value = null
+    dirty.value = false
     // 釋放 blob URLs（雙快取）
     if (imageObjectUrl.value) {
       URL.revokeObjectURL(imageObjectUrl.value)
@@ -492,6 +556,8 @@ export const useMediaStore = defineStore('media', () => {
     // actions
     select,
     selectPath,
+    ensureCanSwitch,
+    saveCurrentIfNeeded,
     loadDescriptor,
     ensurePdfFirstPage,
     renderPdfPage,

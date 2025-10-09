@@ -7,8 +7,7 @@ import ImageViewport from './parts/ImageViewport.vue'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
-import { save as saveDialog } from '@tauri-apps/plugin-dialog'
-import { pdfSave } from '@/modules/media/service'
+// save handled inside media store via saveCurrentIfNeeded
 
 const media = useMediaStore()
 const settings = useSettingsStore()
@@ -82,31 +81,21 @@ function handleZoomOut() {
 }
 
 async function onSaveNow() {
-  const id = media.docId
   const d = media.descriptor
-  if (id == null || !d || d.type !== 'pdf') return
+  if (!d || d.type !== 'pdf') return
   try {
     saving.value = true
-    let res: { path: string; pages: number }
-    if (settings.s.deleteBehavior === 'saveAsNew') {
-      const base = (d.name?.replace(/\.pdf$/i, '') || 'output') + ' (edited).pdf'
-      const picked = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
-      if (!picked) return
-      res = await pdfSave({ docId: id, destPath: picked, overwrite: true })
-      try {
-        filelist.add(res.path)
-        filelist.setLastPage(res.path, Math.max(1, currentPage.value))
-        await media.selectPath(res.path)
-      } catch {
-        /* noop */
-      }
-    } else {
-      res = await pdfSave({ docId: id, overwrite: true })
+    await media.saveCurrentIfNeeded()
+    const path = media.descriptor?.path
+    if (path) {
+      try { filelist.setLastPage(path, Math.max(1, currentPage.value)) } catch {}
+      // 若為另存新檔，保持選取同步到新路徑
+      await media.selectPath(path)
     }
-    media.clearDirty()
-    media.descriptor = { ...media.descriptor, path: res.path, pages: res.pages } as any
   } catch (e: any) {
-    alert(e?.message || String(e))
+    if (String(e?.message || e) !== 'SAVE_CANCELLED') {
+      alert(e?.message || String(e))
+    }
   } finally {
     saving.value = false
   }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { MagnifyingGlassIcon } from '@heroicons/vue/24/solid'
 import { ref, computed } from 'vue'
 import { FileList } from './index'
 import type { FileItem } from './types'
@@ -6,11 +7,22 @@ import { useMediaStore } from '@/modules/media/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { open } from '@tauri-apps/plugin-dialog'
 
-const selectedId = ref<string | null>(null)
 const q = ref('')
 
 const media = useMediaStore()
 const filelist = useFileListStore()
+
+const selectedId = computed({
+  get: () => media.selected?.id ?? null,
+  set: (id: string | null) => {
+    if (!id) {
+      media.clear()
+      return
+    }
+    const next = filelist.items.find(i => i.id === id)
+    if (next) media.select(next)
+  },
+})
 
 async function addFiles() {
   const picked = await open({
@@ -25,29 +37,20 @@ async function addFiles() {
   filelist.addPaths(list)
   const firstPath = list[0]
   const first = filelist.items.find(i => i.path === firstPath)
-  if (first) {
-    selectedId.value = first.id
-    media.select(first)
-  }
+  if (first) media.select(first)
 }
 
 function onItemClick(item: FileItem) {
-  selectedId.value = item.id
   media.select(item)
 }
 
 function onRemove(item: FileItem) {
   // 移除並調整選取狀態
   filelist.remove(item.path)
-  if (selectedId.value === item.id) {
-    const next = (filtered.value && filtered.value.length > 0) ? filtered.value[0] : null
-    if (next) {
-      selectedId.value = next.id
-      media.select(next)
-    } else {
-      selectedId.value = null
-      media.clear()
-    }
+  if (media.selected?.id === item.id) {
+    const next = filtered.value.length > 0 ? filtered.value[0] : null
+    if (next) media.select(next)
+    else media.clear()
   }
 }
 
@@ -59,10 +62,13 @@ const filtered = computed(() => {
 </script>
 
 <template>
-  <div class="grid grid-cols-10 gap-1 h-auto min-h-10 max-w-[17] pb-2">
-    <input v-model="q" class="col-span-8 border rounded text-sm pl-2" placeholder="搜尋檔名或路徑" />
-    <button class="col-span-2 border rounded  text-sm" @click="addFiles">＋</button>
+  <div class="grid grid-cols-10 gap-1 h-10 max-w-[28rem] pb-2 items-center">
+    <div class="relative col-span-8 h-full">
+      <input v-model="q" class="w-full h-8 border rounded text-sm pl-8" placeholder="Search" />
+      <MagnifyingGlassIcon class="w-5 h-5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+    </div>
+  <button class="col-span-2 h-8 border rounded text-sm" @click="addFiles">＋</button>
   </div>
-  <FileList :items="filtered" v-bind:selected-id="selectedId" :removable="true"
-    @update:selectedId="selectedId = $event" @item-click="onItemClick" @remove="onRemove" />
+  <FileList :items="filtered" :selected-id="selectedId" :removable="true"
+    @item-click="onItemClick" @remove="onRemove" />
 </template>
