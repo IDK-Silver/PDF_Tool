@@ -9,7 +9,7 @@ const number = (e: Event, fallback: number) => {
 }
 
 function toggleOrientation() {
-  s.value.insertOrientation = s.value.insertOrientation === 'portrait' ? 'landscape' : 'portrait'
+  s.insertOrientation = s.insertOrientation === 'portrait' ? 'landscape' : 'portrait'
 }
 </script>
 
@@ -17,7 +17,7 @@ function toggleOrientation() {
   <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
     <div class="md:col-span-2">
       <label class="block mb-1">預設紙張</label>
-      <select v-model="s.insertPaper" class="w-full border rounded px-2 py-1">
+      <select v-model="s.insertPaper" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
         <option value="A4">A4（210 × 297 mm）</option>
         <option value="Letter">Letter（216 × 279.4 mm）</option>
         <option value="A5">A5（148 × 210 mm）</option>
@@ -29,7 +29,7 @@ function toggleOrientation() {
     <div>
       <label class="block mb-1">方向</label>
       <div class="flex items-center gap-2">
-        <button @click="toggleOrientation" class="px-2 py-1 rounded border bg-white">
+        <button @click="toggleOrientation" class="px-2 py-1 rounded border border-border bg-card hover:bg-hover transition-colors">
           {{ s.insertOrientation === 'portrait' ? '直向' : '橫向' }}
         </button>
       </div>
@@ -37,9 +37,9 @@ function toggleOrientation() {
     <div>
       <label class="block mb-1">自訂寬 × 高（mm）</label>
       <div class="flex items-center gap-2">
-        <input class="w-20 border rounded px-2 py-1" :disabled="s.insertPaper !== 'Custom'" :value="s.insertCustomWidthMm" @input="s.insertCustomWidthMm = number($event, s.insertCustomWidthMm)" />
+        <input class="w-20 border border-border rounded px-2 py-1 bg-input text-foreground" :disabled="s.insertPaper !== 'Custom'" :value="s.insertCustomWidthMm" @input="s.insertCustomWidthMm = number($event, s.insertCustomWidthMm)" />
         <span>×</span>
-        <input class="w-20 border rounded px-2 py-1" :disabled="s.insertPaper !== 'Custom'" :value="s.insertCustomHeightMm" @input="s.insertCustomHeightMm = number($event, s.insertCustomHeightMm)" />
+        <input class="w-20 border border-border rounded px-2 py-1 bg-input text-foreground" :disabled="s.insertPaper !== 'Custom'" :value="s.insertCustomHeightMm" @input="s.insertCustomHeightMm = number($event, s.insertCustomHeightMm)" />
       </div>
       <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">僅在選擇「自訂尺寸」時生效。</p>
     </div>

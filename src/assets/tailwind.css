@@ -5,26 +5,40 @@
 @layer base {
     :root {
         --background: 0 0% 100%;
-        --foreground: 224 71% 4%;
-        --muted: 210 40% 96.1%;
-        --muted-foreground: 215.4 16.3% 46.9%;
-        --accent: 0 0% 80%;
-        --on-accent: 0 0% 10%;
-        --border: 214.3 31.8% 91.4%;
-        /* More visible selection gray on light bg */
+        --foreground: 0 0% 9%;
+        --muted: 0 0% 96%;
+        --muted-foreground: 0 0% 45%;
+        --accent: 0 0% 90%;
+        --on-accent: 0 0% 9%;
+        --border: 0 0% 89%;
+        --card: 0 0% 100%;
+        --input: 0 0% 100%;
         --selection: 0 0% 90%;
+        --hover: 0 0% 96%;
     }
 
     .dark {
-        --background: 224 71% 4%;
-        --foreground: 210 20% 98%;
-        --muted: 217.2 32.6% 17.5%;
-        --muted-foreground: 215 20.2% 65.1%;
-        --accent: 0 0% 35%;
-        --on-accent: 0 0% 98%;
-        --border: 217.2 32.6% 17.5%;
-        /* More visible selection gray on dark bg */
-        --selection: 0 0% 22%;
+        --background: 0 0% 15%;
+        --foreground: 0 0% 85%;
+        --muted: 0 0% 22%;
+        --muted-foreground: 0 0% 60%;
+        --accent: 0 0% 28%;
+        --on-accent: 0 0% 85%;
+        --border: 0 0% 26%;
+        --card: 0 0% 18%;
+        --input: 0 0% 20%;
+        --selection: 0 0% 26%;
+        --hover: 0 0% 24%;
+        
+        /* 深色模式滾動條顏色 */
+        --scrollbar-thumb: 0 0% 40%;
+        --scrollbar-track: 0 0% 20%;
+    }
+
+    :root {
+        /* 亮色模式滾動條顏色 */
+        --scrollbar-thumb: 0 0% 60%;
+        --scrollbar-track: 0 0% 92%;
     }
 
     body {
@@ -61,28 +75,46 @@
         user-select: none;
         pointer-events: auto;
     }
+
+    input, textarea, select {
+        background-color: hsl(var(--input));
+        color: hsl(var(--foreground));
+        border-color: hsl(var(--border));
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+        color: hsl(var(--muted-foreground));
+    }
+
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px hsl(var(--accent) / 0.35);
+    }
 }
 
 @layer utilities {
     /* Always-visible, styled vertical scrollbar */
     .scrollbar-visible {
         scrollbar-width: thin; /* Firefox */
-        scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--border));
+        scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
     }
     .scrollbar-visible::-webkit-scrollbar {
         width: 12px;
         height: 12px;
     }
     .scrollbar-visible::-webkit-scrollbar-thumb {
-        background-color: hsl(var(--muted-foreground) / 0.5);
+        background-color: hsl(var(--scrollbar-thumb));
         border-radius: 8px;
         border: 3px solid transparent;
         background-clip: content-box;
     }
     .scrollbar-visible::-webkit-scrollbar-thumb:hover {
-        background-color: hsl(var(--muted-foreground) / 0.7);
+        background-color: hsl(var(--scrollbar-thumb) / 0.8);
     }
     .scrollbar-visible::-webkit-scrollbar-track {
-        background-color: hsl(var(--border));
+        background-color: hsl(var(--scrollbar-track));
     }
 }

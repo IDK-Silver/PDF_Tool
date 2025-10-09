@@ -1,6 +1,9 @@
 // 精簡版 Settings（v2）- 移除過度設計的參數
 
 export interface SettingsState {
+  // === 外觀 ===
+  theme: 'light' | 'dark'
+
   // === 檔案操作 ===
   deleteBehavior: 'saveAsNew' | 'overwrite'
 
@@ -40,6 +43,9 @@ export interface SettingsState {
 }
 
 export const defaultSettings: SettingsState = {
+  // 外觀
+  theme: 'light',
+
   // 檔案操作
   deleteBehavior: 'saveAsNew',
 
@@ -81,6 +87,7 @@ export const defaultSettings: SettingsState = {
 // 舊版參數映射（用於遷移）
 export function migrateFromV1(old: any): SettingsState {
   return {
+    theme: old.theme ?? defaultSettings.theme,
     deleteBehavior: old.deleteBehavior ?? defaultSettings.deleteBehavior,
     
     insertPaper: old.insertPaper ?? defaultSettings.insertPaper,

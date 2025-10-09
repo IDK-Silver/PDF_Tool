@@ -42,15 +42,37 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
 </script>
 
 <template>
-  <div class="h-full overflow-auto" data-settings-scroll-root>
+  <div class="h-full overflow-auto scrollbar-visible" data-settings-scroll-root>
     <div class="mx-auto max-w-3xl p-6 space-y-8 text-sm">
       <header class="sticky top-0 bg-background/80 backdrop-blur z-10 py-3 border-b">
         <div class="flex items-center justify-between gap-3">
           <h1 class="text-lg font-medium">設定</h1>
-          <button @click="resetToDefaults" class="px-2 py-1 text-sm rounded border bg-white">回復預設</button>
+          <button @click="resetToDefaults" class="px-2 py-1 text-sm rounded border border-border bg-card hover:bg-hover transition-colors">回復預設</button>
         </div>
         <p class="text-xs text-[hsl(var(--muted-foreground))]">調整渲染體驗與效能參數。右側主視圖會即時套用。</p>
       </header>
+
+      <section id="appearance" class="space-y-3">
+        <h2 class="font-medium text-base">外觀</h2>
+        <div class="rounded-md border p-4 space-y-3">
+          <div>
+            <label class="block mb-2">主題模式</label>
+            <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
+              <label class="flex items-center gap-2">
+                <input type="radio" value="light" v-model="s.theme" />
+                <span>亮色（預設）</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="radio" value="dark" v-model="s.theme" />
+                <span>暗色</span>
+              </label>
+            </div>
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              切換介面的配色主題，即時生效。
+            </p>
+          </div>
+        </div>
+      </section>
 
       <section id="low-res-rendering" class="space-y-3">
         <h2 class="font-medium text-base">低清渲染</h2>
@@ -84,7 +106,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">低清 DPI</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.lowResDpi"
                 @input="s.lowResDpi = number($event, s.lowResDpi)"
                 :disabled="!s.enableLowRes"
@@ -96,7 +118,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">大頁面低清 DPI</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.largePageLowResDpi"
                 @input="s.largePageLowResDpi = number($event, s.largePageLowResDpi)"
                 :disabled="!s.enableLowRes"
@@ -108,7 +130,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div :class="{ 'opacity-50': !s.enableLowRes || !s.useLowResDpr }">
               <label class="block mb-1">DPR 倍數上限</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.lowResDprMultiplier"
                 @input="s.lowResDprMultiplier = number($event, s.lowResDprMultiplier)"
                 :disabled="!s.enableLowRes || !s.useLowResDpr"
@@ -131,7 +153,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
 
           <div>
             <label class="block mb-1">高清輸出格式</label>
-            <select v-model="s.renderFormat" class="w-full border rounded px-2 py-1">
+            <select v-model="s.renderFormat" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
               <option value="raw">Raw（預設，最快速）</option>
               <option value="webp">WebP（高壓縮比）</option>
               <option value="png">PNG（無損）</option>
@@ -145,7 +167,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
           <div v-if="s.renderFormat === 'raw'">
             <label class="block mb-1">Raw 快取上限（頁）</label>
             <input
-              class="w-full border rounded px-2 py-1"
+              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
               :value="s.rawHighResCacheSize"
               @input="s.rawHighResCacheSize = number($event, s.rawHighResCacheSize)"
             />
@@ -158,7 +180,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">高清 DPI 上限</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.highResDpiCap"
                 @input="s.highResDpiCap = number($event, s.highResDpiCap)"
               />
@@ -169,7 +191,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">DPR 上限</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.dprCap"
                 @input="s.dprCap = number($event, s.dprCap)"
               />
@@ -180,7 +202,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">最大輸出寬度（px）</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.maxOutputWidth"
                 @input="s.maxOutputWidth = number($event, s.maxOutputWidth)"
               />
@@ -191,7 +213,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">實際大小 DPI 上限</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.actualModeDpiCap"
                 @input="s.actualModeDpiCap = number($event, s.actualModeDpiCap)"
               />
@@ -202,7 +224,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">縮放防抖延遲（ms）</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.zoomDebounceMs"
                 @input="s.zoomDebounceMs = number($event, s.zoomDebounceMs)"
               />
@@ -221,7 +243,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">最大並行渲染</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.maxConcurrentRenders"
                 @input="s.maxConcurrentRenders = number($event, s.maxConcurrentRenders)"
               />
@@ -232,7 +254,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">高清預載範圍</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.highResOverscan"
                 @input="s.highResOverscan = number($event, s.highResOverscan)"
               />
@@ -287,7 +309,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div>
               <label class="block mb-1">JPEG 品質（1–100）</label>
               <input
-                class="w-full border rounded px-2 py-1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.jpegQuality"
                 @input="s.jpegQuality = number($event, s.jpegQuality)"
               />
@@ -297,7 +319,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             </div>
             <div>
               <label class="block mb-1">PNG 壓縮等級</label>
-              <select v-model="s.pngCompression" class="w-full border rounded px-2 py-1">
+              <select v-model="s.pngCompression" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
                 <option value="fast">快速（檔案較大）</option>
                 <option value="balanced">平衡</option>
                 <option value="best">最佳（檔案最小，較慢）</option>

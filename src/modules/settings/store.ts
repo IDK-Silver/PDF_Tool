@@ -6,6 +6,18 @@ import { defaultSettings, migrateFromV1 } from './types'
 const LS_KEY = 'kano_pdf_settings_v2'
 const LS_KEY_OLD = 'kano_pdf_settings_v1'
 
+/**
+ * 套用主題到 <html> 元素
+ */
+function applyTheme(theme: 'light' | 'dark') {
+  const html = document.documentElement
+  if (theme === 'dark') {
+    html.classList.add('dark')
+  } else {
+    html.classList.remove('dark')
+  }
+}
+
 function loadFromStorage(): SettingsState {
   try {
     // 嘗試載入 v2
@@ -35,6 +47,9 @@ function loadFromStorage(): SettingsState {
 export const useSettingsStore = defineStore('settings', () => {
   const s = ref<SettingsState>(loadFromStorage())
 
+  // 初始化時套用主題
+  applyTheme(s.value.theme)
+
   // Debounced persistence to avoid jank when editing numbers rapidly
   let persistTimer: number | null = null
   function schedulePersist(v: SettingsState) {
@@ -48,6 +63,11 @@ export const useSettingsStore = defineStore('settings', () => {
   watch(s, v => {
     schedulePersist(v)
   }, { deep: true })
+
+  // 監聽主題變更，即時套用到 <html>
+  watch(() => s.value.theme, (theme) => {
+    applyTheme(theme)
+  })
 
   // 移除 prefetchRootMargin（已不需要，IntersectionObserver 內建處理）
 

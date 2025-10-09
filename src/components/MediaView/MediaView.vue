@@ -823,8 +823,8 @@ function onImageLoad(e: Event) {
         <!-- 左側：檔案操作 -->
         <div class="flex items-center gap-3">
           <button @click="onSaveNow" :disabled="saving || !media.dirty"
-            class="rounded border w-8 h-8 flex items-center justify-center transition-colors"
-            :class="media.dirty ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-white text-gray-400 opacity-60 cursor-not-allowed'"
+            class="rounded border border-border w-8 h-8 flex items-center justify-center transition-colors"
+            :class="media.dirty ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
             title="儲存">
             💾
           </button>
@@ -847,24 +847,24 @@ function onImageLoad(e: Event) {
         <!-- 右側：檢視控制 -->
         <div class="flex items-center gap-3">
           <!-- 顯示模式 -->
-          <div class="flex items-center gap-1 bg-white rounded border p-0.5">
+          <div class="flex items-center gap-1 bg-card rounded border border-border p-0.5">
             <button @click="setFitMode"
               class="text-xs rounded px-2 h-7 flex items-center justify-center transition-colors whitespace-nowrap"
-              :class="viewMode === 'fit' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-gray-50'">
+              :class="viewMode === 'fit' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-hover'">
               符合寬度
             </button>
             <button @click="resetZoom"
               class="text-xs rounded px-2 h-7 flex items-center justify-center transition-colors whitespace-nowrap"
-              :class="viewMode === 'actual' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-gray-50'">
+              :class="viewMode === 'actual' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-hover'">
               實際大小
             </button>
           </div>
 
           <!-- 縮放控制 -->
-          <div class="flex items-center gap-1 bg-white rounded border px-1">
-            <button @click="zoomOut" class="w-7 h-7 text-sm rounded hover:bg-gray-50 transition-colors flex items-center justify-center">−</button>
+          <div class="flex items-center gap-1 bg-card rounded border border-border px-1">
+            <button @click="zoomOut" class="w-7 h-7 text-sm rounded hover:bg-hover transition-colors flex items-center justify-center">−</button>
             <div class="min-w-[48px] text-center text-xs tabular-nums px-1">{{ displayZoom }}%</div>
-            <button @click="zoomIn" class="w-7 h-7 text-sm rounded hover:bg-gray-50 transition-colors flex items-center justify-center">+</button>
+            <button @click="zoomIn" class="w-7 h-7 text-sm rounded hover:bg-hover transition-colors flex items-center justify-center">+</button>
           </div>
         </div>
       </div>
@@ -881,10 +881,10 @@ function onImageLoad(e: Event) {
 
         <div v-else>
           
-          <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-4 pb-10" data-image-view>
+          <div v-if="media.imageUrl" class="w-full min-h-full bg-muted pt-4 pb-10" data-image-view>
             <div class="w-full flex justify-center">
               <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
-                <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto inline-block"
+                <div class="bg-card rounded-md shadow border border-border overflow-auto inline-block"
                   :style="pageCardStyle(0)">
                   <img :src="media.imageUrl" alt="image" :class="viewMode === 'fit' ? 'w-full block' : 'block'"
                     :style="imgTransformStyle()" ref="imageEl" @load="onImageLoad"
@@ -894,7 +894,7 @@ function onImageLoad(e: Event) {
             </div>
           </div>
 
-          <div v-else-if="totalPages" class="w-full min-h-full bg-neutral-200 pt-4 pb-10">
+          <div v-else-if="totalPages" class="w-full min-h-full bg-muted pt-4 pb-10">
             <div v-for="idx in renderIndices" :key="idx" 
               class="w-full mb-10 flex justify-center"
               :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomApplied / 100)) + 'px' } : undefined"
@@ -902,7 +902,7 @@ function onImageLoad(e: Event) {
               @contextmenu.prevent="onPageContextMenu(idx, $event)">
               <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
                 <div
-                  :class="['bg-white rounded-md shadow border border-neutral-200 relative inline-block', viewMode === 'fit' ? 'overflow-hidden w-full' : 'overflow-visible']"
+                  :class="['bg-card rounded-md shadow border border-border relative inline-block', viewMode === 'fit' ? 'overflow-hidden w-full' : 'overflow-visible']"
                   :style="pageCardStyle(idx)">
                   <!-- 漸進式顯示：優先 highResUrl，enableLowRes 啟用時才回退 lowResUrl -->
                   <img 
@@ -918,7 +918,7 @@ function onImageLoad(e: Event) {
                     loading="lazy" 
                     draggable="false" 
                   />
-                  <div v-else class="w-full aspect-[1/1.414] bg-gray-100 animate-pulse"></div>
+                  <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
                 </div>
                 <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
               </div>
@@ -928,18 +928,18 @@ function onImageLoad(e: Event) {
       </div>
     </div>
     <teleport to="body">
-      <div v-if="menu.open" data-context-menu class="fixed z-[2000] bg-white border rounded shadow text-sm w-max"
+      <div v-if="menu.open" data-context-menu class="fixed z-[2000] bg-card border border-border rounded shadow text-sm w-max"
         :style="{ left: menu.x + 'px', top: menu.y + 'px' }">
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="deletePageFromMenu(menu.pageIndex)">
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="deletePageFromMenu(menu.pageIndex)">
           刪除此頁
         </button>
-        <div class="border-t my-1"></div>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="insertBlankQuick(menu.pageIndex)">
+        <div class="border-t border-border my-1"></div>
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="insertBlankQuick(menu.pageIndex)">
           插入空白頁（{{ menu.aboveHalf ? '之前' : '之後' }}）
         </button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="rotatePlus90(menu.pageIndex)">旋轉 +90°</button>
-        <div class="border-t my-1"></div>
-        <button class="w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] flex items-center justify-between gap-4 whitespace-nowrap"
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="rotatePlus90(menu.pageIndex)">旋轉 +90°</button>
+        <div class="border-t border-border my-1"></div>
+        <button class="w-full text-left px-3 py-2 hover:bg-hover flex items-center justify-between gap-4 whitespace-nowrap"
           @pointerenter="(ev:any) => { cancelExportClose(); const r=(ev.currentTarget as HTMLElement).getBoundingClientRect(); exportMenu.x = Math.round(r.right + 2); exportMenu.y = Math.round(r.top); exportMenu.open = true }"
           @pointerleave="() => scheduleExportClose(180)">
           <span>匯出</span>
@@ -948,11 +948,11 @@ function onImageLoad(e: Event) {
       </div>
     </teleport>
     <teleport to="body">
-      <div v-if="exportMenu.open" data-export-submenu class="fixed z-[2010] bg-white border rounded shadow text-sm w-max"
+      <div v-if="exportMenu.open" data-export-submenu class="fixed z-[2010] bg-card border border-border rounded shadow text-sm w-max"
         :style="{ left: exportMenu.x + 'px', top: exportMenu.y + 'px' }"
         @pointerenter="cancelExportClose" @pointerleave="() => scheduleExportClose(120)">
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="exportPageAsImage(menu.pageIndex)">圖片…</button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-[hsl(var(--accent))] whitespace-nowrap" @click="exportPageAsPdf(menu.pageIndex)">PDF…</button>
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="exportPageAsImage(menu.pageIndex)">圖片…</button>
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="exportPageAsPdf(menu.pageIndex)">PDF…</button>
       </div>
     </teleport>
   </div>
