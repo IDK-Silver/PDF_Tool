@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
+import { ArchiveBoxIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   saving: { type: Boolean, default: false },
@@ -25,14 +26,11 @@ const emit = defineEmits<{
     <div class="px-4 py-2 flex items-center justify-between gap-4">
       <!-- 左側：檔案操作 -->
       <div class="flex items-center gap-3">
-        <button
-          @click="emit('save')"
-          :disabled="props.saving || !props.canSave"
+        <button @click="emit('save')" :disabled="props.saving || !props.canSave"
           class="rounded border border-border w-8 h-8 flex items-center justify-center transition-colors"
-          :class="props.canSave ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
-          title="儲存"
-        >
-          💾
+          :class="props.canSave ? 'bg-blue-400 text-white hover:bg-blue-700' : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
+          title="儲存">
+          <ArchiveBoxIcon class="w-4 h-4" />
         </button>
       </div>
 
@@ -54,35 +52,27 @@ const emit = defineEmits<{
       <div class="flex items-center gap-3">
         <!-- 顯示模式 -->
         <div class="flex items-center gap-1 bg-card rounded border border-border p-0.5">
-          <button
-            @click="emit('set-fit-mode')"
+          <button @click="emit('set-fit-mode')"
             class="text-xs rounded px-2 h-7 flex items-center justify-center transition-colors whitespace-nowrap"
-            :class="props.viewMode === 'fit' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-hover'"
-          >
+            :class="props.viewMode === 'fit' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-hover'">
             符合寬度
           </button>
-          <button
-            @click="emit('reset-zoom')"
+          <button @click="emit('reset-zoom')"
             class="text-xs rounded px-2 h-7 flex items-center justify-center transition-colors whitespace-nowrap"
-            :class="props.viewMode === 'actual' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-hover'"
-          >
+            :class="props.viewMode === 'actual' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-hover'">
             實際大小
           </button>
         </div>
 
         <!-- 縮放控制 -->
         <div class="flex items-center gap-1 bg-card rounded border border-border px-1">
-          <button
-            @click="emit('zoom-out')"
-            class="w-7 h-7 text-sm rounded hover:bg-hover transition-colors flex items-center justify-center"
-          >
+          <button @click="emit('zoom-out')"
+            class="w-7 h-7 text-sm rounded hover:bg-hover transition-colors flex items-center justify-center">
             −
           </button>
           <div class="min-w-[48px] text-center text-xs tabular-nums px-1">{{ props.displayZoom }}%</div>
-          <button
-            @click="emit('zoom-in')"
-            class="w-7 h-7 text-sm rounded hover:bg-hover transition-colors flex items-center justify-center"
-          >
+          <button @click="emit('zoom-in')"
+            class="w-7 h-7 text-sm rounded hover:bg-hover transition-colors flex items-center justify-center">
             +
           </button>
         </div>
