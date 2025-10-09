@@ -791,11 +791,33 @@ function pageCardStyle(idx: number) {
 }
 
 const liveScale = computed(() => viewMode.value === 'actual' ? Math.max(0.1, zoomTarget.value / Math.max(1, zoomApplied.value)) : 1)
+
+// 計算是否需要反轉顏色
+const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
+
 function imgTransformStyle() {
-  if (viewMode.value !== 'actual') return undefined
-  const s = liveScale.value
-  if (!Number.isFinite(s) || s === 1) return undefined
-  return { transform: `scale(${s})`, transformOrigin: 'top left' }
+  const transforms: string[] = []
+  const styles: Record<string, string> = {}
+  
+  // 縮放變換（實際大小模式）
+  if (viewMode.value === 'actual') {
+    const s = liveScale.value
+    if (Number.isFinite(s) && s !== 1) {
+      transforms.push(`scale(${s})`)
+      styles.transformOrigin = 'top left'
+    }
+  }
+  
+  // 顏色反轉（暗色模式 + 啟用反轉）
+  if (shouldInvertColors.value) {
+    styles.filter = 'invert(1) hue-rotate(180deg)'
+  }
+  
+  if (transforms.length > 0) {
+    styles.transform = transforms.join(' ')
+  }
+  
+  return Object.keys(styles).length > 0 ? styles : undefined
 }
 
 const imageEl = ref<HTMLImageElement | null>(null)

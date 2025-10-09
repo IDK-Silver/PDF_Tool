@@ -71,6 +71,17 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               切換介面的配色主題，即時生效。
             </p>
           </div>
+
+          <div class="flex items-start gap-2" :class="{ 'opacity-50': s.theme !== 'dark' }">
+            <input type="checkbox" id="invertColorsInDarkMode" v-model="s.invertColorsInDarkMode" :disabled="s.theme !== 'dark'" class="mt-1 w-4 h-4" />
+            <label for="invertColorsInDarkMode" class="flex-1">
+              <span class="font-medium">暗色模式反轉文件顏色</span>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                在暗色模式下反轉 PDF/圖片的顏色，讓白底黑字的文件變成黑底白字，更適合夜間閱讀。
+                <span v-if="s.theme !== 'dark'" class="block mt-1">需先啟用暗色模式。</span>
+              </p>
+            </label>
+          </div>
         </div>
       </section>
 

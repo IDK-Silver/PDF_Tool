@@ -3,6 +3,7 @@
 export interface SettingsState {
   // === 外觀 ===
   theme: 'light' | 'dark'
+  invertColorsInDarkMode: boolean  // 暗色模式下反轉 PDF/圖片顏色
 
   // === 檔案操作 ===
   deleteBehavior: 'saveAsNew' | 'overwrite'
@@ -45,6 +46,7 @@ export interface SettingsState {
 export const defaultSettings: SettingsState = {
   // 外觀
   theme: 'light',
+  invertColorsInDarkMode: false,
 
   // 檔案操作
   deleteBehavior: 'saveAsNew',
@@ -88,6 +90,7 @@ export const defaultSettings: SettingsState = {
 export function migrateFromV1(old: any): SettingsState {
   return {
     theme: old.theme ?? defaultSettings.theme,
+    invertColorsInDarkMode: old.invertColorsInDarkMode ?? defaultSettings.invertColorsInDarkMode,
     deleteBehavior: old.deleteBehavior ?? defaultSettings.deleteBehavior,
     
     insertPaper: old.insertPaper ?? defaultSettings.insertPaper,
