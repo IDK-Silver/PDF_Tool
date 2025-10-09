@@ -33,7 +33,7 @@ export const useMediaStore = defineStore('media', () => {
   const priorityIndex = ref(0)
   // 雙快取策略：追蹤高解析度頁面用於 LRU 淘汰（動態上限）
   const highResPages = new Set<number>()
-  const getMaxHiResCache = () => settings.s.useRawForHighRes ? settings.s.rawHighResCacheSize : 50
+  const getMaxHiResCache = () => settings.s.renderFormat === 'raw' ? settings.s.rawHighResCacheSize : 50
   let evictCounter = 0  // 批次淘汰計數器
   
   // Batch DOM-reactive updates to next animation frame to reduce jank
@@ -338,14 +338,14 @@ export const useMediaStore = defineStore('media', () => {
       const size = pageSizesPt.value[index] || await getPageSizePt(index)
       const isLargePage = size && (size.widthPt > 650 || size.heightPt > 900)
       
-      // 🚀 激進模式：高清也用 raw（零編解碼，記憶體換速度）
       let finalFormat: 'png'|'jpeg'|'webp'|'raw'
-      if (settings.s.useRawForHighRes) {
-        finalFormat = 'raw'  // 激進：全 raw
+      const userFormat = format ?? settings.s.renderFormat
+      if (userFormat === 'raw') {
+        finalFormat = 'raw'
+      } else if (isLargePage && userFormat !== 'jpeg') {
+        finalFormat = 'jpeg'
       } else {
-        // 保守：用戶指定格式 or Settings，大頁面強制 JPEG
-        const userFormat = format ?? settings.s.renderFormat
-        finalFormat = isLargePage ? 'jpeg' : userFormat
+        finalFormat = userFormat
       }
       
       enqueueJob(index, targetWidth, finalFormat, dpi, false)
@@ -379,7 +379,9 @@ export const useMediaStore = defineStore('media', () => {
         ? (isLowRes ? 65 : 82)  // 低清 JPEG 65（極速），高清 JPEG 82（平衡品質與速度）
         : (job.format === 'webp')
         ? 85  // WebP 統一品質 85
-        : (settings.s.pngCompression === 'fast' ? 25 : settings.s.pngCompression === 'best' ? 100 : 50)
+        : (job.format === 'png'
+          ? (settings.s.pngCompression === 'fast' ? 25 : settings.s.pngCompression === 'best' ? 100 : 50)
+          : undefined)
       const gen = nextGen(idx)
       pdfRenderPage({ docId: docId.value!, pageIndex: idx, targetWidth: job.targetWidth, dpi: job.dpi, format: job.format, quality: q, gen })
         .then(p => {
