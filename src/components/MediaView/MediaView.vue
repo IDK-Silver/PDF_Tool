@@ -778,7 +778,7 @@ function onImageLoad(e: Event) {
 
     <div ref="scrollRootEl" class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain"
       style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: auto;">
-      <div :class="viewMode === 'fit' ? 'p-4 space-y-3' : 'p-4 space-y-3 inline-block min-w-full'" 
+      <div :class="viewMode === 'fit' ? 'p-4 space-y-3' : 'p-4 space-y-3 min-w-full'" 
         style="will-change: contents; contain: layout;">
 
         <div v-if="media.loading">讀取中…</div>
@@ -787,10 +787,9 @@ function onImageLoad(e: Event) {
 
         <div v-else>
           
-          <div v-if="media.imageUrl" class="min-h-full bg-neutral-200 pt-4 pb-10" 
-            :class="viewMode === 'fit' ? 'w-full' : 'inline-block'" data-image-view>
-            <div :class="viewMode === 'fit' ? 'w-full flex justify-center' : 'text-center'">
-              <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'inline-block px-6'">
+          <div v-if="media.imageUrl" class="w-full min-h-full bg-neutral-200 pt-4 pb-10" data-image-view>
+            <div class="w-full flex justify-center">
+              <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
                 <div class="bg-white rounded-md shadow border border-neutral-200 overflow-auto inline-block"
                   :style="pageCardStyle(0)">
                   <img :src="media.imageUrl" alt="image" :class="viewMode === 'fit' ? 'w-full block' : 'block'"
@@ -801,14 +800,13 @@ function onImageLoad(e: Event) {
             </div>
           </div>
 
-          <div v-else-if="totalPages" class="min-h-full bg-neutral-200 pt-4 pb-10"
-            :class="viewMode === 'fit' ? 'w-full' : 'inline-block'">
+          <div v-else-if="totalPages" class="w-full min-h-full bg-neutral-200 pt-4 pb-10">
             <div v-for="idx in renderIndices" :key="idx" 
-              :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'mb-10 text-center'"
+              class="w-full mb-10 flex justify-center"
               :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomApplied / 100)) + 'px' } : undefined"
               :data-pdf-page="idx" :ref="el => observe(el as Element, idx)"
               @contextmenu.prevent="onPageContextMenu(idx, $event)">
-              <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'inline-block px-6'">
+              <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
                 <div
                   :class="['bg-white rounded-md shadow border border-neutral-200 relative inline-block', viewMode === 'fit' ? 'overflow-hidden w-full' : 'overflow-visible']"
                   :style="pageCardStyle(idx)">
