@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, unref, watchEffect } from 'vue'
+import { computed, ref, unref, watchEffect, onMounted, onBeforeUnmount } from 'vue'
 import type { Ref } from 'vue'
 import MediaToolbar from './parts/MediaToolbar.vue'
 import PdfViewport from './parts/PdfViewport.vue'
@@ -79,6 +79,37 @@ function handleZoomIn() {
 function handleZoomOut() {
   activeControls.value?.zoomOut()
 }
+
+function isEditableTarget(el: EventTarget | null): boolean {
+  const t = el as HTMLElement | null
+  if (!t) return false
+  const tag = t.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || (t as any).isContentEditable === true
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (!e.metaKey && !e.ctrlKey) return
+  if (isEditableTarget(e.target)) return
+  const k = e.key
+  const code = (e.code || '').toLowerCase()
+  if (k === '+' || k === '=' || code === 'equal') {
+    e.preventDefault()
+    handleZoomIn()
+    return
+  }
+  if (k === '-' || k === '_' || code === 'minus') {
+    e.preventDefault()
+    handleZoomOut()
+    return
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown, { passive: false })
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown as any)
+})
 
 async function onSaveNow() {
   const d = media.descriptor

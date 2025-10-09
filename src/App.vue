@@ -2,12 +2,37 @@
 import ModeChooseList from './components/ModeChooseList.vue'
 import SettingBar from './components/SettingBar.vue'
 import { useGlobalFileDrop } from '@/modules/filedrop/useFileDrop'
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useUiStore } from '@/modules/ui/store'
 
 const { isDragging } = useGlobalFileDrop()
 const ui = useUiStore()
 const asideClass = computed(() => ui.sidebarCollapsed ? 'hidden' : 'w-[260px]')
+
+function isEditableTarget(el: EventTarget | null): boolean {
+  const t = el as HTMLElement | null
+  if (!t) return false
+  const tag = t.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || (t as any).isContentEditable === true
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (!e.metaKey && !e.ctrlKey) return
+  if (isEditableTarget(e.target)) return
+  // Cmd/Ctrl + B: toggle/collapse sidebar
+  const k = e.key.toLowerCase()
+  if (k === 'b') {
+    e.preventDefault()
+    ui.toggleSidebar()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown, { passive: false })
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown as any)
+})
 </script>
 
 <template>
