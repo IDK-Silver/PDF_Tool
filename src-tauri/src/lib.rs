@@ -17,6 +17,7 @@ pub fn run() {
             greet,
             media::analyze_media,
             media::image_read,
+            media::image_to_pdf,
             media::pdf_open,
             media::pdf_close,
             media::pdf_render_page,

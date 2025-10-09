@@ -130,6 +130,12 @@ export async function pdfExportPagePdf(opts: { docId: number, pageIndex: number,
   return invoke<{ path: string }>('pdf_export_page_pdf', { docId, pageIndex, destPath })
 }
 
+export async function imageToPdf(opts: { srcPath: string, destPath: string }): Promise<{ path: string }> {
+  const { srcPath, destPath } = opts
+  const path = await invoke<string>('image_to_pdf', { srcPath, destPath })
+  return { path }
+}
+
 export async function pdfInsertBlank(opts: { docId: number, index: number, widthPt: number, heightPt: number}): Promise<{ pages: number }> {
   const { docId, index, widthPt, heightPt } = opts
   return invoke<{ pages: number }>('pdf_insert_blank', { docId, index, widthPt, heightPt })

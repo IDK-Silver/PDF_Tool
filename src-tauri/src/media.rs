@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, atomic::{AtomicU64, Ordering}, mpsc};
 use once_cell::sync::Lazy;
 use image::ImageEncoder;
+use image::GenericImageView;
 use std::fs;
 use std::path::{Path, PathBuf};
 // no timestamp usage currently
@@ -152,6 +153,7 @@ enum PdfRequest {
     RotatePageRelative { doc_id: u64, index: u32, delta_deg: i16, reply: mpsc::Sender<Result<u16, MediaError>> },
     CopyPage { src_doc_id: u64, src_index: u32, dest_doc_id: u64, dest_index: u32, reply: mpsc::Sender<Result<usize, MediaError>> },
     Save { doc_id: u64, dest_path: Option<String>, overwrite: Option<bool>, reply: mpsc::Sender<Result<(String, usize), MediaError>> },
+    ImageToPdf { src_path: String, dest_path: String, reply: mpsc::Sender<Result<String, MediaError>> },
 }
 
 pub fn init_pdf_worker() {
@@ -379,6 +381,57 @@ pub fn init_pdf_worker() {
                         paths.insert(doc_id, dest.clone());
                         let pages = doc.pages().len() as usize;
                         Ok((dest, pages))
+                    })();
+                    let _ = reply.send(res);
+                }
+                Ok(PdfRequest::ImageToPdf { src_path, dest_path, reply }) => {
+                    let res = (|| -> Result<String, MediaError> {
+                        let p = Path::new(&src_path);
+                        if !p.exists() {
+                            return Err(MediaError::new("not_found", format!("圖片檔案不存在: {}", src_path)));
+                        }
+
+                        // 讀取圖片以取得尺寸
+                        let bytes = fs::read(p).map_err(|e| MediaError::new("io_error", format!("讀取圖片失敗: {e}")))?;
+                        let dyn_img = image::load_from_memory(&bytes)
+                            .map_err(|e| MediaError::new("decode_error", format!("解碼圖片失敗: {e}")))?;
+                        let (w_px, h_px) = GenericImageView::dimensions(&dyn_img);
+
+                        // 經驗法則：以 72 DPI 對應 1 px = 1 pt，避免不必要縮放
+                        let width_pt = w_px as f32;
+                        let height_pt = h_px as f32;
+
+                        let mut doc = pdfium
+                            .create_new_pdf()
+                            .map_err(|e| MediaError::new("io_error", format!("建立 PDF 失敗: {e}")))?;
+
+                        // 建立單一頁面
+                        let size = PdfPagePaperSize::Custom(PdfPoints::new(width_pt), PdfPoints::new(height_pt));
+                        let mut page = doc
+                            .pages_mut()
+                            .create_page_at_index(size, 0)
+                            .map_err(|e| MediaError::new("io_error", format!("建立頁面失敗: {e}")))?;
+
+                        // 在頁面上放置圖片，鋪滿整頁
+                        {
+                            let objects = page.objects_mut();
+                            // 以 0,0 為左下角，指定輸出寬高為整頁
+                            let _obj = objects
+                                .create_image_object(
+                                    PdfPoints::new(0.0),
+                                    PdfPoints::new(0.0),
+                                    &dyn_img,
+                                    Some(PdfPoints::new(width_pt)),
+                                    Some(PdfPoints::new(height_pt)),
+                                )
+                                .map_err(|e| MediaError::new("unsupported", format!("建立影像物件失敗: {e}")))?;
+                            // create_image_object 已自動加入頁面物件集合，無需再 add
+                        }
+
+                        doc
+                            .save_to_file(&dest_path)
+                            .map_err(|e| MediaError::new("io_error", format!("寫入 PDF 失敗: {e}")))?;
+                        Ok(dest_path)
                     })();
                     let _ = reply.send(res);
                 }
@@ -771,4 +824,20 @@ pub fn image_read(path: String) -> Result<ImageReadResult, MediaError> {
         image_bytes: bytes,
         mime_type,
     })
+}
+
+#[tauri::command]
+pub async fn image_to_pdf(src_path: String, dest_path: String) -> Result<String, MediaError> {
+    // 使用 Tokio 阻塞執行緒池，避免阻塞主執行緒
+    tokio::task::spawn_blocking(move || -> Result<String, MediaError> {
+        let (rtx, rrx) = mpsc::channel();
+        WORKER_TX
+            .lock().unwrap().as_ref()
+            .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+            .send(PdfRequest::ImageToPdf { src_path, dest_path, reply: rtx })
+            .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+        rrx.recv().map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+    })
+    .await
+    .map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
 }

@@ -39,7 +39,7 @@ src-tauri/
 ### 支援格式
 
 - **PDF**: 完整支援（檢視、編輯、匯出）
-- **圖片**: PNG, JPEG, WebP, GIF, BMP, TIFF
+- **圖片**: PNG, JPEG, WebP, GIF, BMP, TIFF（可將單張圖片轉為單頁 PDF）
 
 ### 圖片載入流程
 
@@ -88,6 +88,10 @@ struct MediaDescriptor {
     height: Option<u32>,
 }
 ```
+
+##### `image_to_pdf(src_path: String, dest_path: String) -> String`
+
+將圖片轉為單頁 PDF 並存檔，回傳輸出路徑。
 
 #### 前端 Service
 
@@ -149,3 +153,6 @@ PDF 頁面採用雙快取策略以平衡載入速度與顯示品質：
 - [ ] 圖片批次處理
 - [ ] 圖片轉 PDF
 - [ ] 更多匯出選項
+##### `imageToPdf({ srcPath, destPath }): Promise<{ path: string }>`
+
+將圖片轉為 PDF 並回傳輸出路徑；ImageView 右鍵選單提供快捷操作。

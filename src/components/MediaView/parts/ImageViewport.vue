@@ -3,9 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
 import { openInFileManager } from '@/modules/media/openInFileManager'
+import { imageToPdf } from '@/modules/media/service'
+import { save as saveDialog } from '@tauri-apps/plugin-dialog'
+import { useFileListStore } from '@/modules/filelist/store'
 
 const media = useMediaStore()
 const settings = useSettingsStore()
+const filelist = useFileListStore()
 
 const viewMode = ref<'fit' | 'actual'>('fit')
 const zoomTarget = ref(100)
@@ -55,6 +59,22 @@ async function revealInFileManagerFromMenu() {
   } catch (err) {
     console.error('展示檔案於檔案管理器失敗', err)
     alert('無法在檔案管理器中開啟此檔案。')
+  }
+}
+
+async function convertImageToPdfFromMenu() {
+  closeMenu()
+  const d = media.descriptor
+  if (!d || d.type !== 'image') return
+  const base = (d.name?.replace(/\.(png|jpe?g|webp|gif|bmp|tiff?)$/i, '') || 'image') + '.pdf'
+  const picked = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+  if (!picked) return
+  try {
+    const res = await imageToPdf({ srcPath: d.path, destPath: picked })
+    try { filelist.add(res.path) } catch {}
+    await media.selectPath(res.path)
+  } catch (e: any) {
+    alert(e?.message || String(e))
   }
 }
 
@@ -365,6 +385,9 @@ defineExpose({
     >
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="revealInFileManagerFromMenu">
         在檔案管理器中開啟
+      </button>
+      <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="convertImageToPdfFromMenu">
+        轉成 PDF…
       </button>
     </div>
   </teleport>
