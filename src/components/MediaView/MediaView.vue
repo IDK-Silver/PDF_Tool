@@ -680,7 +680,7 @@ onMounted(() => { scheduleUpdateFitPercent() })
 watch(zoomApplied, () => { /* no-op: 讓依賴更新 */ })
 
 function pageCardStyle(idx: number) {
-  const baseStyle: any = { contentVisibility: 'auto', containIntrinsicSize: '800px 1131px' }
+  const baseStyle: any = {}
   if (viewMode.value === 'fit') return baseStyle
   const d = media.descriptor
   if (!d) return baseStyle
@@ -777,9 +777,9 @@ function onImageLoad(e: Event) {
     </div>
 
     <div ref="scrollRootEl" class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain"
-      style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: auto;">
+      style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: none;">
       <div :class="viewMode === 'fit' ? 'p-4 space-y-3' : 'p-4 space-y-3 min-w-full'" 
-        style="will-change: contents; contain: layout;">
+        style="will-change: contents;">
 
         <div v-if="media.loading">讀取中…</div>
 
