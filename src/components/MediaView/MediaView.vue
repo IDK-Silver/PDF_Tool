@@ -70,8 +70,33 @@ function scheduleZoomApply() {
   zoomDebounceTimer = window.setTimeout(() => {
     zoomDebounceTimer = null
     if (viewMode.value === 'actual') {
-      // 停止互動後才套用實際寬度並觸發高清重繪
-      zoomApplied.value = zoomTarget.value
+      // 記錄當前滾動位置和縮放比例
+      const root = scrollRootEl.value
+      if (root) {
+        const oldZoom = zoomApplied.value
+        const newZoom = zoomTarget.value
+        const zoomRatio = newZoom / oldZoom
+        
+        // 記錄當前滾動中心點
+        const scrollCenterX = root.scrollLeft + root.clientWidth / 2
+        const scrollCenterY = root.scrollTop + root.clientHeight / 2
+        
+        // 套用新的縮放
+        zoomApplied.value = zoomTarget.value
+        
+        // 下一幀調整滾動位置以保持視覺中心
+        nextTick(() => {
+          requestAnimationFrame(() => {
+            const newScrollCenterX = scrollCenterX * zoomRatio
+            const newScrollCenterY = scrollCenterY * zoomRatio
+            root.scrollLeft = newScrollCenterX - root.clientWidth / 2
+            root.scrollTop = newScrollCenterY - root.clientHeight / 2
+          })
+        })
+      } else {
+        zoomApplied.value = zoomTarget.value
+      }
+      
       pendingIdx.clear();
       for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
       scheduleHiResRerender(0)
@@ -81,26 +106,76 @@ function scheduleZoomApply() {
 function zoomIn() {
   if (viewMode.value !== 'actual') {
     // 由 fit 切換到 actual 時，以當前 fit 百分比作為起始縮放
+    const root = scrollRootEl.value
     viewMode.value = 'actual'
     zoomTarget.value = fitPercentBaseline()
     zoomApplied.value = zoomTarget.value
+    
+    // 切換模式後保持當前頁面在視窗中心
+    if (root) {
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement
+          if (currentPageEl) {
+            currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
+          }
+        })
+      })
+    }
   }
   zoomTarget.value = Math.min(400, zoomTarget.value + 10)
   scheduleZoomApply()
 }
 function zoomOut() {
   if (viewMode.value !== 'actual') {
+    const root = scrollRootEl.value
     viewMode.value = 'actual'
     zoomTarget.value = fitPercentBaseline()
     zoomApplied.value = zoomTarget.value
+    
+    // 切換模式後保持當前頁面在視窗中心
+    if (root) {
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement
+          if (currentPageEl) {
+            currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
+          }
+        })
+      })
+    }
   }
   zoomTarget.value = Math.max(10, zoomTarget.value - 10)
   scheduleZoomApply()
 }
 function resetZoom() {
-  viewMode.value = 'actual'
-  zoomTarget.value = 100
-  zoomApplied.value = 100
+  const root = scrollRootEl.value
+  if (root && viewMode.value === 'actual') {
+    // 記錄縮放前的中心點
+    const oldZoom = zoomApplied.value
+    const newZoom = 100
+    const zoomRatio = newZoom / oldZoom
+    const scrollCenterX = root.scrollLeft + root.clientWidth / 2
+    const scrollCenterY = root.scrollTop + root.clientHeight / 2
+    
+    viewMode.value = 'actual'
+    zoomTarget.value = 100
+    zoomApplied.value = 100
+    
+    // 調整滾動位置
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        const newScrollCenterX = scrollCenterX * zoomRatio
+        const newScrollCenterY = scrollCenterY * zoomRatio
+        root.scrollLeft = newScrollCenterX - root.clientWidth / 2
+        root.scrollTop = newScrollCenterY - root.clientHeight / 2
+      })
+    })
+  } else {
+    viewMode.value = 'actual'
+    zoomTarget.value = 100
+    zoomApplied.value = 100
+  }
   pendingIdx.clear();[...visibleIdx].forEach(i => pendingIdx.add(i)); rafScheduled = false; scheduleHiResRerender(0)
 }
 function setFitMode() {
@@ -568,19 +643,38 @@ onMounted(() => {
       const w = scrollRootEl.value?.clientWidth || 0
       if (w > 0) {
         const oldW = containerW.value
-        containerW.value = w
-        scheduleUpdateFitPercent()
         
-        // ⚡ 視窗大小變化超過 10% 時重新渲染（支援放大與縮小）
-        // fit 模式：容器變大需要更高解析度，變小可降低解析度節省資源
-        // actual 模式：容器變化不影響 DPI，但仍需更新可見範圍
-        const sizeDiff = Math.abs(w - oldW)
-        const shouldRerender = oldW > 0 && (sizeDiff / oldW) > 0.1
-        
-        if (shouldRerender && w !== lastResizeWidth) {
-          lastResizeWidth = w
-          if (hiResTimer) clearTimeout(hiResTimer)
-          scheduleHiResRerender(500)  // 視窗調整後 500ms 重渲染（平衡響應速度與效能）
+        // 🎯 視窗大小變化時保持當前頁面位置
+        if (oldW > 0 && w !== oldW) {
+          const root = scrollRootEl.value
+          const currentPageEl = root?.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement
+          
+          // 先更新寬度
+          containerW.value = w
+          scheduleUpdateFitPercent()
+          
+          // 延遲恢復滾動位置（等待 DOM 更新）
+          nextTick(() => {
+            requestAnimationFrame(() => {
+              if (currentPageEl && root) {
+                // 保持當前頁面在視窗中的相對位置
+                currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
+              }
+            })
+          })
+          
+          // ⚡ 視窗大小變化超過 10% 時重新渲染（支援放大與縮小）
+          const sizeDiff = Math.abs(w - oldW)
+          const shouldRerender = (sizeDiff / oldW) > 0.1
+          
+          if (shouldRerender && w !== lastResizeWidth) {
+            lastResizeWidth = w
+            if (hiResTimer) clearTimeout(hiResTimer)
+            scheduleHiResRerender(500)  // 視窗調整後 500ms 重渲染（平衡響應速度與效能）
+          }
+        } else {
+          containerW.value = w
+          scheduleUpdateFitPercent()
         }
       }
     })
