@@ -20,7 +20,6 @@ const exportSettings = useExportSettings()
 
 const viewMode = ref<'fit' | 'actual'>('fit')
 const zoomTarget = ref(100)
-const zoomApplied = ref(100)
 const displayFitPercent = ref<number | null>(null)
 const displayZoom = computed(() => (viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value))
 
@@ -47,78 +46,95 @@ function dprForMode() {
   return viewMode.value === 'fit' ? Math.min(window.devicePixelRatio || 1, settings.s.dprCap) : 1
 }
 function dpiForActual() {
-  const dpi = Math.max(24, Math.round(96 * (zoomApplied.value / 100)))
+  const dpi = Math.max(24, Math.round(96 * (zoomTarget.value / 100)))
   const cap = Math.max(48, settings.s.actualModeDpiCap || dpi)
   return Math.min(dpi, cap)
 }
+
 function fitPercentBaseline(): number {
   const p = Math.round(displayFitPercent.value ?? 100)
   return Math.max(10, Math.min(400, p))
 }
 
-let zoomDebounceTimer: number | null = null
-function scheduleZoomApply() {
-  if (zoomDebounceTimer) {
-    clearTimeout(zoomDebounceTimer)
-    zoomDebounceTimer = null
-  }
-  const ms = Math.max(120, Math.min(300, settings.s.zoomDebounceMs || 180))
-  zoomDebounceTimer = window.setTimeout(() => {
-    zoomDebounceTimer = null
-    if (viewMode.value !== 'actual') return
-    const root = scrollRootEl.value
+function zoomIn() {
+  const root = scrollRootEl.value
+  if (viewMode.value !== 'actual') {
+    viewMode.value = 'actual'
+    zoomTarget.value = fitPercentBaseline()  // 從當前 fit 的縮放值開始
     if (root) {
-      const oldZoom = zoomApplied.value
-      const newZoom = zoomTarget.value
-      const zoomRatio = newZoom / oldZoom
-      const scrollCenterX = root.scrollLeft + root.clientWidth / 2
-      const scrollCenterY = root.scrollTop + root.clientHeight / 2
-      zoomApplied.value = newZoom
       nextTick(() => {
         requestAnimationFrame(() => {
-          const newScrollCenterX = scrollCenterX * zoomRatio
-          const newScrollCenterY = scrollCenterY * zoomRatio
-          root.scrollLeft = newScrollCenterX - root.clientWidth / 2
-          root.scrollTop = newScrollCenterY - root.clientHeight / 2
+          const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement | null
+          if (currentPageEl) {
+            currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
+          }
         })
       })
-    } else {
-      zoomApplied.value = zoomTarget.value
     }
+  } else if (root) {
+    const newZoom = Math.min(400, zoomTarget.value + 10)
+    
+    // 找到當前中心頁面的圖片元素
+    const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement | null
+    const img = currentPageEl?.querySelector('img') as HTMLImageElement | null
+    
+    if (img) {
+      // 獲取圖片和視窗的實際位置
+      const rootRect = root.getBoundingClientRect()
+      const imgRect = img.getBoundingClientRect()
+      
+      // 計算視窗中心點相對於圖片的位置（像素值）
+      const viewportCenterX = rootRect.left + rootRect.width / 2
+      const viewportCenterY = rootRect.top + rootRect.height / 2
+      const offsetX = viewportCenterX - imgRect.left
+      const offsetY = viewportCenterY - imgRect.top
+      
+      // 計算縮放比例
+      const zoomRatio = newZoom / zoomTarget.value
+      
+      zoomTarget.value = newZoom
+      
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          // 縮放後重新獲取圖片位置
+          const newImgRect = img.getBoundingClientRect()
+          const newRootRect = root.getBoundingClientRect()
+          
+          // 計算縮放後，原本的點應該在哪裡
+          const newOffsetX = offsetX * zoomRatio
+          const newOffsetY = offsetY * zoomRatio
+          const targetCenterX = newImgRect.left + newOffsetX
+          const targetCenterY = newImgRect.top + newOffsetY
+          
+          // 調整滾動位置使中心點保持不變
+          const scrollAdjustX = targetCenterX - (newRootRect.left + newRootRect.width / 2)
+          const scrollAdjustY = targetCenterY - (newRootRect.top + newRootRect.height / 2)
+          
+          root.scrollLeft += scrollAdjustX
+          root.scrollTop += scrollAdjustY
+        })
+      })
+      // 立即觸發重新渲染，不使用 debounce
+      pendingIdx.clear()
+      for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
+      rafScheduled = false
+      scheduleHiResRerender(0)
+      return
+    }
+    zoomTarget.value = newZoom
+    // 立即觸發重新渲染
     pendingIdx.clear()
     for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
     rafScheduled = false
     scheduleHiResRerender(0)
-  }, ms)
-}
-
-function zoomIn() {
-  if (viewMode.value !== 'actual') {
-    const root = scrollRootEl.value
-    viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()
-    zoomApplied.value = zoomTarget.value
-    if (root) {
-      nextTick(() => {
-        requestAnimationFrame(() => {
-          const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement | null
-          if (currentPageEl) {
-            currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
-          }
-        })
-      })
-    }
   }
-  zoomTarget.value = Math.min(400, zoomTarget.value + 10)
-  scheduleZoomApply()
 }
 
 function zoomOut() {
+  const root = scrollRootEl.value
   if (viewMode.value !== 'actual') {
-    const root = scrollRootEl.value
     viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()
-    zoomApplied.value = zoomTarget.value
+    zoomTarget.value = fitPercentBaseline()  // 從當前 fit 的縮放值開始
     if (root) {
       nextTick(() => {
         requestAnimationFrame(() => {
@@ -129,27 +145,74 @@ function zoomOut() {
         })
       })
     }
+  } else if (root) {
+    const newZoom = Math.max(10, zoomTarget.value - 10)
+    
+    // 找到當前中心頁面的圖片元素
+    const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement | null
+    const img = currentPageEl?.querySelector('img') as HTMLImageElement | null
+    
+    if (img) {
+      // 獲取圖片和視窗的實際位置
+      const rootRect = root.getBoundingClientRect()
+      const imgRect = img.getBoundingClientRect()
+      
+      // 計算視窗中心點相對於圖片的位置（像素值）
+      const viewportCenterX = rootRect.left + rootRect.width / 2
+      const viewportCenterY = rootRect.top + rootRect.height / 2
+      const offsetX = viewportCenterX - imgRect.left
+      const offsetY = viewportCenterY - imgRect.top
+      
+      // 計算縮放比例
+      const zoomRatio = newZoom / zoomTarget.value
+      
+      zoomTarget.value = newZoom
+      
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          // 縮放後重新獲取圖片位置
+          const newImgRect = img.getBoundingClientRect()
+          const newRootRect = root.getBoundingClientRect()
+          
+          // 計算縮放後，原本的點應該在哪裡
+          const newOffsetX = offsetX * zoomRatio
+          const newOffsetY = offsetY * zoomRatio
+          const targetCenterX = newImgRect.left + newOffsetX
+          const targetCenterY = newImgRect.top + newOffsetY
+          
+          // 調整滾動位置使中心點保持不變
+          const scrollAdjustX = targetCenterX - (newRootRect.left + newRootRect.width / 2)
+          const scrollAdjustY = targetCenterY - (newRootRect.top + newRootRect.height / 2)
+          
+          root.scrollLeft += scrollAdjustX
+          root.scrollTop += scrollAdjustY
+        })
+      })
+      // 立即觸發重新渲染，不使用 debounce
+      pendingIdx.clear()
+      for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
+      rafScheduled = false
+      scheduleHiResRerender(0)
+      return
+    }
+    zoomTarget.value = newZoom
+    // 立即觸發重新渲染
+    pendingIdx.clear()
+    for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
+    rafScheduled = false
+    scheduleHiResRerender(0)
   }
-  zoomTarget.value = Math.max(10, zoomTarget.value - 10)
-  scheduleZoomApply()
 }
 
 function resetZoom() {
   const root = scrollRootEl.value
-  const oldZoom = zoomApplied.value
   viewMode.value = 'actual'
   zoomTarget.value = 100
-  zoomApplied.value = 100
   if (root) {
-    const zoomRatio = 100 / oldZoom
-    const scrollCenterX = root.scrollLeft + root.clientWidth / 2
-    const scrollCenterY = root.scrollTop + root.clientHeight / 2
     nextTick(() => {
       requestAnimationFrame(() => {
-        const newScrollCenterX = scrollCenterX * zoomRatio
-        const newScrollCenterY = scrollCenterY * zoomRatio
-        root.scrollLeft = newScrollCenterX - root.clientWidth / 2
-        root.scrollTop = newScrollCenterY - root.clientHeight / 2
+        root.scrollLeft = 0
+        root.scrollTop = 0
       })
     })
   }
@@ -670,7 +733,6 @@ onBeforeUnmount(() => {
   refs.clear()
   if (scrollEndTimer) clearTimeout(scrollEndTimer)
   if (hiResTimer) clearTimeout(hiResTimer)
-  if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer)
   if (fitTimer) clearTimeout(fitTimer)
   scrollRootEl.value?.removeEventListener('scroll', onScroll)
   try {
@@ -726,24 +788,12 @@ onMounted(() => {
   scheduleUpdateFitPercent()
 })
 
-const liveScale = computed(() => (viewMode.value === 'actual' ? Math.max(0.1, zoomTarget.value / Math.max(1, zoomApplied.value)) : 1))
 const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
 
 function imgTransformStyle() {
-  const transforms: string[] = []
   const styles: Record<string, string> = {}
-  if (viewMode.value === 'actual') {
-    const s = liveScale.value
-    if (Number.isFinite(s) && s !== 1) {
-      transforms.push(`scale(${s})`)
-      styles.transformOrigin = 'top left'
-    }
-  }
   if (shouldInvertColors.value) {
     styles.filter = 'invert(1) hue-rotate(180deg)'
-  }
-  if (transforms.length > 0) {
-    styles.transform = transforms.join(' ')
   }
   return Object.keys(styles).length > 0 ? styles : undefined
 }
@@ -753,7 +803,7 @@ function pageCardStyle(idx: number) {
   if (viewMode.value === 'fit') return baseStyle
   const base = media.baseCssWidthAt100(idx)
   if (base) {
-    return { ...baseStyle, width: `${Math.max(50, Math.round(base * (zoomApplied.value / 100)))}px` }
+    return { ...baseStyle, width: `${Math.max(50, Math.round(base * (zoomTarget.value / 100)))}px` }
   }
   return baseStyle
 }
@@ -785,8 +835,8 @@ defineExpose({
         <div
           v-for="idx in renderIndices"
           :key="idx"
-          class="w-full mb-10 flex justify-center"
-          :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomApplied / 100)) + 'px' } : undefined"
+          :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'w-full mb-10'"
+          :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomTarget / 100)) + 'px' } : undefined"
           :data-pdf-page="idx"
           :ref="(el) => observe(el as Element, idx)"
           @contextmenu.prevent="onPageContextMenu(idx, $event)"

@@ -8,10 +8,8 @@ const settings = useSettingsStore()
 
 const viewMode = ref<'fit' | 'actual'>('fit')
 const zoomTarget = ref(100)
-const zoomApplied = ref(100)
 const displayFitPercent = ref<number | null>(null)
 const displayZoom = computed(() => (viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value))
-const liveScale = computed(() => (viewMode.value === 'actual' ? Math.max(0.1, zoomTarget.value / Math.max(1, zoomApplied.value)) : 1))
 const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
 
 const scrollRootEl = ref<HTMLElement | null>(null)
@@ -23,20 +21,9 @@ let fitTimer: number | null = null
 let resizeObs: ResizeObserver | null = null
 
 function imgTransformStyle() {
-  const transforms: string[] = []
   const styles: Record<string, string> = {}
-  if (viewMode.value === 'actual') {
-    const s = liveScale.value
-    if (Number.isFinite(s) && s !== 1) {
-      transforms.push(`scale(${s})`)
-      styles.transformOrigin = 'top left'
-    }
-  }
   if (shouldInvertColors.value) {
     styles.filter = 'invert(1) hue-rotate(180deg)'
-  }
-  if (transforms.length > 0) {
-    styles.transform = transforms.join(' ')
   }
   return Object.keys(styles).length > 0 ? styles : undefined
 }
@@ -46,97 +33,126 @@ function fitPercentBaseline(): number {
   return Math.max(10, Math.min(400, p))
 }
 
-function scheduleZoomApply() {
-  if (zoomDebounceTimer) {
-    clearTimeout(zoomDebounceTimer)
-    zoomDebounceTimer = null
-  }
-  const ms = Math.max(120, Math.min(300, settings.s.zoomDebounceMs || 180))
-  zoomDebounceTimer = window.setTimeout(() => {
-    zoomDebounceTimer = null
-    if (viewMode.value !== 'actual') return
-
-    const root = scrollRootEl.value
-    const imageContainer = root?.querySelector('[data-image-view]') as HTMLElement | null
-    if (!root || !imageContainer) {
-      zoomApplied.value = zoomTarget.value
-      return
-    }
-    const oldZoom = zoomApplied.value
-    const newZoom = zoomTarget.value
-    const zoomRatio = newZoom / oldZoom
-
-    const containerRect = imageContainer.getBoundingClientRect()
-    const rootRect = root.getBoundingClientRect()
-    const viewportCenterX = rootRect.left + rootRect.width / 2
-    const viewportCenterY = rootRect.top + rootRect.height / 2
-    const offsetX = viewportCenterX - containerRect.left + root.scrollLeft
-    const offsetY = viewportCenterY - containerRect.top + root.scrollTop
-
-    zoomApplied.value = newZoom
-    nextTick(() => {
-      requestAnimationFrame(() => {
-        const newOffsetX = offsetX * zoomRatio
-        const newOffsetY = offsetY * zoomRatio
-        root.scrollLeft = newOffsetX - rootRect.width / 2
-        root.scrollTop = newOffsetY - rootRect.height / 2
-      })
-    })
-  }, ms)
-}
-
 function zoomIn() {
+  const root = scrollRootEl.value
+  const img = imageEl.value
   if (viewMode.value !== 'actual') {
     viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()
-    zoomApplied.value = zoomTarget.value
+    zoomTarget.value = fitPercentBaseline()  // 從當前 fit 的縮放值開始
     nextTick(() => {
-      const root = scrollRootEl.value
       if (root) {
         root.scrollTop = 0
         root.scrollLeft = 0
       }
     })
+  } else if (root && img) {
+    // 記錄縮放前的狀態
+    const newZoom = Math.min(400, zoomTarget.value + 10)
+    
+    // 獲取圖片和視窗的實際位置
+    const rootRect = root.getBoundingClientRect()
+    const imgRect = img.getBoundingClientRect()
+    
+    // 計算視窗中心點相對於圖片的位置（像素值）
+    const viewportCenterX = rootRect.left + rootRect.width / 2
+    const viewportCenterY = rootRect.top + rootRect.height / 2
+    const offsetX = viewportCenterX - imgRect.left
+    const offsetY = viewportCenterY - imgRect.top
+    
+    // 計算縮放比例
+    const zoomRatio = newZoom / zoomTarget.value
+    
+    zoomTarget.value = newZoom
+    
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        // 縮放後重新獲取圖片位置
+        const newImgRect = img.getBoundingClientRect()
+        const newRootRect = root.getBoundingClientRect()
+        
+        // 計算縮放後，原本的點應該在哪裡
+        const newOffsetX = offsetX * zoomRatio
+        const newOffsetY = offsetY * zoomRatio
+        const targetCenterX = newImgRect.left + newOffsetX
+        const targetCenterY = newImgRect.top + newOffsetY
+        
+        // 調整滾動位置使中心點保持不變
+        const scrollAdjustX = targetCenterX - (newRootRect.left + newRootRect.width / 2)
+        const scrollAdjustY = targetCenterY - (newRootRect.top + newRootRect.height / 2)
+        
+        root.scrollLeft += scrollAdjustX
+        root.scrollTop += scrollAdjustY
+      })
+    })
+    return
   }
   zoomTarget.value = Math.min(400, zoomTarget.value + 10)
-  scheduleZoomApply()
 }
 
 function zoomOut() {
+  const root = scrollRootEl.value
+  const img = imageEl.value
   if (viewMode.value !== 'actual') {
     viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()
-    zoomApplied.value = zoomTarget.value
+    zoomTarget.value = fitPercentBaseline()  // 從當前 fit 的縮放值開始
     nextTick(() => {
-      const root = scrollRootEl.value
       if (root) {
         root.scrollTop = 0
         root.scrollLeft = 0
       }
     })
+  } else if (root && img) {
+    // 記錄縮放前的狀態
+    const newZoom = Math.max(10, zoomTarget.value - 10)
+    
+    // 獲取圖片和視窗的實際位置
+    const rootRect = root.getBoundingClientRect()
+    const imgRect = img.getBoundingClientRect()
+    
+    // 計算視窗中心點相對於圖片的位置（像素值）
+    const viewportCenterX = rootRect.left + rootRect.width / 2
+    const viewportCenterY = rootRect.top + rootRect.height / 2
+    const offsetX = viewportCenterX - imgRect.left
+    const offsetY = viewportCenterY - imgRect.top
+    
+    // 計算縮放比例
+    const zoomRatio = newZoom / zoomTarget.value
+    
+    zoomTarget.value = newZoom
+    
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        // 縮放後重新獲取圖片位置
+        const newImgRect = img.getBoundingClientRect()
+        const newRootRect = root.getBoundingClientRect()
+        
+        // 計算縮放後，原本的點應該在哪裡
+        const newOffsetX = offsetX * zoomRatio
+        const newOffsetY = offsetY * zoomRatio
+        const targetCenterX = newImgRect.left + newOffsetX
+        const targetCenterY = newImgRect.top + newOffsetY
+        
+        // 調整滾動位置使中心點保持不變
+        const scrollAdjustX = targetCenterX - (newRootRect.left + newRootRect.width / 2)
+        const scrollAdjustY = targetCenterY - (newRootRect.top + newRootRect.height / 2)
+        
+        root.scrollLeft += scrollAdjustX
+        root.scrollTop += scrollAdjustY
+      })
+    })
+    return
   }
   zoomTarget.value = Math.max(10, zoomTarget.value - 10)
-  scheduleZoomApply()
 }
 
 function resetZoom() {
-  const oldZoom = zoomApplied.value
   viewMode.value = 'actual'
   zoomTarget.value = 100
-  zoomApplied.value = 100
   const root = scrollRootEl.value
   if (root) {
-    const newZoom = 100
-    const zoomRatio = newZoom / oldZoom
-    const scrollCenterX = root.scrollLeft + root.clientWidth / 2
-    const scrollCenterY = root.scrollTop + root.clientHeight / 2
     nextTick(() => {
-      requestAnimationFrame(() => {
-        const newScrollCenterX = scrollCenterX * zoomRatio
-        const newScrollCenterY = scrollCenterY * zoomRatio
-        root.scrollLeft = newScrollCenterX - root.clientWidth / 2
-        root.scrollTop = newScrollCenterY - root.clientHeight / 2
-      })
+      root.scrollTop = 0
+      root.scrollLeft = 0
     })
   }
 }
@@ -146,7 +162,6 @@ function setFitMode() {
     viewMode.value = 'fit'
     const baseline = fitPercentBaseline()
     zoomTarget.value = baseline
-    zoomApplied.value = baseline
   }
   scheduleUpdateFitPercent()
 }
@@ -188,7 +203,6 @@ watch(() => media.imageUrl, () => {
   imageNaturalWidth.value = null
   viewMode.value = 'fit'
   zoomTarget.value = 100
-  zoomApplied.value = 100
   displayFitPercent.value = null
   scheduleUpdateFitPercent()
 })
@@ -232,7 +246,8 @@ defineExpose({
 <template>
   <div
     ref="scrollRootEl"
-    class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain bg-muted flex items-center justify-center min-h-0"
+    class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain bg-muted min-h-0"
+    :class="viewMode === 'fit' ? 'flex items-center justify-center' : ''"
     style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: none;"
     data-image-view
   >
@@ -240,7 +255,7 @@ defineExpose({
       <div
         class="bg-card rounded-md shadow border border-border overflow-hidden mx-auto"
         :class="viewMode === 'fit' ? 'max-w-none w-full' : undefined"
-        :style="viewMode === 'actual' && imageNaturalWidth != null ? { width: Math.max(50, Math.round(imageNaturalWidth * (zoomApplied / 100))) + 'px' } : undefined"
+        :style="viewMode === 'actual' && imageNaturalWidth != null ? { width: Math.max(50, Math.round(imageNaturalWidth * (zoomTarget / 100))) + 'px' } : undefined"
       >
         <img
           :src="media.imageUrl || undefined"
