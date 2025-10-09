@@ -147,6 +147,12 @@ PDF 頁面採用雙快取策略以平衡載入速度與顯示品質：
 - 記憶上次瀏覽頁碼（PDF）
 - 搜尋過濾功能
 
+## 系統層級開檔流程
+
+- 後端在 `src-tauri/src/lib.rs` 內維護待處理佇列並透過 `frontend_ready` 指令與 `open-file` 事件串接單一實例與系統開檔事件。
+- 前端於 `src/modules/app/openFileBridge.ts` 初始化 `open-file` 事件監聽，新增路徑至檔案列表並呼叫媒體檢視載入。
+- `src-tauri/tauri.conf.json` 的 `fileAssociations` 訊息將應用註冊為 PDF 與常見圖片格式的檢視器。
+
 ## 未來規劃
 
 - [ ] 圖片編輯功能（旋轉、裁切）

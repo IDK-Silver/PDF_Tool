@@ -2,12 +2,14 @@
 import ModeChooseList from './components/ModeChooseList.vue'
 import SettingBar from './components/SettingBar.vue'
 import { useGlobalFileDrop } from '@/modules/filedrop/useFileDrop'
+import { initOpenFileBridge } from '@/modules/app/openFileBridge'
 import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useUiStore } from '@/modules/ui/store'
 
 const { isDragging } = useGlobalFileDrop()
 const ui = useUiStore()
 const asideClass = computed(() => ui.sidebarCollapsed ? 'hidden' : 'w-[260px]')
+let disposeOpenBridge: (() => void) | null = null
 
 function isEditableTarget(el: EventTarget | null): boolean {
   const t = el as HTMLElement | null
@@ -27,11 +29,23 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', onKeydown, { passive: false })
+  try {
+    disposeOpenBridge = await initOpenFileBridge()
+  } catch (err) {
+    console.error('[App] Failed to init open-file bridge', err)
+    disposeOpenBridge = null
+  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown as any)
+  if (disposeOpenBridge) {
+    try { disposeOpenBridge() } catch (err) {
+      console.error('[App] Failed to teardown open-file bridge', err)
+    }
+    disposeOpenBridge = null
+  }
 })
 </script>
 

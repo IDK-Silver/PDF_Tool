@@ -47,6 +47,23 @@
     ],
     "resources": [
       "resources/pdfium/*/*"
+    ],
+    "macOS": {
+      "entitlements": "macos/entitlements.plist"
+    },
+    "fileAssociations": [
+      {
+        "ext": ["pdf"],
+        "name": "PDF Document",
+        "role": "Viewer",
+        "description": "PDF file"
+      },
+      {
+        "ext": ["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "tif", "svg"],
+        "name": "Image File",
+        "role": "Viewer",
+        "description": "Image file"
+      }
     ]
   }
 }
