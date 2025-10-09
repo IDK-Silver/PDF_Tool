@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
+import { openInFileManager } from '@/modules/media/openInFileManager'
 
 const media = useMediaStore()
 const settings = useSettingsStore()
@@ -15,10 +16,47 @@ const shouldInvertColors = computed(() => settings.s.theme === 'dark' && setting
 const scrollRootEl = ref<HTMLElement | null>(null)
 const imageEl = ref<HTMLImageElement | null>(null)
 const imageNaturalWidth = ref<number | null>(null)
+const menu = ref<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
 
 let zoomDebounceTimer: number | null = null
 let fitTimer: number | null = null
 let resizeObs: ResizeObserver | null = null
+
+function onImageContextMenu(e: MouseEvent) {
+  e.preventDefault()
+  menu.value = { open: true, x: e.clientX, y: e.clientY }
+}
+
+function closeMenu() {
+  menu.value.open = false
+}
+
+function onGlobalClick(e: MouseEvent) {
+  if (!menu.value.open) return
+  const target = e.target as HTMLElement | null
+  const inMenu = target?.closest('[data-image-context-menu]')
+  if (!inMenu) {
+    closeMenu()
+  }
+}
+
+function onEsc(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    closeMenu()
+  }
+}
+
+async function revealInFileManagerFromMenu() {
+  const path = media.descriptor?.path
+  closeMenu()
+  if (!path) return
+  try {
+    await openInFileManager(path)
+  } catch (err) {
+    console.error('展示檔案於檔案管理器失敗', err)
+    alert('無法在檔案管理器中開啟此檔案。')
+  }
+}
 
 function imgTransformStyle() {
   const styles: Record<string, string> = {}
@@ -255,6 +293,8 @@ onMounted(() => {
     })
     resizeObs.observe(root)
   }
+  window.addEventListener('click', onGlobalClick, { capture: true })
+  window.addEventListener('keydown', onEsc)
   scheduleUpdateFitPercent()
 })
 
@@ -266,10 +306,14 @@ onBeforeUnmount(() => {
   } catch {
     /* noop */
   }
+  window.removeEventListener('click', onGlobalClick, { capture: true })
+  window.removeEventListener('keydown', onEsc)
 })
 
 const currentPage = computed(() => media.imageUrl ? 1 : 0)
 const totalPages = computed(() => media.imageUrl ? 1 : 0)
+
+watch(() => media.descriptor?.path, () => closeMenu())
 
 defineExpose({
   viewMode,
@@ -291,6 +335,7 @@ defineExpose({
     style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: none;"
     data-image-view
     @wheel="handleWheel"
+    @contextmenu.prevent="onImageContextMenu"
   >
     <div :class="viewMode === 'fit' ? 'w-full px-6 py-10' : 'px-6 py-10'">
       <div
@@ -311,4 +356,16 @@ defineExpose({
       </div>
     </div>
   </div>
+  <teleport to="body">
+    <div
+      v-if="menu.open"
+      data-image-context-menu
+      class="fixed z-[2000] bg-card border border-border rounded shadow text-sm w-max"
+      :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
+    >
+      <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="revealInFileManagerFromMenu">
+        在檔案管理器中開啟
+      </button>
+    </div>
+  </teleport>
 </template>

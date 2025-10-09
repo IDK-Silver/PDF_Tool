@@ -46,7 +46,7 @@ export interface SettingsState {
 export const defaultSettings: SettingsState = {
   // 外觀
   theme: 'light',
-  invertColorsInDarkMode: false,
+  invertColorsInDarkMode: true,
 
   // 檔案操作
   deleteBehavior: 'saveAsNew',
@@ -67,10 +67,10 @@ export const defaultSettings: SettingsState = {
   
   // 高清渲染
   renderFormat: 'raw',
-  highResDpiCap: 300,          // 高清 DPI 上限（A3: 96dpi=1.78M像素=300ms，144dpi=4M像素=700ms）
-  dprCap: 1.0,
+  highResDpiCap: 144,          // 高清 DPI 上限（A3: 96dpi=1.78M像素=300ms，144dpi=4M像素=700ms）
+  dprCap: 1.5,
   maxOutputWidth: 1200,
-  actualModeDpiCap: 300,
+  actualModeDpiCap: 144,
   zoomDebounceMs: 10,
 
   // 效能控制

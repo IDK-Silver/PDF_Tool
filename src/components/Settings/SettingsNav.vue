@@ -26,9 +26,9 @@ function go(hash: string) {
 <template>
   <nav class="p-3 text-sm space-y-2">
     <div class="text-xs text-[hsl(var(--muted-foreground))] mb-2">設定導覽</div>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))] text-blue-600 dark:text-blue-400" href="#low-res-rendering" @click.prevent="go('#low-res-rendering')">⚡ 低清渲染</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))] text-purple-600 dark:text-purple-400" href="#high-res-rendering" @click.prevent="go('#high-res-rendering')">✨ 高清渲染</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))] text-green-600 dark:text-green-400" href="#performance" @click.prevent="go('#performance')">⚙️ 效能控制</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#low-res-rendering" @click.prevent="go('#low-res-rendering')">低清渲染</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#high-res-rendering" @click.prevent="go('#high-res-rendering')">高清渲染</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#performance" @click.prevent="go('#performance')">效能控制</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#fileops" @click.prevent="go('#fileops')">檔案操作</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#encoding" @click.prevent="go('#encoding')">編碼品質</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#insert-defaults" @click.prevent="go('#insert-defaults')">插入預設</a>

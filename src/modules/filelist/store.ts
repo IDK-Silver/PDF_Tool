@@ -9,11 +9,18 @@ function baseName(p: string) {
   return parts[parts.length - 1] || p
 }
 
+function guessFileType(path: string): 'pdf' | 'image' | 'unknown' {
+  const lower = path.toLowerCase()
+  if (lower.endsWith('.pdf')) return 'pdf'
+  if (/\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(lower)) return 'image'
+  return 'unknown'
+}
+
 function loadFromStorage(): FileItem[] {
   try {
     const txt = localStorage.getItem(LS_KEY)
     if (!txt) return []
-    const arr = JSON.parse(txt) as Array<{ path: string; name?: string; id?: string; lastPage?: number }>
+    const arr = JSON.parse(txt) as Array<{ path: string; name?: string; id?: string; lastPage?: number; type?: 'pdf' | 'image' | 'unknown' }>
     const seen = new Set<string>()
     const items: FileItem[] = []
     for (const e of arr) {
@@ -22,7 +29,8 @@ function loadFromStorage(): FileItem[] {
       seen.add(e.path)
       const name = e.name || baseName(e.path)
       const lastPage = (typeof e.lastPage === 'number' && e.lastPage > 0) ? Math.floor(e.lastPage) : undefined
-      items.push({ id: e.path, name, path: e.path, lastPage })
+      const type = e.type || guessFileType(e.path)
+      items.push({ id: e.path, name, path: e.path, lastPage, type })
     }
     return items
   } catch {
@@ -52,7 +60,8 @@ export const useFileListStore = defineStore('filelist', () => {
       items.value.unshift(existing)
       return existing
     }
-    const it: FileItem = { id: path, name: baseName(path), path }
+    const type = guessFileType(path)
+    const it: FileItem = { id: path, name: baseName(path), path, type }
     items.value.unshift(it)
     return it
   }
