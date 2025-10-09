@@ -7,6 +7,18 @@ export async function analyzeMedia(path: string): Promise<MediaDescriptor> {
   return res
 }
 
+export interface ImageReadResult {
+  width: number
+  height: number
+  imageBytes: number[]
+  mimeType: string
+}
+
+export async function imageRead(path: string): Promise<ImageReadResult> {
+  const res = await invoke<ImageReadResult>('image_read', { path })
+  return res
+}
+
 // 已移除：請改用 pdf_open() 回傳的 pages 或 pdf_page_size()
 
 export async function pdfRenderPage(opts: {

@@ -16,6 +16,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             media::analyze_media,
+            media::image_read,
             media::pdf_open,
             media::pdf_close,
             media::pdf_render_page,

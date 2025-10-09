@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
 import type { MediaDescriptor, PageRender } from './types'
-import { analyzeMedia, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel } from './service'
+import { analyzeMedia, imageRead, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel } from './service'
 import { useSettingsStore } from '@/modules/settings/store'
 
 export const useMediaStore = defineStore('media', () => {
@@ -226,39 +226,25 @@ export const useMediaStore = defineStore('media', () => {
   function markDirty() { dirty.value = true }
   function clearDirty() { dirty.value = false }
 
-  function guessMime(path: string): string {
-    const ext = path.split('.').pop()?.toLowerCase()
-    switch (ext) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg'
-      case 'png':
-        return 'image/png'
-      case 'webp':
-        return 'image/webp'
-      case 'gif':
-        return 'image/gif'
-      case 'bmp':
-        return 'image/bmp'
-      case 'tif':
-      case 'tiff':
-        return 'image/tiff'
-      default:
-        return 'application/octet-stream'
-    }
-  }
-
-  // 失敗時從檔案系統讀 bytes，建立 blob URL
+  // 從後端讀取圖片 bytes 並建立 blob URL
   async function fallbackLoadImageBlob() {
     const d = descriptor.value
     if (!d || d.type !== 'image') return
     try {
-      const { readFile } = await import('@tauri-apps/plugin-fs')
-      const bytes = await readFile(d.path)
-      const mime = guessMime(d.path)
-      const blob = new Blob([bytes], { type: mime })
+      const result = await imageRead(d.path)
+      const bytes = new Uint8Array(result.imageBytes)
+      const blob = new Blob([bytes], { type: result.mimeType })
       const url = URL.createObjectURL(blob)
       imageObjectUrl.value = url
+      
+      // 更新 descriptor 的寬高資訊
+      if (descriptor.value) {
+        descriptor.value = {
+          ...descriptor.value,
+          width: result.width,
+          height: result.height,
+        }
+      }
     } catch (e: any) {
       error.value = e?.message || String(e)
     }
