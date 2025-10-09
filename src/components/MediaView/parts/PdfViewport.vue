@@ -836,7 +836,7 @@ defineExpose({
 <template>
   <div
     ref="scrollRootEl"
-    class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain min-h-0"
+    class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain bg-muted min-h-0"
     style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: none;"
   >
     <div v-if="!totalPages" class="p-4">尚未載入頁面</div>
@@ -844,7 +844,7 @@ defineExpose({
       v-else
       :class="viewMode === 'fit' ? 'p-4 space-y-3' : 'p-4 space-y-3 min-w-full'"
     >
-      <div class="w-full min-h-full bg-muted pt-4 pb-10">
+      <div class="w-full min-h-full pt-4 pb-10">
         <div
           v-for="idx in renderIndices"
           :key="idx"
