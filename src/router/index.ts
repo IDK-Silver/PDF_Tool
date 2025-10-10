@@ -12,6 +12,14 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/compress',
+    name: 'compress',
+    components: {
+      default: () => import('../components/Compression/CompressionView.vue'),
+      filelist: () => import('../components/FileList/MediaFileListPane.vue'),
+    },
+  },
+  {
     path: '/editor',
     name: 'pdf_editor',
     components: {

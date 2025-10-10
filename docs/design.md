@@ -132,6 +132,15 @@ MediaView 組件支援兩種檢視模式：
 - `MediaView/parts/PdfViewport.vue`：專責 PDF 頁面渲染、快取與右鍵操作。
 - `MediaView/parts/ImageViewport.vue`：圖片檢視與縮放控制，保持與 PDF 相同的檢視體驗。
 
+### Compression 模組（UI）
+
+- `Compression/CompressionView.vue`：壓縮主頁（PDF/圖片 Tab）。
+- `Compression/parts/PdfCompressPane.vue`：PDF 智慧壓縮參數（目標有效 DPI、格式、品質、黑白策略、結構最佳化）。
+- `Compression/parts/ImageCompressPane.vue`：圖片壓縮參數（格式、品質、最大邊、移除中繼資料）。
+- 目前僅提供前端 UI 與設定持久化（`src/modules/compress/`），後端壓縮指令將於後續加入。
+
+更多壓縮設計與策略詳見：`docs/compression.md`。
+
 ### 雙快取策略（PDF 專用）
 
 PDF 頁面採用雙快取策略以平衡載入速度與顯示品質：
