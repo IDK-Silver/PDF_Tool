@@ -143,14 +143,14 @@ pub async fn compress_image(args: CompressImageArgs) -> Result<CompressImageResu
                 image::imageops::overlay(&mut bg, &rgba, 0, 0);
                 let rgb = image::DynamicImage::ImageRgba8(bg).to_rgb8();
                 let q = args.quality.unwrap_or(82).clamp(1, 100);
-                let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(Cursor::new(&mut out), q);
+                let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(Cursor::new(&mut out), q);
                 enc.write_image(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
                     .map_err(|e| MediaError::new("encode_error", format!("JPEG 編碼失敗: {e}")))?;
             }
             "png" => {
                 use image::ColorType;
                 let rgba = img.to_rgba8();
-                let mut enc = image::codecs::png::PngEncoder::new_with_quality(
+                let enc = image::codecs::png::PngEncoder::new_with_quality(
                     Cursor::new(&mut out),
                     image::codecs::png::CompressionType::Default,
                     image::codecs::png::FilterType::NoFilter,
@@ -221,6 +221,277 @@ pub async fn compress_pdf_lossless(args: CompressPdfLosslessArgs) -> Result<Comp
             .map_err(|e| MediaError::new("io_error", format!("寫入輸出檔失敗: {e}")))?;
         let after_meta = fs::metadata(&args.dest_path).map_err(|e| MediaError::new("io_error", format!("讀取輸出檔資訊失敗: {e}")))?;
         Ok(CompressPdfLosslessResult { path: args.dest_path, before_size, after_size: after_meta.len() })
+    }).await.map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
+}
+
+// ------- v1 Smart compression (JPEG/Flate + basic structure optimize) -------
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressPdfSmartArgs {
+    pub src_path: String,
+    pub dest_path: String,
+    pub target_effective_dpi: Option<f32>,
+    pub downsample_rule: Option<String>,      // 'always' | 'whenAbove' （v1 暫不套用）
+    pub threshold_effective_dpi: Option<f32>, // v1 暫不套用
+    pub format: Option<String>,               // 'jpeg' | 'keep'
+    pub quality: Option<u8>,                  // 1-100（僅 JPEG 生效）
+    pub lossless_optimize: Option<bool>,
+    pub remove_metadata: Option<bool>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressPdfSmartResult {
+    pub path: String,
+    pub before_size: u64,
+    pub after_size: u64,
+    pub pages: usize,
+    pub changed_images: usize,
+}
+
+#[tauri::command]
+pub async fn compress_pdf_smart(args: CompressPdfSmartArgs) -> Result<CompressPdfSmartResult, MediaError> {
+    tokio::task::spawn_blocking(move || -> Result<CompressPdfSmartResult, MediaError> {
+        use lopdf::{Document, Object};
+
+        let src = Path::new(&args.src_path);
+        if !src.exists() {
+            return Err(MediaError::new("not_found", format!("來源檔案不存在: {}", args.src_path)));
+        }
+
+        let before_meta = fs::metadata(src)
+            .map_err(|e| MediaError::new("io_error", format!("讀取來源檔案資訊失敗: {e}")))?;
+        let before_size = before_meta.len();
+
+        let mut doc = Document::load(&args.src_path)
+            .map_err(|e| MediaError::new("parse_error", format!("讀取 PDF 失敗: {e}")))?;
+
+        // 移除 metadata（可選）
+        if args.remove_metadata.unwrap_or(true) {
+            let _ = doc.trailer.remove(b"Info");
+            if let Ok(root_id) = doc.trailer.get(b"Root").and_then(Object::as_reference) {
+                if let Ok(root_obj) = doc.get_object_mut(root_id) {
+                    if let Ok(dict) = root_obj.as_dict_mut() {
+                        let _ = dict.remove(b"Metadata");
+                    }
+                }
+            }
+        }
+
+        let pages_map = doc.get_pages();
+        let pages = pages_map.len();
+        let mut changed_images: usize = 0;
+
+        let requested_fmt = args.format.unwrap_or_else(|| "jpeg".to_string()).to_lowercase();
+        let jpeg_quality = args.quality.unwrap_or(82).clamp(1, 100);
+
+        // 逐頁處理 XObject 影像（僅處理 Subtype=Image 且 ColorSpace=DeviceRGB/DeviceGray）
+        for (_page_num, page_id) in pages_map {
+            // 取得頁面資源字典
+            let page_obj = doc
+                .get_object(page_id)
+                .map_err(|e| MediaError::new("parse_error", format!("讀取頁面失敗: {e}")))?;
+            let page_dict = page_obj
+                .as_dict()
+                .map_err(|_| MediaError::new("parse_error", "頁面物件非字典"))?;
+            let resources_obj = match page_dict.get(b"Resources") {
+                Ok(o) => o.clone(),
+                Err(_) => continue,
+            };
+            let resources_dict = match &resources_obj {
+                Object::Reference(id) => doc
+                    .get_object(*id)
+                    .map_err(|e| MediaError::new("parse_error", format!("讀取 Resources 失敗: {e}")))?
+                    .as_dict()
+                    .map_err(|_| MediaError::new("parse_error", "Resources 非字典"))?
+                    .clone(),
+                Object::Dictionary(d) => d.clone(),
+                _ => continue,
+            };
+
+            // 解析內容流，計算每個 XObject 名稱的顯示尺寸（pt）
+            use lopdf::content::Content;
+            let mut name_usage: HashMap<Vec<u8>, (f32, f32)> = HashMap::new();
+            let content_bytes = doc
+                .get_page_content(page_id)
+                .map_err(|e| MediaError::new("parse_error", format!("讀取內容流失敗: {e}")))?;
+            if let Ok(content) = Content::decode(&content_bytes) {
+                // 簡易 CTM 追蹤
+                let mut stack: Vec<[f32; 6]> = vec![[1.0, 0.0, 0.0, 1.0, 0.0, 0.0]];
+                let mut cur = [1.0f32, 0.0, 0.0, 1.0, 0.0, 0.0];
+                fn mul(m: [f32; 6], n: [f32; 6]) -> [f32; 6] {
+                    let (a, b, c, d, e, f) = (m[0], m[1], m[2], m[3], m[4], m[5]);
+                    let (a2, b2, c2, d2, e2, f2) = (n[0], n[1], n[2], n[3], n[4], n[5]);
+                    [
+                        a * a2 + b * c2,
+                        a * b2 + b * d2,
+                        c * a2 + d * c2,
+                        c * b2 + d * d2,
+                        e * a2 + f * c2 + e2,
+                        e * b2 + f * d2 + f2,
+                    ]
+                }
+                for op in content.operations {
+                    match op.operator.as_str() {
+                        "q" => { stack.push(cur); }
+                        "Q" => { cur = stack.pop().unwrap_or([1.0,0.0,0.0,1.0,0.0,0.0]); }
+                        "cm" => {
+                            if op.operands.len() >= 6 {
+                                let mut nums = [0f32;6];
+                                for i in 0..6 {
+                                    nums[i] = match &op.operands[i] {
+                                        Object::Integer(v) => *v as f32,
+                                        Object::Real(f) => *f as f32,
+                                        _ => 0.0,
+                                    };
+                                }
+                                let m = [nums[0], nums[1], nums[2], nums[3], nums[4], nums[5]];
+                                cur = mul(m, cur);
+                            }
+                        }
+                        "Do" => {
+                            if let Some(name_obj) = op.operands.get(0) {
+                                if let Ok(n) = name_obj.as_name() {
+                                    let w_pt = (cur[0]*cur[0] + cur[2]*cur[2]).sqrt();
+                                    let h_pt = (cur[1]*cur[1] + cur[3]*cur[3]).sqrt();
+                                    let entry = name_usage.entry(n.to_vec()).or_insert((0.0, 0.0));
+                                    if w_pt > entry.0 { entry.0 = w_pt; }
+                                    if h_pt > entry.1 { entry.1 = h_pt; }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // XObject dict
+            let xobj_dict_obj = match resources_dict.get(b"XObject") { Ok(o) => o, Err(_) => continue };
+            let xobj_dict = match xobj_dict_obj {
+                Object::Reference(id) => doc
+                    .get_object(*id)
+                    .map_err(|e| MediaError::new("parse_error", format!("讀取 XObject 失敗: {e}")))?
+                    .as_dict()
+                    .map_err(|_| MediaError::new("parse_error", "XObject 非字典"))?
+                    .clone(),
+                Object::Dictionary(d) => d.clone(),
+                _ => continue,
+            };
+
+            for (name, maybe_ref) in xobj_dict.iter() {
+                let obj_id = if let Object::Reference(id) = maybe_ref { *id } else { continue };
+                // 只處理影像 XObject
+                let is_image = {
+                    if let Ok(obj) = doc.get_object(obj_id) {
+                        if let Ok(stream) = obj.as_stream() {
+                            match stream.dict.get(b"Subtype") {
+                                Ok(Object::Name(n)) if n.as_slice() == b"Image" => true,
+                                _ => false,
+                            }
+                        } else { false }
+                    } else { false }
+                };
+                if !is_image { continue; }
+
+                // 取得可變更的 Stream
+                let stream_ref = doc.get_object_mut(obj_id).map_err(|e| MediaError::new("parse_error", format!("讀取影像物件失敗: {e}")))?;
+                let stream = match stream_ref.as_stream_mut() { Ok(s) => s, Err(_) => continue };
+
+                // 僅處理 DeviceRGB/DeviceGray
+                let colorspace_ok = match stream.dict.get(b"ColorSpace") {
+                    Ok(Object::Name(n)) if n.as_slice() == b"DeviceRGB" || n.as_slice() == b"DeviceGray" => true,
+                    _ => true, // 保守放行（某些影像未標示 ColorSpace，交由解碼器判斷）
+                };
+                if !colorspace_ok { continue; }
+
+                // 濾鏡判斷：優先處理 DCTDecode（JPEG）
+                let mut can_decode_jpeg = false;
+                match stream.dict.get(b"Filter") {
+                    Ok(Object::Name(n)) if n.as_slice() == b"DCTDecode" => can_decode_jpeg = true,
+                    Ok(Object::Array(arr)) => {
+                        if arr.iter().any(|o| matches!(o, Object::Name(n) if n.as_slice() == b"DCTDecode")) { can_decode_jpeg = true; }
+                    }
+                    _ => {}
+                }
+                if !can_decode_jpeg { continue; }
+
+                // 嘗試用 image crate 解碼影像（JPEG）
+                let data = &stream.content;
+                let mut dyn_img = match image::load_from_memory(data) {
+                    Ok(img) => img,
+                    Err(_) => continue,
+                };
+
+                // v2：依 UI 規則執行有效 DPI 下採樣（僅針對 JPEG 路徑）
+                if requested_fmt == "jpeg" {
+                    // 頁面上此影像的顯示寬/高（pt）
+                    let (disp_w_pt, disp_h_pt) = name_usage.get(name).copied().unwrap_or((0.0, 0.0));
+                    // 原始像素尺寸
+                    let img_w_px = match stream.dict.get(b"Width").and_then(|o| o.as_i64()) { Ok(v) => v as u32, Err(_) => dyn_img.width() };
+                    let img_h_px = match stream.dict.get(b"Height").and_then(|o| o.as_i64()) { Ok(v) => v as u32, Err(_) => dyn_img.height() };
+                    if disp_w_pt > 0.0 && img_w_px > 0 {
+                        let eff_dpi = (img_w_px as f32) * 72.0 / disp_w_pt.max(0.01);
+                        if let Some(tgt_dpi) = args.target_effective_dpi {
+                            let rule = args.downsample_rule.as_deref().unwrap_or("always");
+                            let threshold = args.threshold_effective_dpi.unwrap_or(tgt_dpi);
+                            let need = match rule {
+                                "whenAbove" => eff_dpi >= threshold as f32,
+                                _ => eff_dpi > tgt_dpi as f32,
+                            };
+                            if need {
+                                use image::imageops::FilterType;
+                                let target_w = ((disp_w_pt / 72.0) * tgt_dpi as f32).round().max(1.0) as u32;
+                                let target_h = if disp_h_pt > 0.0 { ((disp_h_pt / 72.0) * tgt_dpi as f32).round().max(1.0) as u32 } else { (img_h_px as f32 * (target_w as f32 / img_w_px as f32)).round().max(1.0) as u32 };
+                                if target_w < img_w_px || target_h < img_h_px {
+                                    dyn_img = dyn_img.resize(target_w, target_h, FilterType::Triangle);
+                                }
+                            }
+                        }
+                    }
+                    // 轉為 RGB8 並以 JPEG 輸出（無 alpha）
+                    use image::ColorType;
+                    let rgb = dyn_img.to_rgb8();
+                    let mut out: Vec<u8> = Vec::new();
+                    let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(Cursor::new(&mut out), jpeg_quality);
+                    if let Err(_) = enc.write_image(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into()) { continue; }
+
+                    // 更新 Stream：Filter=DCTDecode，移除 DecodeParms
+                    stream.set_content(out);
+                    stream.dict.set(b"Filter", Object::Name(b"DCTDecode".to_vec()));
+                    let _ = stream.dict.remove(b"DecodeParms");
+                    // 設為 DeviceRGB，8-bit
+                    stream.dict.set(b"ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
+                    stream.dict.set(b"BitsPerComponent", 8);
+                    // 同步寬高
+                    stream.dict.set(b"Width", rgb.width() as i64);
+                    stream.dict.set(b"Height", rgb.height() as i64);
+                    changed_images += 1;
+                } else {
+                    // keep：不處理
+                }
+            }
+        }
+
+        // 無損結構最佳化（v1：重壓 Flate streams）
+        if args.lossless_optimize.unwrap_or(true) {
+            doc.compress();
+        }
+
+        // 保存
+        doc.save(&args.dest_path)
+            .map_err(|e| MediaError::new("io_error", format!("寫入 PDF 失敗: {e}")))?;
+
+        let after_meta = fs::metadata(&args.dest_path)
+            .map_err(|e| MediaError::new("io_error", format!("讀取輸出檔資訊失敗: {e}")))?;
+
+        Ok(CompressPdfSmartResult {
+            path: args.dest_path,
+            before_size,
+            after_size: after_meta.len(),
+            pages,
+            changed_images,
+        })
     }).await.map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
 }
 

@@ -5,7 +5,7 @@ import { useCompressSettings } from './settings'
 import type { CompressionUiState } from './types'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useFileListStore } from '@/modules/filelist/store'
-import { compressImage, compressPdfLossless } from '@/modules/media/service'
+import { compressImage, compressPdfSmart } from '@/modules/media/service'
 
 export const useCompressionStore = defineStore('compression', () => {
   const ui = ref<CompressionUiState>({ activeTab: 'pdf' })
@@ -53,12 +53,23 @@ export const useCompressionStore = defineStore('compression', () => {
         try { filelist.add(res.path) } catch {}
         await media.selectPath(res.path)
       } else if (d.type === 'pdf') {
-        // v1: structure optimize (pure Rust placeholder; JPEG/Flate pass to follow)
+        // v1: JPEG/Flate 重編碼 + 基礎結構最佳化（純 Rust）
         const srcPath = d.path
         const base = (d.name || 'document').replace(/\.[^.]+$/,'') + ' (optimized).pdf'
         const destPath = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
         if (!destPath) return
-        const res = await compressPdfLossless({ srcPath, destPath, linearize: true })
+        const s = settings.s.pdf
+        const res = await compressPdfSmart({
+          srcPath,
+          destPath,
+          targetEffectiveDpi: s.targetEffectiveDpi,
+          downsampleRule: s.downsampleRule,
+          thresholdEffectiveDpi: s.thresholdEffectiveDpi,
+          format: s.format,
+          quality: s.quality,
+          losslessOptimize: s.losslessOptimize,
+          removeMetadata: s.removeMetadata,
+        })
         try { filelist.add(res.path) } catch {}
         await media.selectPath(res.path)
       }

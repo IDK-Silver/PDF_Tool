@@ -168,6 +168,28 @@ export async function compressPdfLossless(opts: CompressPdfLosslessOpts): Promis
   return invoke('compress_pdf_lossless', { args: opts })
 }
 
+export interface CompressPdfSmartOpts {
+  srcPath: string
+  destPath: string
+  targetEffectiveDpi?: number
+  downsampleRule?: 'always' | 'whenAbove'
+  thresholdEffectiveDpi?: number
+  format?: 'jpeg' | 'keep'
+  quality?: number
+  losslessOptimize?: boolean
+  removeMetadata?: boolean
+}
+
+export async function compressPdfSmart(opts: CompressPdfSmartOpts): Promise<{
+  path: string,
+  beforeSize: number,
+  afterSize: number,
+  pages: number,
+  changedImages: number,
+}> {
+  return invoke('compress_pdf_smart', { args: opts })
+}
+
 export async function pdfInsertBlank(opts: { docId: number, index: number, widthPt: number, heightPt: number}): Promise<{ pages: number }> {
   const { docId, index, widthPt, heightPt } = opts
   return invoke<{ pages: number }>('pdf_insert_blank', { docId, index, widthPt, heightPt })

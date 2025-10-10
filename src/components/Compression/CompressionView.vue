@@ -9,6 +9,9 @@ import { formatFileSize } from '@/modules/media/fileSize'
 import { openInFileManager } from '@/modules/media/openInFileManager'
 import { FolderOpenIcon } from '@heroicons/vue/24/outline'
 
+import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
+import { useUiStore } from '@/modules/ui/store'
+
 const compression = useCompressionStore()
 const media = useMediaStore()
 
@@ -24,6 +27,12 @@ const hasValidFile = computed(() => isPdf.value || isImage.value)
 const fileName = computed(() => media.selected?.name ?? '')
 const filePath = computed(() => media.selected?.path ?? '')
 const descriptorSize = computed(() => media.descriptor?.size ?? null)
+
+const ui = useUiStore()
+
+function onExpandSidebar() {
+  ui.setSidebarCollapsed(false)
+}
 
 // 檔案大小
 const fileSize = ref<number | null>(null)
@@ -79,6 +88,16 @@ async function onReveal() {
           @click="onReveal"
         >
           <FolderOpenIcon class="w-5 h-5" />
+        </button>
+        <!-- 展開側欄按鈕，僅在側欄收合時顯示 -->
+        <button
+          v-if="ui.sidebarCollapsed"
+          class="ml-2 inline-flex items-center justify-center w-7 h-7 rounded hover:bg-[hsl(var(--selection))] transition"
+          :title="'展開左側欄'"
+          aria-label="展開左側欄"
+          @click="onExpandSidebar"
+        >
+          <ChevronDoubleRightIcon class="w-5 h-5" />
         </button>
       </div>
     </header>

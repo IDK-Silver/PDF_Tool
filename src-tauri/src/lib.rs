@@ -147,6 +147,7 @@ pub fn run() {
             media::image_read,
             media::compress_image,
             media::compress_pdf_lossless,
+            media::compress_pdf_smart,
             media::image_to_pdf,
             media::pdf_open,
             media::pdf_close,
