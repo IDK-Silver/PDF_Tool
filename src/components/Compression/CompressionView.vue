@@ -9,6 +9,7 @@ import { formatFileSize } from '@/modules/media/fileSize'
 import { openInFileManager } from '@/modules/media/openInFileManager'
 import { FolderOpenIcon, ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
+import missingFile from '@/assets/placeholders/missing-file.jpg'
 
 const compression = useCompressionStore()
 const media = useMediaStore()
@@ -26,6 +27,13 @@ const hasValidFile = computed(() => isPdf.value || isImage.value)
 const fileName = computed(() => media.selected?.name ?? '')
 const filePath = computed(() => media.selected?.path ?? '')
 const descriptorSize = computed(() => media.descriptor?.size ?? null)
+
+// 當 filelist 有選擇但檔案不存在時，顯示佔位圖
+const isFileMissing = computed(() => {
+  if (!media.selected) return false
+  const msg = media.error || ''
+  return msg.includes('檔案不存在') || /not\s*found/i.test(msg)
+})
 
 // 檔案大小
 const fileSize = ref<number | null>(null)
@@ -103,6 +111,7 @@ async function onReveal() {
       class="border-b border-[hsl(var(--border))]"
       :running="compression.running"
       :selected-name="fileName"
+      :hide-actions="isFileMissing"
       @start="onStart"
       @cancel="onCancel"
     />
@@ -111,6 +120,9 @@ async function onReveal() {
     <div class="flex-1 min-h-0 overflow-auto p-4">
       <PdfCompressPane v-if="isPdf" />
       <ImageCompressPane v-else-if="isImage" />
+      <div v-else-if="isFileMissing" class="h-full flex items-center justify-center">
+        <img :src="missingFile" alt="File not found" class="max-w-[60%] max-h-[60%] opacity-80 select-none" />
+      </div>
       <div v-else class="h-full flex items-center justify-center">
         <div class="text-center text-[hsl(var(--muted-foreground))]">
           <p class="text-sm">請在左側選擇 PDF 或圖片檔案以開始壓縮</p>

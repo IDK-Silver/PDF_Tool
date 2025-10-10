@@ -4,6 +4,7 @@ import { computed } from 'vue'
 const props = defineProps<{
   running: boolean
   selectedName?: string
+  hideActions?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'start'): void; (e: 'cancel'): void }>()
@@ -21,7 +22,7 @@ function onCancel() { emit('cancel') }
       <span class="font-medium" v-if="selectedName">{{ selectedName }}</span>
       <span v-else class="text-[hsl(var(--muted-foreground))]">尚未選擇</span>
     </div>
-    <div class="flex-shrink-0 flex items-center gap-2">
+    <div v-if="!props.hideActions" class="flex-shrink-0 flex items-center gap-2">
       <button
         class="px-3 py-1 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
         :class="props.running 
@@ -38,4 +39,3 @@ function onCancel() { emit('cancel') }
     </div>
   </div>
 </template>
-

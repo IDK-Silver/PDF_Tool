@@ -7,6 +7,7 @@ import ImageViewport from './parts/ImageViewport.vue'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
+import missingFile from '@/assets/placeholders/missing-file.jpg'
 // save handled inside media store via saveCurrentIfNeeded
 
 const media = useMediaStore()
@@ -55,6 +56,13 @@ const currentPage = ref(0)
 const totalPages = ref(0)
 const canZoomIn = ref(true)
 const canZoomOut = ref(true)
+
+// 當 filelist 已選擇且後端回報檔案不存在時，顯示預設佔位圖
+const isFileMissing = computed(() => {
+  if (!media.selected) return false
+  const msg = media.error || ''
+  return msg.includes('檔案不存在') || /not\s*found/i.test(msg)
+})
 
 watchEffect(() => {
   const controls = activeControls.value
@@ -143,37 +151,30 @@ async function onSaveNow() {
 
 <template>
   <div class="h-full flex flex-col">
-    <div
-      v-if="settings.s.devPerfOverlay"
-      class="fixed bottom-2 right-2 z-50 pointer-events-none bg-black/75 text-white text-xs px-2 py-1 rounded shadow"
-    >
+    <div v-if="settings.s.devPerfOverlay"
+      class="fixed bottom-2 right-2 z-50 pointer-events-none bg-black/75 text-white text-xs px-2 py-1 rounded shadow">
       <span v-if="isPdf">p {{ currentPage }} / {{ totalPages }} · </span>
       inflight: {{ media.inflightCount }} · queued: {{ media.queue.length }}
     </div>
 
-    <MediaToolbar
-      :saving="saving"
-      :can-save="media.dirty && isPdf"
-      :current-page="currentPage"
-      :total-pages="totalPages"
-      :view-mode="viewMode"
-      :display-zoom="displayZoom"
-      :is-pdf="isPdf"
-      :can-zoom-in="canZoomIn"
-      :can-zoom-out="canZoomOut"
-      @save="onSaveNow"
-      @set-fit-mode="handleSetFitMode"
-      @reset-zoom="handleResetZoom"
-      @zoom-in="handleZoomIn"
-      @zoom-out="handleZoomOut"
-    />
+    <MediaToolbar :saving="saving" :can-save="media.dirty && isPdf" :current-page="currentPage"
+      :total-pages="totalPages" :view-mode="viewMode" :display-zoom="displayZoom" :is-pdf="isPdf"
+      :can-zoom-in="canZoomIn" :can-zoom-out="canZoomOut" @save="onSaveNow" @set-fit-mode="handleSetFitMode"
+      @reset-zoom="handleResetZoom" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut" />
 
     <div class="flex-1 flex min-h-0">
       <div v-if="media.loading" class="p-4">讀取中…</div>
+      <div v-else-if="isFileMissing" class="flex-1 flex items-center justify-center">
+        <img :src="missingFile" alt="File not found" class="max-w-[60%] max-h-[60%] opacity-80 select-none" />
+      </div>
       <div v-else-if="media.error" class="text-red-600 p-4">{{ media.error }}</div>
       <ImageViewport v-else-if="isImage" ref="imageViewportRef" />
       <PdfViewport v-else-if="isPdf" ref="pdfViewportRef" />
-      <div v-else class="p-4 text-sm text-[hsl(var(--muted-foreground))]">尚未選擇檔案</div>
+      <div v-else class="h-full w-full flex items-center justify-center">
+        <div class="text-center text-[hsl(var(--muted-foreground))]">
+          <p class="text-sm">請在左側選擇 PDF 或圖片檔案以開始檢視</p>
+        </div>
+      </div>
     </div>
   </div>
 </template>
