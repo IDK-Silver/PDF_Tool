@@ -22,19 +22,20 @@
 - 掃描頁面物件，統計文字/向量/影像比例；列出影像 XObject。
 - 對每個影像計算「有效 DPI」（影像像素與頁面放置尺寸推得），高於門檻則下採樣。
 - 依型態選擇編碼（v1）：
-  - 彩色/灰階：JPEG（品質可調）。
+  - DCTDecode 彩色/灰階：解碼後依有效 DPI 判斷是否縮放，再以指定品質重新 JPEG 編碼。
+  - 單純 FlateDecode（DeviceRGB / DeviceGray、8-bit、可含 PNG Predictor）：解壓並還原像素緩衝後轉成 JPEG，僅處理非遮罩、1 或 3 通道影像。
   - 線稿/圖示/低色數：保留 Flate（無損）。
   - 二值黑白掃描（CCITT G4）與 JPEG2000/JBIG2/JPX 等進階編碼不在 v1 範圍。
 - 替換影像資料流（維持同一影像物件之寬高/顏色空間/遮罩設定）。
+- 限制（v1）：僅支援 BitsPerComponent=8、無 alpha 的 DeviceGray/DeviceRGB/簡單 ICC；遇到 Mask/特殊濾鏡時跳過不重編碼。
 - 完成後執行無損結構最佳化：
   - 重新壓縮所有 streams（Flate）。
   - 啟用/產生 object streams 與壓縮 xref（PDF 1.5+）。
   - 去除冗餘物件/重複影像去重、清除 metadata。
 
 採用套件（已定）：
-- 解析：`pdf`（pdf-rs）
-- 輸出：`pdf-writer`
-- 影像：`image`（JPEG/PNG）、`flate2`（Flate 壓縮）
+- 解析 / 重寫：`lopdf`（讀取 PDF、就地修改物件與 stream 字典）
+- 影像：`image`（JPEG/PNG 編碼）、`flate2`（Flate 解壓與 Predictor 處理）、`webp`（圖片壓縮指令）
 （不依賴外部 qpdf；未來若需要 linearization 再另行規劃。）
 
 ### 3) 圖片壓縮

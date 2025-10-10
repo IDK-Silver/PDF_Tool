@@ -1,10 +1,12 @@
+use flate2::read::ZlibDecoder;
 use image::GenericImageView;
 use image::ImageEncoder;
+use log::warn;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Mutex,
@@ -250,6 +252,369 @@ pub struct CompressPdfSmartResult {
     pub changed_images: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum PdfColorSpaceKind {
+    Gray,
+    Rgb,
+}
+
+fn resolve_object(doc: &lopdf::Document, obj: &lopdf::Object) -> Option<lopdf::Object> {
+    let mut current = obj.clone();
+    for _ in 0..8 {
+        if let lopdf::Object::Reference(id) = current {
+            current = doc.get_object(id).ok()?.clone();
+        } else {
+            return Some(current);
+        }
+    }
+    None
+}
+
+fn resolve_dict(doc: &lopdf::Document, obj: &lopdf::Object) -> Option<lopdf::Dictionary> {
+    match resolve_object(doc, obj)? {
+        lopdf::Object::Dictionary(dict) => Some(dict),
+        lopdf::Object::Stream(stream) => Some(stream.dict),
+        lopdf::Object::Array(items) => {
+            for item in items.iter() {
+                if let Some(dict) = resolve_dict(doc, item) {
+                    return Some(dict);
+                }
+            }
+            None
+        }
+        lopdf::Object::Reference(_) => None,
+        _ => None,
+    }
+}
+
+fn dict_get_i64(doc: &lopdf::Document, dict: &lopdf::Dictionary, key: &[u8]) -> Option<i64> {
+    let raw = dict.get(key).ok()?;
+    match resolve_object(doc, raw)? {
+        lopdf::Object::Integer(v) => Some(v),
+        lopdf::Object::Real(v) => Some(v as i64),
+        _ => None,
+    }
+}
+
+fn dict_get_usize(doc: &lopdf::Document, dict: &lopdf::Dictionary, key: &[u8]) -> Option<usize> {
+    dict_get_i64(doc, dict, key).and_then(|v| if v > 0 { usize::try_from(v).ok() } else { None })
+}
+
+fn infer_color_space_kind(doc: &lopdf::Document, color_space: Option<lopdf::Object>) -> Option<PdfColorSpaceKind> {
+    match color_space {
+        None => Some(PdfColorSpaceKind::Gray), // default fallback per spec
+        Some(obj) => match obj {
+            lopdf::Object::Reference(id) => {
+                let resolved = doc.get_object(id).ok()?.clone();
+                infer_color_space_kind(doc, Some(resolved))
+            }
+            lopdf::Object::Name(name) => match name.as_slice() {
+                b"DeviceRGB" => Some(PdfColorSpaceKind::Rgb),
+                b"DeviceGray" => Some(PdfColorSpaceKind::Gray),
+                b"CalRGB" => Some(PdfColorSpaceKind::Rgb),
+                b"CalGray" => Some(PdfColorSpaceKind::Gray),
+                _ => None,
+            },
+            lopdf::Object::Array(items) => {
+                if items.is_empty() {
+                    return None;
+                }
+                match &items[0] {
+                    lopdf::Object::Name(name) if name.as_slice() == b"ICCBased" => {
+                        if let Some(profile_obj) = items.get(1) {
+                            if let Some(dict) = resolve_dict(doc, profile_obj) {
+                                match dict_get_usize(doc, &dict, b"N") {
+                                    Some(1) => Some(PdfColorSpaceKind::Gray),
+                                    Some(3) => Some(PdfColorSpaceKind::Rgb),
+                                    _ => None,
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                    lopdf::Object::Name(name) if name.as_slice() == b"CalRGB" => Some(PdfColorSpaceKind::Rgb),
+                    lopdf::Object::Name(name) if name.as_slice() == b"CalGray" => Some(PdfColorSpaceKind::Gray),
+                    _ => None,
+                }
+            }
+            _ => None,
+        },
+    }
+}
+
+fn decode_png_predictor(
+    data: &[u8],
+    columns: usize,
+    components: usize,
+    bits_per_component: usize,
+    height: usize,
+) -> Option<Vec<u8>> {
+    if bits_per_component != 8 {
+        return None;
+    }
+    let bytes_per_pixel = components.checked_mul(bits_per_component / 8)?;
+    if bytes_per_pixel == 0 {
+        return None;
+    }
+    let row_bytes = columns.checked_mul(bytes_per_pixel)?;
+    if row_bytes == 0 {
+        return None;
+    }
+    let stride = row_bytes + 1;
+    if stride == 0 || data.len() % stride != 0 {
+        return None;
+    }
+    let rows = data.len() / stride;
+    if rows != height {
+        return None;
+    }
+
+    let mut output = Vec::with_capacity(row_bytes * rows);
+    let mut prev_row = vec![0u8; row_bytes];
+
+    for row_idx in 0..rows {
+        let offset = row_idx * stride;
+        let filter = data[offset];
+        let row = &data[offset + 1..offset + stride];
+        let mut recon = vec![0u8; row_bytes];
+
+        match filter {
+            0 => recon.copy_from_slice(row),
+            1 => {
+                for i in 0..row_bytes {
+                    let left = if i >= bytes_per_pixel {
+                        recon[i - bytes_per_pixel]
+                    } else {
+                        0
+                    };
+                    recon[i] = row[i].wrapping_add(left);
+                }
+            }
+            2 => {
+                for i in 0..row_bytes {
+                    recon[i] = row[i].wrapping_add(prev_row[i]);
+                }
+            }
+            3 => {
+                for i in 0..row_bytes {
+                    let left = if i >= bytes_per_pixel {
+                        recon[i - bytes_per_pixel]
+                    } else {
+                        0
+                    };
+                    let up = prev_row[i];
+                    let avg = ((left as u16 + up as u16) / 2) as u8;
+                    recon[i] = row[i].wrapping_add(avg);
+                }
+            }
+            4 => {
+                for i in 0..row_bytes {
+                    let left = if i >= bytes_per_pixel {
+                        recon[i - bytes_per_pixel]
+                    } else {
+                        0
+                    };
+                    let up = prev_row[i];
+                    let up_left = if i >= bytes_per_pixel {
+                        prev_row[i - bytes_per_pixel]
+                    } else {
+                        0
+                    };
+                    recon[i] = row[i].wrapping_add(paeth_predictor(left, up, up_left));
+                }
+            }
+            _ => return None,
+        }
+
+        prev_row.copy_from_slice(&recon);
+        output.extend_from_slice(&recon);
+    }
+
+    Some(output)
+}
+
+fn paeth_predictor(a: u8, b: u8, c: u8) -> u8 {
+    let a = a as i32;
+    let b = b as i32;
+    let c = c as i32;
+    let p = a + b - c;
+    let pa = (p - a).abs();
+    let pb = (p - b).abs();
+    let pc = (p - c).abs();
+    if pa <= pb && pa <= pc {
+        a as u8
+    } else if pb <= pc {
+        b as u8
+    } else {
+        c as u8
+    }
+}
+
+fn apply_predictor(
+    data: Vec<u8>,
+    predictor: i64,
+    columns: usize,
+    components: usize,
+    bits_per_component: usize,
+    height: usize,
+) -> Option<Vec<u8>> {
+    match predictor {
+        0 | 1 => Some(data),
+        10..=15 => decode_png_predictor(&data, columns, components, bits_per_component, height),
+        _ => None,
+    }
+}
+
+fn decode_flate_image_stream(
+    doc: &lopdf::Document,
+    stream: &lopdf::Stream,
+) -> Option<image::DynamicImage> {
+    if stream
+        .dict
+        .get(b"ImageMask")
+        .ok()
+        .and_then(|o| o.as_bool().ok())
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let width = stream
+        .dict
+        .get(b"Width")
+        .ok()
+        .and_then(|o| o.as_i64().ok())
+        .and_then(|v| u32::try_from(v).ok())?;
+    let height = stream
+        .dict
+        .get(b"Height")
+        .ok()
+        .and_then(|o| o.as_i64().ok())
+        .and_then(|v| u32::try_from(v).ok())?;
+    if width == 0 || height == 0 {
+        return None;
+    }
+
+    let mut bits_per_component = stream
+        .dict
+        .get(b"BitsPerComponent")
+        .ok()
+        .and_then(|o| o.as_i64().ok())
+        .unwrap_or(8) as usize;
+
+    let decode_parms = stream
+        .dict
+        .get(b"DecodeParms")
+        .ok()
+        .and_then(|obj| resolve_dict(doc, obj));
+
+    if let Some(ref parms) = decode_parms {
+        if let Some(bits) = dict_get_usize(doc, parms, b"BitsPerComponent") {
+            bits_per_component = bits;
+        }
+    }
+
+    if bits_per_component != 8 {
+        return None;
+    }
+
+    let mut components = stream
+        .dict
+        .get(b"ColorSpace")
+        .ok()
+        .cloned()
+        .and_then(|obj| infer_color_space_kind(doc, Some(obj)))
+        .or_else(|| infer_color_space_kind(doc, None))
+        .and_then(|kind| match kind {
+            PdfColorSpaceKind::Gray => Some(1usize),
+            PdfColorSpaceKind::Rgb => Some(3usize),
+        })?;
+
+    if let Some(ref parms) = decode_parms {
+        if let Some(colors) = dict_get_usize(doc, parms, b"Colors") {
+            components = colors;
+        }
+    }
+
+    if components == 0 || (components != 1 && components != 3) {
+        return None;
+    }
+
+    let columns = decode_parms
+        .as_ref()
+        .and_then(|parms| dict_get_usize(doc, parms, b"Columns"))
+        .unwrap_or(width as usize);
+
+    let predictor = decode_parms
+        .as_ref()
+        .and_then(|parms| dict_get_i64(doc, parms, b"Predictor"))
+        .unwrap_or(1);
+
+    let mut decoder = ZlibDecoder::new(stream.content.as_slice());
+    let mut decoded = Vec::new();
+    if let Err(err) = decoder.read_to_end(&mut decoded) {
+        warn!("Flate decode failed: {}", err);
+        return None;
+    }
+
+    let decoded = apply_predictor(
+        decoded,
+        predictor,
+        columns,
+        components,
+        bits_per_component,
+        height as usize,
+    )?;
+
+    let row_stride = columns.checked_mul(components)?;
+    if decoded.len() != row_stride * height as usize {
+        warn!(
+            "Decoded data length mismatch: got {}, expected {}",
+            decoded.len(),
+            row_stride * height as usize
+        );
+        return None;
+    }
+
+    let expected_stride = width as usize * components;
+    let pixel_bytes = if columns == width as usize {
+        decoded
+    } else if columns > width as usize {
+        let mut trimmed = Vec::with_capacity(expected_stride * height as usize);
+        for row in 0..height as usize {
+            let start = row * row_stride;
+            let end = start + expected_stride;
+            trimmed.extend_from_slice(&decoded[start..end]);
+        }
+        trimmed
+    } else {
+        return None;
+    };
+
+    let image = match components {
+        1 => {
+            if let Some(buf) = image::GrayImage::from_vec(width, height, pixel_bytes) {
+                image::DynamicImage::ImageLuma8(buf)
+            } else {
+                return None;
+            }
+        }
+        3 => {
+            if let Some(buf) = image::RgbImage::from_vec(width, height, pixel_bytes) {
+                image::DynamicImage::ImageRgb8(buf)
+            } else {
+                return None;
+            }
+        }
+        _ => return None,
+    };
+
+    Some(image)
+}
+
 #[tauri::command]
 pub async fn compress_pdf_smart(args: CompressPdfSmartArgs) -> Result<CompressPdfSmartResult, MediaError> {
     tokio::task::spawn_blocking(move || -> Result<CompressPdfSmartResult, MediaError> {
@@ -394,82 +759,139 @@ pub async fn compress_pdf_smart(args: CompressPdfSmartArgs) -> Result<CompressPd
                 };
                 if !is_image { continue; }
 
-                // 取得可變更的 Stream
-                let stream_ref = doc.get_object_mut(obj_id).map_err(|e| MediaError::new("parse_error", format!("讀取影像物件失敗: {e}")))?;
-                let stream = match stream_ref.as_stream_mut() { Ok(s) => s, Err(_) => continue };
-
-                // 僅處理 DeviceRGB/DeviceGray
-                let colorspace_ok = match stream.dict.get(b"ColorSpace") {
-                    Ok(Object::Name(n)) if n.as_slice() == b"DeviceRGB" || n.as_slice() == b"DeviceGray" => true,
-                    _ => true, // 保守放行（某些影像未標示 ColorSpace，交由解碼器判斷）
-                };
-                if !colorspace_ok { continue; }
-
-                // 濾鏡判斷：優先處理 DCTDecode（JPEG）
-                let mut can_decode_jpeg = false;
-                match stream.dict.get(b"Filter") {
-                    Ok(Object::Name(n)) if n.as_slice() == b"DCTDecode" => can_decode_jpeg = true,
-                    Ok(Object::Array(arr)) => {
-                        if arr.iter().any(|o| matches!(o, Object::Name(n) if n.as_slice() == b"DCTDecode")) { can_decode_jpeg = true; }
-                    }
-                    _ => {}
+                if requested_fmt != "jpeg" {
+                    continue;
                 }
-                if !can_decode_jpeg { continue; }
 
-                // 嘗試用 image crate 解碼影像（JPEG）
-                let data = &stream.content;
-                let mut dyn_img = match image::load_from_memory(data) {
-                    Ok(img) => img,
-                    Err(_) => continue,
+                let (mut dyn_img, img_w_px, img_h_px) = {
+                    let stream_obj = doc
+                        .get_object(obj_id)
+                        .map_err(|e| MediaError::new("parse_error", format!("讀取影像物件失敗: {e}")))?;
+                    let stream_ro = match stream_obj.as_stream() {
+                        Ok(s) => s,
+                        Err(_) => continue,
+                    };
+
+                    let filters = stream_ro.filters().unwrap_or_default();
+                    let has_dct = filters.iter().any(|f| f == "DCTDecode");
+                    let flate_only = !has_dct && !filters.is_empty() && filters.iter().all(|f| f == "FlateDecode");
+
+                    let mut width = stream_ro
+                        .dict
+                        .get(b"Width")
+                        .ok()
+                        .and_then(|o| o.as_i64().ok())
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0);
+                    let mut height = stream_ro
+                        .dict
+                        .get(b"Height")
+                        .ok()
+                        .and_then(|o| o.as_i64().ok())
+                        .and_then(|v| u32::try_from(v).ok())
+                        .unwrap_or(0);
+
+                    let decoded = if has_dct {
+                        match image::load_from_memory(&stream_ro.content) {
+                            Ok(img) => Some(img),
+                            Err(err) => {
+                                warn!("JPEG decode failed for XObject {:?}: {}", name, err);
+                                None
+                            }
+                        }
+                    } else if flate_only {
+                        match decode_flate_image_stream(&doc, stream_ro) {
+                            Some(img) => Some(img),
+                            None => {
+                                warn!("FlateDecode image skipped due to unsupported parameters");
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
+
+                    let dyn_img = match decoded {
+                        Some(img) => img,
+                        None => continue,
+                    };
+
+                    if width == 0 {
+                        width = dyn_img.width();
+                    }
+                    if height == 0 {
+                        height = dyn_img.height();
+                    }
+
+                    (dyn_img, width, height)
                 };
 
-                // v2：依 UI 規則執行有效 DPI 下採樣（僅針對 JPEG 路徑）
-                if requested_fmt == "jpeg" {
-                    // 頁面上此影像的顯示寬/高（pt）
-                    let (disp_w_pt, disp_h_pt) = name_usage.get(name).copied().unwrap_or((0.0, 0.0));
-                    // 原始像素尺寸
-                    let img_w_px = match stream.dict.get(b"Width").and_then(|o| o.as_i64()) { Ok(v) => v as u32, Err(_) => dyn_img.width() };
-                    let img_h_px = match stream.dict.get(b"Height").and_then(|o| o.as_i64()) { Ok(v) => v as u32, Err(_) => dyn_img.height() };
-                    if disp_w_pt > 0.0 && img_w_px > 0 {
-                        let eff_dpi = (img_w_px as f32) * 72.0 / disp_w_pt.max(0.01);
-                        if let Some(tgt_dpi) = args.target_effective_dpi {
-                            let rule = args.downsample_rule.as_deref().unwrap_or("always");
-                            let threshold = args.threshold_effective_dpi.unwrap_or(tgt_dpi);
-                            let need = match rule {
-                                "whenAbove" => eff_dpi >= threshold as f32,
-                                _ => eff_dpi > tgt_dpi as f32,
+                // 頁面上此影像的顯示寬/高（pt）
+                let (disp_w_pt, disp_h_pt) = name_usage.get(name).copied().unwrap_or((0.0, 0.0));
+                let mut original_w = img_w_px;
+                let mut original_h = img_h_px;
+                if original_w == 0 {
+                    original_w = dyn_img.width();
+                }
+                if original_h == 0 {
+                    original_h = dyn_img.height();
+                }
+
+                if disp_w_pt > 0.0 && original_w > 0 {
+                    let eff_dpi = (original_w as f32) * 72.0 / disp_w_pt.max(0.01);
+                    if let Some(tgt_dpi) = args.target_effective_dpi {
+                        let rule = args.downsample_rule.as_deref().unwrap_or("always");
+                        let threshold = args.threshold_effective_dpi.unwrap_or(tgt_dpi);
+                        let need = match rule {
+                            "whenAbove" => eff_dpi >= threshold as f32,
+                            _ => eff_dpi > tgt_dpi as f32,
+                        };
+                        if need {
+                            use image::imageops::FilterType;
+                            let target_w = ((disp_w_pt / 72.0) * tgt_dpi as f32).round().max(1.0) as u32;
+                            let target_h = if disp_h_pt > 0.0 {
+                                ((disp_h_pt / 72.0) * tgt_dpi as f32).round().max(1.0) as u32
+                            } else {
+                                (original_h as f32 * (target_w as f32 / original_w as f32))
+                                    .round()
+                                    .max(1.0) as u32
                             };
-                            if need {
-                                use image::imageops::FilterType;
-                                let target_w = ((disp_w_pt / 72.0) * tgt_dpi as f32).round().max(1.0) as u32;
-                                let target_h = if disp_h_pt > 0.0 { ((disp_h_pt / 72.0) * tgt_dpi as f32).round().max(1.0) as u32 } else { (img_h_px as f32 * (target_w as f32 / img_w_px as f32)).round().max(1.0) as u32 };
-                                if target_w < img_w_px || target_h < img_h_px {
-                                    dyn_img = dyn_img.resize(target_w, target_h, FilterType::Triangle);
-                                }
+                            if target_w < original_w || target_h < original_h {
+                                dyn_img = dyn_img.resize(target_w, target_h, FilterType::Triangle);
                             }
                         }
                     }
-                    // 轉為 RGB8 並以 JPEG 輸出（無 alpha）
-                    use image::ColorType;
-                    let rgb = dyn_img.to_rgb8();
-                    let mut out: Vec<u8> = Vec::new();
-                    let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(Cursor::new(&mut out), jpeg_quality);
-                    if let Err(_) = enc.write_image(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into()) { continue; }
-
-                    // 更新 Stream：Filter=DCTDecode，移除 DecodeParms
-                    stream.set_content(out);
-                    stream.dict.set(b"Filter", Object::Name(b"DCTDecode".to_vec()));
-                    let _ = stream.dict.remove(b"DecodeParms");
-                    // 設為 DeviceRGB，8-bit
-                    stream.dict.set(b"ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
-                    stream.dict.set(b"BitsPerComponent", 8);
-                    // 同步寬高
-                    stream.dict.set(b"Width", rgb.width() as i64);
-                    stream.dict.set(b"Height", rgb.height() as i64);
-                    changed_images += 1;
-                } else {
-                    // keep：不處理
                 }
+
+                // 轉為 RGB8 並以 JPEG 輸出（無 alpha）
+                use image::ColorType;
+                let rgb = dyn_img.to_rgb8();
+                let mut out: Vec<u8> = Vec::new();
+                let enc =
+                    image::codecs::jpeg::JpegEncoder::new_with_quality(Cursor::new(&mut out), jpeg_quality);
+                if enc
+                    .write_image(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
+                    .is_err()
+                {
+                    continue;
+                }
+
+                let stream_ref = doc
+                    .get_object_mut(obj_id)
+                    .map_err(|e| MediaError::new("parse_error", format!("讀取影像物件失敗: {e}")))?;
+                let stream = match stream_ref.as_stream_mut() {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+
+                stream.set_content(out);
+                stream.dict.set(b"Filter", Object::Name(b"DCTDecode".to_vec()));
+                let _ = stream.dict.remove(b"DecodeParms");
+                stream.dict.set(b"ColorSpace", Object::Name(b"DeviceRGB".to_vec()));
+                stream.dict.set(b"BitsPerComponent", 8);
+                stream.dict.set(b"Width", rgb.width() as i64);
+                stream.dict.set(b"Height", rgb.height() as i64);
+                changed_images += 1;
             }
         }
 
