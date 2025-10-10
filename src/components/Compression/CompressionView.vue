@@ -7,13 +7,12 @@ import ImageCompressPane from './parts/ImageCompressPane.vue'
 import { useMediaStore } from '@/modules/media/store'
 import { formatFileSize } from '@/modules/media/fileSize'
 import { openInFileManager } from '@/modules/media/openInFileManager'
-import { FolderOpenIcon } from '@heroicons/vue/24/outline'
-
-import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
+import { FolderOpenIcon, ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
 
 const compression = useCompressionStore()
 const media = useMediaStore()
+const ui = useUiStore()
 
 onMounted(() => {
   compression.ensureTabForSelection()
@@ -27,12 +26,6 @@ const hasValidFile = computed(() => isPdf.value || isImage.value)
 const fileName = computed(() => media.selected?.name ?? '')
 const filePath = computed(() => media.selected?.path ?? '')
 const descriptorSize = computed(() => media.descriptor?.size ?? null)
-
-const ui = useUiStore()
-
-function onExpandSidebar() {
-  ui.setSidebarCollapsed(false)
-}
 
 // 檔案大小
 const fileSize = ref<number | null>(null)
@@ -51,6 +44,7 @@ watch([filePath, descriptorSize], ([path, size]) => {
 
 function onStart() { compression.start() }
 function onCancel() { compression.cancel() }
+function onExpandSidebar() { ui.setSidebarCollapsed(false) }
 
 async function onReveal() {
   const p = filePath.value
@@ -69,11 +63,23 @@ async function onReveal() {
       v-if="hasValidFile"
       class="px-3 pt-3 pb-2 border-b border-[hsl(var(--border))] flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4"
     >
-      <div class="text-sm">
-        <span class="mr-2">模式：</span>
-        <span class="px-2 py-0.5 rounded bg-[hsl(var(--selection))]">
-          {{ isPdf ? 'PDF 壓縮' : '圖片壓縮' }}
-        </span>
+      <div class="flex items-center gap-2">
+        <!-- 展開側欄按鈕，放在模式顯示的左邊 -->
+        <button
+          v-if="ui.sidebarCollapsed"
+          class="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-[hsl(var(--selection))] transition"
+          title="展開左側欄"
+          aria-label="展開左側欄"
+          @click="onExpandSidebar"
+        >
+          <ChevronDoubleRightIcon class="w-5 h-5" />
+        </button>
+        <div class="text-sm">
+          <span class="mr-2">模式：</span>
+          <span class="px-2 py-0.5 rounded bg-[hsl(var(--selection))]">
+            {{ isPdf ? 'PDF 壓縮' : '圖片壓縮' }}
+          </span>
+        </div>
       </div>
       <div class="sm:ml-auto flex flex-row items-center gap-3 text-xs text-[hsl(var(--muted-foreground))] w-full sm:w-auto">
         <div class="flex items-center gap-2">
@@ -89,22 +95,11 @@ async function onReveal() {
         >
           <FolderOpenIcon class="w-5 h-5" />
         </button>
-        <!-- 展開側欄按鈕，僅在側欄收合時顯示 -->
-        <button
-          v-if="ui.sidebarCollapsed"
-          class="ml-2 inline-flex items-center justify-center w-7 h-7 rounded hover:bg-[hsl(var(--selection))] transition"
-          :title="'展開左側欄'"
-          aria-label="展開左側欄"
-          @click="onExpandSidebar"
-        >
-          <ChevronDoubleRightIcon class="w-5 h-5" />
-        </button>
       </div>
     </header>
 
-    <!-- 僅在有有效檔案時顯示工具列 -->
+    <!-- 工具列：永遠顯示，展開側邊欄按鈕在最左邊 -->
     <CompressionToolbar
-      v-if="hasValidFile"
       class="border-b border-[hsl(var(--border))]"
       :running="compression.running"
       :selected-name="fileName"

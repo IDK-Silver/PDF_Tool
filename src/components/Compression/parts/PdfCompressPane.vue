@@ -45,11 +45,11 @@ const thresholdEffectiveDpi = computed({
 <template>
   <section class="max-w-4xl mx-auto h-full flex flex-col">
     <!-- 說明 -->
-    <div class="mb-6 p-4 rounded-lg bg-[hsl(var(--muted))]/30 border border-[hsl(var(--border))]">
+    <!-- <div class="mb-6 p-4 rounded-lg bg-[hsl(var(--muted))]/30 border border-[hsl(var(--border))]">
       <p class="text-sm text-[hsl(var(--foreground))]">
         採用「智慧壓縮」：保留文字與向量，只針對頁內影像做下採樣與重壓縮，並進行 PDF 結構無損最佳化。
       </p>
-    </div>
+    </div> -->
 
     <!-- 可滾動的表單區 -->
     <div class="flex-1 overflow-y-auto pr-2">

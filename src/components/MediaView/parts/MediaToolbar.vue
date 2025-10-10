@@ -33,7 +33,7 @@ const ui = useUiStore()
       <div class="flex items-center gap-3">
         <!-- 展開側欄（僅在側欄收合時顯示） -->
         <button v-if="ui.sidebarCollapsed" @click="ui.setSidebarCollapsed(false)"
-          class="rounded border border-border w-8 h-8 flex items-center justify-center transition-colors bg-card hover:bg-hover"
+          class="rounded w-8 h-8 flex items-center justify-center transition-colors hover:bg-hover"
           title="展開側欄">
           <ChevronDoubleRightIcon class="w-4 h-4" />
         </button>

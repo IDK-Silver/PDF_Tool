@@ -55,10 +55,16 @@ onBeforeUnmount(() => {
       class="flex-shrink-0 bg-background flex flex-col border-r border-[hsl(var(--border))] pl-2 pr-4 relative z-50"
       :class="asideClass"
     >
-      <SettingBar />
-      <ModeChooseList />
-      <section class="w-full border-t border-[hsl(var(--border))] pt-[6px] py-2"></section>
-      <RouterView name="filelist" />
+      <!-- 固定區域：設定列和模式選擇 -->
+      <div class="flex-shrink-0">
+        <SettingBar />
+        <ModeChooseList />
+        <section class="w-full border-t border-[hsl(var(--border))] pt-[6px] py-2"></section>
+      </div>
+      <!-- 可滾動區域：檔案列表 -->
+      <div class="flex-1 min-h-0 flex flex-col">
+        <RouterView name="filelist" />
+      </div>
     </aside>
     <main class="flex-1 min-h-0 overflow-hidden bg-background flex flex-col relative z-0 mr-8 mb-10">
       <div class="flex-1 min-h-0">

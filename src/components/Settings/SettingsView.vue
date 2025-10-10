@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { useSettingsStore } from '@/modules/settings/store'
+import { useUiStore } from '@/modules/ui/store'
 import { onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ExportSettings from './parts/ExportSettings.vue'
 import InsertDefaults from './parts/InsertDefaults.vue'
+import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
+
 const settings = useSettingsStore()
 const s = settings.s
+const ui = useUiStore()
 const route = useRoute()
 
 const number = (e: Event, fallback: number) => {
@@ -46,7 +50,19 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
     <div class="mx-auto max-w-3xl p-6 space-y-8 text-sm">
       <header class="sticky top-0 bg-background/80 backdrop-blur z-10 py-3 border-b">
         <div class="flex items-center justify-between gap-3">
-          <h1 class="text-lg font-medium">設定</h1>
+          <div class="flex items-center gap-2">
+            <!-- 展開側欄按鈕 -->
+            <button
+              v-if="ui.sidebarCollapsed"
+              @click="ui.setSidebarCollapsed(false)"
+              class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-[hsl(var(--selection))] transition"
+              title="展開左側欄"
+              aria-label="展開左側欄"
+            >
+              <ChevronDoubleRightIcon class="w-5 h-5" />
+            </button>
+            <h1 class="text-lg font-medium">設定</h1>
+          </div>
           <button @click="resetToDefaults" class="px-2 py-1 text-sm rounded border border-border bg-card hover:bg-hover transition-colors">回復預設</button>
         </div>
         <p class="text-xs text-[hsl(var(--muted-foreground))]">調整渲染體驗與效能參數。右側主視圖會即時套用。</p>
@@ -285,11 +301,11 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
               <label class="flex items-center gap-2">
                 <input type="radio" value="saveAsNew" v-model="s.deleteBehavior" />
-                <span>另存新檔（預設）</span>
+                <span>另存新檔</span>
               </label>
               <label class="flex items-center gap-2">
                 <input type="radio" value="overwrite" v-model="s.deleteBehavior" />
-                <span>覆蓋原檔（需確認）</span>
+                <span>覆蓋原檔</span>
               </label>
             </div>
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
@@ -355,10 +371,6 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
           </p>
         </div>
       </section>
-
-      <footer class="text-xs text-[hsl(var(--muted-foreground))] py-4">
-        詳細說明請見 <code>docs/settings.md</code>。
-      </footer>
     </div>
   </div>
 </template>

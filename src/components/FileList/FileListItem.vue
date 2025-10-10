@@ -37,6 +37,7 @@ function onRemove(e: MouseEvent) {
     <button
       type="button"
       class="flex-1 min-w-0 h-full text-left px-[8px] border-0 bg-transparent flex items-center gap-2"
+      :title="item.name"
       @click="onSelect"
     >
       <component :is="iconComponent" class="w-4 h-4 flex-shrink-0 text-[hsl(var(--muted-foreground))]" />

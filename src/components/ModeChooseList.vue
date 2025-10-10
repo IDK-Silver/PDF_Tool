@@ -2,14 +2,14 @@
 
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { EyeIcon } from '@heroicons/vue/24/outline';
+import { EyeIcon, ArchiveBoxIcon } from '@heroicons/vue/24/outline';
 import type { Component } from 'vue';
 
 type Mode = 'media_view' | 'compress' | 'pdf_editor';
 
 const modes: { key: Mode, label: string, icon: Component }[] = [
 	{ key: 'media_view', label: '檢視', icon: EyeIcon },
-	{ key: 'compress', label: '壓縮', icon: EyeIcon },
+	{ key: 'compress', label: '壓縮', icon: ArchiveBoxIcon },
 	// { key: 'pdf_editor', label: '編輯', icon: PencilSquareIcon }
 ];
 

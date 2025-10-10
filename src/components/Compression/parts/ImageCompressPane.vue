@@ -63,11 +63,11 @@ const strip = computed({
 <template>
   <section class="max-w-4xl mx-auto h-full flex flex-col">
     <!-- 說明 -->
-    <div class="mb-6 p-4 rounded-lg bg-[hsl(var(--muted))]/30 border border-[hsl(var(--border))]">
+    <!-- <div class="mb-6 p-4 rounded-lg bg-[hsl(var(--muted))]/30 border border-[hsl(var(--border))]">
       <p class="text-sm text-[hsl(var(--foreground))]">
         設定圖片壓縮參數：調整尺寸、重新編碼與移除中繼資料。後端壓縮流程尚未接線。
       </p>
-    </div>
+    </div> -->
 
     <!-- 可滾動的表單區 -->
     <div class="flex-1 overflow-y-auto pr-2">

@@ -62,13 +62,19 @@ const filtered = computed(() => {
 </script>
 
 <template>
-  <div class="grid grid-cols-10 gap-1 h-10 max-w-[28rem] pb-2 items-center">
-    <div class="relative col-span-8 h-full">
-      <input v-model="q" class="w-full h-8 border rounded text-sm pl-8" placeholder="Search" />
-      <MagnifyingGlassIcon class="w-5 h-5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+  <!-- 搜尋欄固定在頂部 -->
+  <div class="flex-shrink-0 pb-2">
+    <div class="flex gap-2 items-center">
+      <div class="relative flex-1">
+        <input v-model="q" class="w-full h-8 border rounded text-sm pl-8" placeholder="Search" />
+        <MagnifyingGlassIcon class="w-5 h-5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+      </div>
+      <button class="h-8 px-3 border rounded text-sm flex-shrink-0" @click="addFiles">＋</button>
     </div>
-  <button class="col-span-2 h-8 border rounded text-sm" @click="addFiles">＋</button>
   </div>
-  <FileList :items="filtered" :selected-id="selectedId" :removable="true"
-    @item-click="onItemClick" @remove="onRemove" />
+  <!-- 檔案列表可滾動區域 -->
+  <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+    <FileList :items="filtered" :selected-id="selectedId" :removable="true"
+      @item-click="onItemClick" @remove="onRemove" />
+  </div>
 </template>
