@@ -33,6 +33,8 @@ export interface ZoomState {
   zoomIn: (scrollContainer?: HTMLElement | null, currentPageIndex?: number, onComplete?: () => void) => void
   /** 縮小 */
   zoomOut: (scrollContainer?: HTMLElement | null, currentPageIndex?: number, onComplete?: () => void) => void
+  /** 以自定義步進值調整縮放 */
+  adjustZoomBy: (delta: number, scrollContainer?: HTMLElement | null, currentPageIndex?: number, onComplete?: () => void) => void
   /** 重置為 100% */
   resetZoom: (scrollContainer?: HTMLElement | null) => void
   /** 切換為 fit 模式 */
@@ -174,6 +176,10 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
     adjustZoom(-step, scrollContainer, currentPageIndex, onComplete)
   }
 
+  function adjustZoomBy(delta: number, scrollContainer?: HTMLElement | null, currentPageIndex: number = 0, onComplete?: () => void) {
+    adjustZoom(delta, scrollContainer, currentPageIndex, onComplete)
+  }
+
   function resetZoom(scrollContainer?: HTMLElement | null) {
     viewMode.value = 'actual'
     zoomTarget.value = 100
@@ -203,6 +209,7 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
     canZoomOut,
     zoomIn,
     zoomOut,
+    adjustZoomBy,
     resetZoom,
     setFitMode,
     getFitBaseline,

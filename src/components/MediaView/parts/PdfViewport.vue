@@ -29,6 +29,7 @@ const {
   canZoomOut,
   zoomIn,
   zoomOut,
+  adjustZoomBy,
   resetZoom,
   setFitMode
 } = useZoom()
@@ -664,7 +665,52 @@ watch([viewMode, centerIndex, containerW, () => settings.s.maxOutputWidth, () =>
 })
 onMounted(() => {
   scheduleUpdateFitPercent()
+  
+  // 添加觸控板縮放支援
+  const container = scrollRootEl.value
+  if (container) {
+    container.addEventListener('wheel', handleWheelZoom, { passive: false })
+  }
 })
+
+onBeforeUnmount(() => {
+  const container = scrollRootEl.value
+  if (container) {
+    container.removeEventListener('wheel', handleWheelZoom)
+  }
+})
+
+// 觸控板縮放手勢處理
+function handleWheelZoom(e: WheelEvent) {
+  // 檢測 pinch-to-zoom 手勢：Ctrl/Cmd + 滾輪
+  if (!e.ctrlKey && !e.metaKey) return
+  
+  e.preventDefault()
+  
+  // 計算縮放步進：根據 deltaY 的絕對值動態調整
+  // 一般滑動約 ±3-10，快速滑動可達 ±50-100
+  const baseStep = 2 // 基礎步進改為 2%
+  const delta = Math.abs(e.deltaY)
+  let step = baseStep
+  
+  // 根據滑動強度調整步進
+  if (delta > 10) step = 3
+  if (delta > 30) step = 5
+  if (delta > 60) step = 8
+  
+  // deltaY > 0 表示向下滾動（縮小），< 0 表示向上滾動（放大）
+  if (e.deltaY < 0 && canZoomIn.value) {
+    // 放大
+    adjustZoomBy(step, scrollRootEl.value, centerIndex.value, () => {
+      triggerRerender(150)
+    })
+  } else if (e.deltaY > 0 && canZoomOut.value) {
+    // 縮小
+    adjustZoomBy(-step, scrollRootEl.value, centerIndex.value, () => {
+      triggerRerender(150)
+    })
+  }
+}
 
 const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
 
