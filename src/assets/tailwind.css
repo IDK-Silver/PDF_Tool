@@ -117,4 +117,11 @@
     .scrollbar-visible::-webkit-scrollbar-track {
         background-color: hsl(var(--scrollbar-track));
     }
+
+    /* 禁用 macOS Live Text 功能 */
+    .disable-live-text {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
 }

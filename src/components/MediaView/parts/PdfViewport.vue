@@ -790,6 +790,7 @@ defineExpose({
                 :class="[
                   viewMode === 'fit' ? 'w-full block' : 'block',
                   media.pdfPages[idx]?.isLowRes && settings.s.enableLowRes && 'blur-[0.3px]',
+                  'disable-live-text',
                 ]"
                 :style="imgStyle(idx)"
                 decoding="async"
