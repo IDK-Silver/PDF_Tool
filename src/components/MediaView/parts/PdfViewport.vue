@@ -5,6 +5,7 @@ import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useExportSettings } from '@/modules/export/settings'
+import { useZoom } from '@/modules/media/useZoom'
 import {
   pdfDeletePagesDoc,
   pdfInsertBlank,
@@ -19,10 +20,31 @@ const settings = useSettingsStore()
 const filelist = useFileListStore()
 const exportSettings = useExportSettings()
 
-const viewMode = ref<'fit' | 'actual'>('fit')
-const zoomTarget = ref(100)
-const displayFitPercent = ref<number | null>(null)
-const displayZoom = computed(() => (viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value))
+const { 
+  viewMode, 
+  zoomTarget, 
+  displayFitPercent, 
+  displayZoom, 
+  canZoomIn, 
+  canZoomOut,
+  zoomIn, 
+  zoomOut, 
+  resetZoom, 
+  setFitMode,
+  setEffectiveMax
+} = useZoom()
+
+// 根據 actualModeDpiCap 計算有效的最大縮放值
+function updateEffectiveMaxZoom() {
+  const dpiCap = settings.s.actualModeDpiCap
+  // 計算：如果 dpi = 96 * (zoom / 100)，那麼 zoom = (dpi * 100) / 96
+  const maxZoomByDpi = Math.floor((dpiCap * 100) / 96)
+  setEffectiveMax(maxZoomByDpi)
+}
+
+// 初始化和監聽 DPI cap 變化
+updateEffectiveMaxZoom()
+watch(() => settings.s.actualModeDpiCap, updateEffectiveMaxZoom)
 
 function getRenderFormat() {
   return settings.s.renderFormat
@@ -52,185 +74,38 @@ function dpiForActual() {
   return Math.min(dpi, cap)
 }
 
-function fitPercentBaseline(): number {
-  const p = Math.round(displayFitPercent.value ?? 100)
-  return Math.max(10, Math.min(400, p))
+/** 包裝 composable 的 zoomIn，加入重新渲染邏輯 */
+function handleZoomIn() {
+  zoomIn(scrollRootEl.value, centerIndex.value, () => {
+    triggerRerender()
+  })
 }
 
-function zoomIn() {
-  const root = scrollRootEl.value
-  if (viewMode.value !== 'actual') {
-    viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()  // 從當前 fit 的縮放值開始
-    if (root) {
-      nextTick(() => {
-        requestAnimationFrame(() => {
-          const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement | null
-          if (currentPageEl) {
-            currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
-          }
-        })
-      })
-    }
-  } else if (root) {
-    const newZoom = Math.min(400, zoomTarget.value + 10)
-    
-    // 找到當前中心頁面的圖片元素
-    const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement | null
-    const img = currentPageEl?.querySelector('img') as HTMLImageElement | null
-    
-    if (img) {
-      // 獲取圖片和視窗的實際位置
-      const rootRect = root.getBoundingClientRect()
-      const imgRect = img.getBoundingClientRect()
-      
-      // 計算視窗中心點相對於圖片的位置（像素值）
-      const viewportCenterX = rootRect.left + rootRect.width / 2
-      const viewportCenterY = rootRect.top + rootRect.height / 2
-      const offsetX = viewportCenterX - imgRect.left
-      const offsetY = viewportCenterY - imgRect.top
-      
-      // 計算縮放比例
-      const zoomRatio = newZoom / zoomTarget.value
-      
-      zoomTarget.value = newZoom
-      
-      nextTick(() => {
-        requestAnimationFrame(() => {
-          // 縮放後重新獲取圖片位置
-          const newImgRect = img.getBoundingClientRect()
-          const newRootRect = root.getBoundingClientRect()
-          
-          // 計算縮放後，原本的點應該在哪裡
-          const newOffsetX = offsetX * zoomRatio
-          const newOffsetY = offsetY * zoomRatio
-          const targetCenterX = newImgRect.left + newOffsetX
-          const targetCenterY = newImgRect.top + newOffsetY
-          
-          // 調整滾動位置使中心點保持不變
-          const scrollAdjustX = targetCenterX - (newRootRect.left + newRootRect.width / 2)
-          const scrollAdjustY = targetCenterY - (newRootRect.top + newRootRect.height / 2)
-          
-          root.scrollLeft += scrollAdjustX
-          root.scrollTop += scrollAdjustY
-        })
-      })
-      // 立即觸發重新渲染，不使用 debounce
-      pendingIdx.clear()
-      for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
-      rafScheduled = false
-      scheduleHiResRerender(0)
-      return
-    }
-    zoomTarget.value = newZoom
-    // 立即觸發重新渲染
-    pendingIdx.clear()
-    for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
-    rafScheduled = false
-    scheduleHiResRerender(0)
-  }
+/** 包裝 composable 的 zoomOut，加入重新渲染邏輯 */
+function handleZoomOut() {
+  zoomOut(scrollRootEl.value, centerIndex.value, () => {
+    triggerRerender()
+  })
 }
 
-function zoomOut() {
-  const root = scrollRootEl.value
-  if (viewMode.value !== 'actual') {
-    viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()  // 從當前 fit 的縮放值開始
-    if (root) {
-      nextTick(() => {
-        requestAnimationFrame(() => {
-          const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement | null
-          if (currentPageEl) {
-            currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
-          }
-        })
-      })
-    }
-  } else if (root) {
-    const newZoom = Math.max(10, zoomTarget.value - 10)
-    
-    // 找到當前中心頁面的圖片元素
-    const currentPageEl = root.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement | null
-    const img = currentPageEl?.querySelector('img') as HTMLImageElement | null
-    
-    if (img) {
-      // 獲取圖片和視窗的實際位置
-      const rootRect = root.getBoundingClientRect()
-      const imgRect = img.getBoundingClientRect()
-      
-      // 計算視窗中心點相對於圖片的位置（像素值）
-      const viewportCenterX = rootRect.left + rootRect.width / 2
-      const viewportCenterY = rootRect.top + rootRect.height / 2
-      const offsetX = viewportCenterX - imgRect.left
-      const offsetY = viewportCenterY - imgRect.top
-      
-      // 計算縮放比例
-      const zoomRatio = newZoom / zoomTarget.value
-      
-      zoomTarget.value = newZoom
-      
-      nextTick(() => {
-        requestAnimationFrame(() => {
-          // 縮放後重新獲取圖片位置
-          const newImgRect = img.getBoundingClientRect()
-          const newRootRect = root.getBoundingClientRect()
-          
-          // 計算縮放後，原本的點應該在哪裡
-          const newOffsetX = offsetX * zoomRatio
-          const newOffsetY = offsetY * zoomRatio
-          const targetCenterX = newImgRect.left + newOffsetX
-          const targetCenterY = newImgRect.top + newOffsetY
-          
-          // 調整滾動位置使中心點保持不變
-          const scrollAdjustX = targetCenterX - (newRootRect.left + newRootRect.width / 2)
-          const scrollAdjustY = targetCenterY - (newRootRect.top + newRootRect.height / 2)
-          
-          root.scrollLeft += scrollAdjustX
-          root.scrollTop += scrollAdjustY
-        })
-      })
-      // 立即觸發重新渲染，不使用 debounce
-      pendingIdx.clear()
-      for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
-      rafScheduled = false
-      scheduleHiResRerender(0)
-      return
-    }
-    zoomTarget.value = newZoom
-    // 立即觸發重新渲染
-    pendingIdx.clear()
-    for (let i = visibleStart.value; i <= visibleEnd.value; i++) pendingIdx.add(i)
-    rafScheduled = false
-    scheduleHiResRerender(0)
-  }
+/** 包裝 composable 的 resetZoom，加入重新渲染邏輯 */
+function handleResetZoom() {
+  resetZoom(scrollRootEl.value)
+  triggerRerender()
 }
 
-function resetZoom() {
-  const root = scrollRootEl.value
-  viewMode.value = 'actual'
-  zoomTarget.value = 100
-  if (root) {
-    nextTick(() => {
-      requestAnimationFrame(() => {
-        root.scrollLeft = 0
-        root.scrollTop = 0
-      })
-    })
-  }
+/** 包裝 composable 的 setFitMode，加入重新渲染邏輯 */
+function handleSetFitMode() {
+  setFitMode()
+  triggerRerender()
+}
+
+/** 統一的重新渲染觸發函式 */
+function triggerRerender(delay: number = 0) {
   pendingIdx.clear()
   for (const i of visibleIdx) pendingIdx.add(i)
   rafScheduled = false
-  scheduleHiResRerender(0)
-}
-
-function setFitMode() {
-  if (viewMode.value !== 'fit') {
-    viewMode.value = 'fit'
-    pendingIdx.clear()
-    for (const i of visibleIdx) pendingIdx.add(i)
-    rafScheduled = false
-    scheduleHiResRerender(0)
-  }
+  scheduleHiResRerender(delay)
 }
 
 const centerIndex = ref(0)
@@ -826,10 +701,12 @@ defineExpose({
   displayZoom,
   currentPage,
   totalPages,
-  setFitMode,
-  resetZoom,
-  zoomIn,
-  zoomOut,
+  canZoomIn,
+  canZoomOut,
+  setFitMode: handleSetFitMode,
+  resetZoom: handleResetZoom,
+  zoomIn: handleZoomIn,
+  zoomOut: handleZoomOut,
 })
 </script>
 

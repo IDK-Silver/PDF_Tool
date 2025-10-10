@@ -117,6 +117,14 @@ MediaView 組件支援兩種檢視模式：
    - 支援縮放 (10% - 400%)
    - 使用 CSS transform 實現即時縮放
 
+### 縮放系統
+
+縮放邏輯統一由 `src/modules/media/useZoom.ts` composable 管理：
+
+- **核心狀態**: `viewMode` (fit/actual)、`zoomTarget` (縮放百分比)、`displayZoom` (當前顯示值)
+- **核心操作**: `zoomIn/zoomOut`、`resetZoom`、`setFitMode`
+- **視覺焦點維持**: 使用滾動內容的比例位置 (ratio) 來維持縮放前後的視覺中心點
+
 ### MediaView 組件結構
 
 - `MediaView.vue`：主控容器，負責選擇媒體型態、串接工具列與載入狀態。

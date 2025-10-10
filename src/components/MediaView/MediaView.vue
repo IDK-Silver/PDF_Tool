@@ -22,6 +22,8 @@ type ViewportExpose = {
   displayZoom: MaybeRef<number>
   currentPage: MaybeRef<number>
   totalPages: MaybeRef<number>
+  canZoomIn: MaybeRef<boolean>
+  canZoomOut: MaybeRef<boolean>
   setFitMode: () => void
   resetZoom: () => void
   zoomIn: () => void
@@ -51,6 +53,8 @@ const viewMode = ref<'fit' | 'actual'>('fit')
 const displayZoom = ref(100)
 const currentPage = ref(0)
 const totalPages = ref(0)
+const canZoomIn = ref(true)
+const canZoomOut = ref(true)
 
 watchEffect(() => {
   const controls = activeControls.value
@@ -59,12 +63,16 @@ watchEffect(() => {
     displayZoom.value = 100
     currentPage.value = 0
     totalPages.value = 0
+    canZoomIn.value = true
+    canZoomOut.value = true
     return
   }
   viewMode.value = unref(controls.viewMode)
   displayZoom.value = unref(controls.displayZoom)
   currentPage.value = unref(controls.currentPage)
   totalPages.value = unref(controls.totalPages)
+  canZoomIn.value = unref(controls.canZoomIn)
+  canZoomOut.value = unref(controls.canZoomOut)
 })
 
 function handleSetFitMode() {
@@ -151,6 +159,8 @@ async function onSaveNow() {
       :view-mode="viewMode"
       :display-zoom="displayZoom"
       :is-pdf="isPdf"
+      :can-zoom-in="canZoomIn"
+      :can-zoom-out="canZoomOut"
       @save="onSaveNow"
       @set-fit-mode="handleSetFitMode"
       @reset-zoom="handleResetZoom"

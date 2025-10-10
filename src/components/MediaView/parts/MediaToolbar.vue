@@ -11,6 +11,8 @@ const props = defineProps({
   viewMode: { type: String as PropType<'fit' | 'actual'>, default: 'fit' },
   displayZoom: { type: Number, default: 100 },
   isPdf: { type: Boolean, default: false },
+  canZoomIn: { type: Boolean, default: true },
+  canZoomOut: { type: Boolean, default: true },
 })
 
 const emit = defineEmits<{
@@ -75,13 +77,17 @@ const ui = useUiStore()
 
         <!-- 縮放控制 -->
         <div class="flex items-center gap-1 bg-card rounded border border-border px-1">
-          <button @click="emit('zoom-out')"
-            class="w-7 h-7 text-sm rounded hover:bg-hover transition-colors flex items-center justify-center">
+          <button @click="emit('zoom-out')" :disabled="!props.canZoomOut"
+            class="w-7 h-7 text-sm rounded transition-colors flex items-center justify-center"
+            :class="props.canZoomOut ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
+            :title="props.canZoomOut ? '縮小' : '已達最小縮放'">
             −
           </button>
           <div class="min-w-[48px] text-center text-xs tabular-nums px-1">{{ props.displayZoom }}%</div>
-          <button @click="emit('zoom-in')"
-            class="w-7 h-7 text-sm rounded hover:bg-hover transition-colors flex items-center justify-center">
+          <button @click="emit('zoom-in')" :disabled="!props.canZoomIn"
+            class="w-7 h-7 text-sm rounded transition-colors flex items-center justify-center"
+            :class="props.canZoomIn ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
+            :title="props.canZoomIn ? '放大' : '已達最大縮放（受 DPI 限制）'">
             +
           </button>
         </div>
