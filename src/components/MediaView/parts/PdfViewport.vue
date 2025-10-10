@@ -77,14 +77,16 @@ function dpiForActual() {
 /** 包裝 composable 的 zoomIn，加入重新渲染邏輯 */
 function handleZoomIn() {
   zoomIn(scrollRootEl.value, centerIndex.value, () => {
-    triggerRerender()
+    // 延遲渲染，讓縮放動畫先完成
+    triggerRerender(150)
   })
 }
 
 /** 包裝 composable 的 zoomOut，加入重新渲染邏輯 */
 function handleZoomOut() {
   zoomOut(scrollRootEl.value, centerIndex.value, () => {
-    triggerRerender()
+    // 延遲渲染，讓縮放動畫先完成
+    triggerRerender(150)
   })
 }
 
@@ -678,11 +680,22 @@ onMounted(() => {
 
 const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
 
-function imgTransformStyle() {
+function imgStyle(idx: number) {
   const styles: Record<string, string> = {}
+  
+  // 顏色反轉
   if (shouldInvertColors.value) {
     styles.filter = 'invert(1) hue-rotate(180deg)'
   }
+  
+  // 在 actual 模式下，設定圖片寬度以匹配卡片，避免閃爍
+  if (viewMode.value === 'actual') {
+    const base = media.baseCssWidthAt100(idx)
+    if (base) {
+      styles.width = `${Math.max(50, Math.round(base * (zoomTarget.value / 100)))}px`
+    }
+  }
+  
   return Object.keys(styles).length > 0 ? styles : undefined
 }
 
@@ -725,7 +738,7 @@ defineExpose({
         <div
           v-for="idx in renderIndices"
           :key="idx"
-          :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'w-full mb-10'"
+          :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'w-full mb-10 flex justify-center'"
           :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomTarget / 100)) + 'px' } : undefined"
           :data-pdf-page="idx"
           :ref="(el) => observe(el as Element, idx)"
@@ -744,7 +757,7 @@ defineExpose({
                   viewMode === 'fit' ? 'w-full block' : 'block',
                   media.pdfPages[idx]?.isLowRes && settings.s.enableLowRes && 'blur-[0.3px]',
                 ]"
-                :style="imgTransformStyle()"
+                :style="imgStyle(idx)"
                 decoding="async"
                 loading="lazy"
                 draggable="false"

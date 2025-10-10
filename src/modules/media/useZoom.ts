@@ -45,11 +45,11 @@ export interface ZoomState {
 
 /**
  * 計算縮放後要維持的視覺焦點位置
- * 策略：追蹤當前頁面元素的位置，縮放後維持該元素在視窗中的相對位置
+ * 策略：記錄視窗中心在滾動內容中的位置，縮放後維持該位置在視窗中心
  */
 function preserveVisualCenter(
   scrollContainer: HTMLElement | null,
-  currentPageIndex: number,
+  _currentPageIndex: number, // 保留用於介面兼容，實際不使用
   oldZoom: number,
   newZoom: number,
   callback: () => void,
@@ -58,90 +58,41 @@ function preserveVisualCenter(
   if (!scrollContainer || oldZoom === newZoom) {
     callback()
     if (onComplete) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => onComplete())
-        })
-      })
+      requestAnimationFrame(() => onComplete())
     }
     return
   }
 
-  // 找到當前頁面元素
-  const pageEl = scrollContainer.querySelector(
-    `[data-pdf-page="${currentPageIndex}"]`
-  ) as HTMLElement | null
-
-  if (!pageEl) {
-    // 找不到元素，直接執行縮放
-    callback()
-    if (onComplete) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => onComplete())
-        })
-      })
-    }
-    return
-  }
-
-  // 記錄縮放前的狀態
+  // 記錄縮放前的滾動狀態
+  const scrollLeft = scrollContainer.scrollLeft
+  const scrollTop = scrollContainer.scrollTop
   const clientWidth = scrollContainer.clientWidth
   const clientHeight = scrollContainer.clientHeight
 
-  // 獲取頁面元素相對於滾動容器的位置
-  const containerRect = scrollContainer.getBoundingClientRect()
-  const pageRect = pageEl.getBoundingClientRect()
-
-  // 計算視窗中心點相對於頁面元素的偏移量（相對位置）
-  const viewportCenterX = containerRect.left + clientWidth / 2
-  const viewportCenterY = containerRect.top + clientHeight / 2
-  const offsetXFromPage = viewportCenterX - pageRect.left
-  const offsetYFromPage = viewportCenterY - pageRect.top
+  // 計算視窗中心點在滾動內容中的絕對位置
+  const centerX = scrollLeft + clientWidth / 2
+  const centerY = scrollTop + clientHeight / 2
 
   // 執行縮放
   callback()
 
-  // 使用多層 rAF + setTimeout 確保 DOM 完全更新（Vue 響應式 + CSS 重排 + 瀏覽器渲染）
+  // 在下一幀調整滾動位置
   requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      // 額外的 setTimeout 確保所有同步操作完成
-      setTimeout(() => {
-        requestAnimationFrame(() => {
-          // 獲取縮放後頁面元素的新位置
-          const newPageRect = pageEl.getBoundingClientRect()
-          const newContainerRect = scrollContainer.getBoundingClientRect()
+    // 計算縮放比例
+    const scale = newZoom / oldZoom
 
-          // 計算縮放比例
-          const scale = newZoom / oldZoom
+    // 縮放後，原來的中心點應該在新位置
+    const newCenterX = centerX * scale
+    const newCenterY = centerY * scale
 
-          // 計算縮放後，原本的偏移量應該是多少
-          const newOffsetXFromPage = offsetXFromPage * scale
-          const newOffsetYFromPage = offsetYFromPage * scale
+    // 計算新的滾動位置，使中心點保持在視窗中心
+    scrollContainer.scrollLeft = newCenterX - clientWidth / 2
+    scrollContainer.scrollTop = newCenterY - clientHeight / 2
 
-          // 計算新的視窗中心點應該在哪裡（相對於視窗）
-          const targetCenterX = newPageRect.left + newOffsetXFromPage
-          const targetCenterY = newPageRect.top + newOffsetYFromPage
-
-          // 計算當前視窗中心點
-          const currentCenterX = newContainerRect.left + clientWidth / 2
-          const currentCenterY = newContainerRect.top + clientHeight / 2
-
-          // 計算需要調整的滾動量
-          const scrollAdjustX = targetCenterX - currentCenterX
-          const scrollAdjustY = targetCenterY - currentCenterY
-
-          // 應用滾動調整
-          scrollContainer.scrollLeft += scrollAdjustX
-          scrollContainer.scrollTop += scrollAdjustY
-
-          // 呼叫完成回調
-          if (onComplete) {
-            requestAnimationFrame(() => onComplete())
-          }
-        })
-      }, 0)
-    })
+    // 呼叫完成回調
+    if (onComplete) {
+      requestAnimationFrame(() => onComplete())
+    }
   })
 }
 
