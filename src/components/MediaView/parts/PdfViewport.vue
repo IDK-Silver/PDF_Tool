@@ -20,31 +20,19 @@ const settings = useSettingsStore()
 const filelist = useFileListStore()
 const exportSettings = useExportSettings()
 
-const { 
-  viewMode, 
-  zoomTarget, 
-  displayFitPercent, 
-  displayZoom, 
-  canZoomIn, 
+const {
+  viewMode,
+  zoomTarget,
+  displayFitPercent,
+  displayZoom,
+  canZoomIn,
   canZoomOut,
-  zoomIn, 
-  zoomOut, 
-  resetZoom, 
-  setFitMode,
-  setEffectiveMax
+  zoomIn,
+  zoomOut,
+  resetZoom,
+  setFitMode
 } = useZoom()
 
-// 根據 actualModeDpiCap 計算有效的最大縮放值
-function updateEffectiveMaxZoom() {
-  const dpiCap = settings.s.actualModeDpiCap
-  // 計算：如果 dpi = 96 * (zoom / 100)，那麼 zoom = (dpi * 100) / 96
-  const maxZoomByDpi = Math.floor((dpiCap * 100) / 96)
-  setEffectiveMax(maxZoomByDpi)
-}
-
-// 初始化和監聽 DPI cap 變化
-updateEffectiveMaxZoom()
-watch(() => settings.s.actualModeDpiCap, updateEffectiveMaxZoom)
 
 function getRenderFormat() {
   return settings.s.renderFormat
@@ -645,18 +633,18 @@ function updateFitPercent() {
   if (!cW) return
   const idx = centerIndex.value
   const cachedBase = media.baseCssWidthAt100(idx)
-  const dprUsed = Math.min(window.devicePixelRatio || 1, settings.s.dprCap)
-  const maxCssByCap = Math.max(1, Math.floor((settings.s.maxOutputWidth || Number.MAX_SAFE_INTEGER) / Math.max(0.5, dprUsed)))
-  const effectiveCssW = Math.min(cW, maxCssByCap)
+  
+  // Fit 模式的百分比 = (容器寬度 / PDF 原始寬度) × 100
+  // 這表示：要讓 PDF 符合容器寬度，需要縮放到多少百分比
   if (cachedBase && cachedBase > 0) {
-    displayFitPercent.value = Math.max(5, Math.min(400, Math.round((effectiveCssW / cachedBase) * 100)))
+    displayFitPercent.value = Math.max(5, Math.min(400, Math.round((cW / cachedBase) * 100)))
     return
   }
   media.getPageSizePt(idx).then((sz) => {
     if (!sz) return
-    const base = sz.widthPt * (96 / 72)
+    const base = sz.widthPt * (96 / 72)  // PDF 原始寬度（96 DPI，即 100% 時的 CSS 寬度）
     if (base > 0) {
-      displayFitPercent.value = Math.max(5, Math.min(400, Math.round((effectiveCssW / base) * 100)))
+      displayFitPercent.value = Math.max(5, Math.min(400, Math.round((cW / base) * 100)))
     }
   })
 }
@@ -732,13 +720,13 @@ defineExpose({
     <div v-if="!totalPages" class="p-4">尚未載入頁面</div>
     <div
       v-else
-      :class="viewMode === 'fit' ? 'p-4 space-y-3' : 'p-4 space-y-3 min-w-full'"
+      :class="viewMode === 'fit' ? 'p-4 space-y-3' : 'p-4 space-y-3 inline-block min-w-full'"
     >
       <div class="w-full min-h-full pt-4 pb-10">
         <div
           v-for="idx in renderIndices"
           :key="idx"
-          :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'w-full mb-10 flex justify-center'"
+          :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'mb-10 flex justify-center'"
           :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomTarget / 100)) + 'px' } : undefined"
           :data-pdf-page="idx"
           :ref="(el) => observe(el as Element, idx)"

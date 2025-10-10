@@ -87,7 +87,7 @@ const ui = useUiStore()
           <button @click="emit('zoom-in')" :disabled="!props.canZoomIn"
             class="w-7 h-7 text-sm rounded transition-colors flex items-center justify-center"
             :class="props.canZoomIn ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
-            :title="props.canZoomIn ? '放大' : '已達最大縮放（受 DPI 限制）'">
+            :title="props.canZoomIn ? '放大' : '已達最大縮放 (400%)'">
             +
           </button>
         </div>

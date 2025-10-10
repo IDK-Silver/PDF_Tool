@@ -96,29 +96,6 @@ function preserveVisualCenter(
   })
 }
 
-/**
- * 模式切換時的滾動位置維持
- * 從 fit 切換到 actual 時，將當前頁面置中
- */
-function centerCurrentPage(
-  scrollContainer: HTMLElement | null,
-  currentPageIndex: number
-) {
-  if (!scrollContainer) return
-
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const pageEl = scrollContainer.querySelector(
-        `[data-pdf-page="${currentPageIndex}"]`
-      ) as HTMLElement | null
-      
-      if (pageEl) {
-        pageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
-      }
-    })
-  })
-}
-
 export function useZoom(options: ZoomOptions = {}): ZoomState {
   const { step = 10, min = 10, max = 400 } = options
 
@@ -171,16 +148,12 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
     if (viewMode.value !== 'actual') {
       const baseline = getFitBaseline()
       const newZoom = clampZoom(baseline + delta)
-      viewMode.value = 'actual'
-      zoomTarget.value = newZoom
-      centerCurrentPage(scrollContainer ?? null, currentPageIndex)
-      if (onComplete) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => onComplete())
-          })
-        })
-      }
+      
+      // 使用 preserveVisualCenter 維持視覺中心，而不是 centerCurrentPage
+      preserveVisualCenter(scrollContainer ?? null, currentPageIndex, baseline, newZoom, () => {
+        viewMode.value = 'actual'
+        zoomTarget.value = newZoom
+      }, onComplete)
       return
     }
 
