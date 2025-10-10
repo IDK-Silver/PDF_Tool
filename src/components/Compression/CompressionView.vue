@@ -5,7 +5,9 @@ import CompressionToolbar from './parts/CompressionToolbar.vue'
 import PdfCompressPane from './parts/PdfCompressPane.vue'
 import ImageCompressPane from './parts/ImageCompressPane.vue'
 import { useMediaStore } from '@/modules/media/store'
-import { getFileSize, formatFileSize } from '@/modules/media/fileSize'
+import { formatFileSize } from '@/modules/media/fileSize'
+import { openInFileManager } from '@/modules/media/openInFileManager'
+import { FolderOpenIcon } from '@heroicons/vue/24/outline'
 
 const compression = useCompressionStore()
 const media = useMediaStore()
@@ -21,6 +23,7 @@ const isImage = computed(() => fileType.value === 'image')
 const hasValidFile = computed(() => isPdf.value || isImage.value)
 const fileName = computed(() => media.selected?.name ?? '')
 const filePath = computed(() => media.selected?.path ?? '')
+const descriptorSize = computed(() => media.descriptor?.size ?? null)
 
 // 檔案大小
 const fileSize = ref<number | null>(null)
@@ -28,17 +31,26 @@ const fileSizeText = computed(() =>
   fileSize.value !== null ? formatFileSize(fileSize.value) : '...'
 )
 
-// 當檔案變更時重新讀取大小
-watch(filePath, async (path) => {
+// 當檔案變更時更新大小（以後端 analyze_media 回傳為準，避免前端 fs 權限問題）
+watch([filePath, descriptorSize], ([path, size]) => {
   if (!path) {
     fileSize.value = null
     return
   }
-  fileSize.value = await getFileSize(path)
+  fileSize.value = (typeof size === 'number' && Number.isFinite(size)) ? size : null
 }, { immediate: true })
 
 function onStart() { compression.start() }
 function onCancel() { compression.cancel() }
+
+async function onReveal() {
+  const p = filePath.value
+  if (!p) return
+  try { await openInFileManager(p) } catch (err) {
+    console.error('openInFileManager failed', err)
+    alert('無法在檔案管理器顯示該檔案')
+  }
+}
 </script>
 
 <template>
@@ -54,14 +66,20 @@ function onCancel() { compression.cancel() }
           {{ isPdf ? 'PDF 壓縮' : '圖片壓縮' }}
         </span>
       </div>
-      <div class="sm:ml-auto flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 text-xs text-[hsl(var(--muted-foreground))] w-full sm:w-auto">
+      <div class="sm:ml-auto flex flex-row items-center gap-3 text-xs text-[hsl(var(--muted-foreground))] w-full sm:w-auto">
         <div class="flex items-center gap-2">
           <span class="font-medium">檔案大小：</span>
           <span class="font-mono">{{ fileSizeText }}</span>
         </div>
-        <div class="truncate max-w-full sm:max-w-xs sm:text-right">
-          {{ fileName }}
-        </div>
+        <button
+          class="ml-2 inline-flex items-center justify-center w-7 h-7 rounded hover:bg-[hsl(var(--selection))] transition"
+          :disabled="!hasValidFile"
+          :title="hasValidFile ? '在檔案管理器顯示' : ''"
+          aria-label="在檔案管理器顯示"
+          @click="onReveal"
+        >
+          <FolderOpenIcon class="w-5 h-5" />
+        </button>
       </div>
     </header>
 

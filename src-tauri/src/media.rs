@@ -50,6 +50,180 @@ pub struct MediaDescriptor {
     pub orientation: Option<u8>,
 }
 
+// =====================
+// Compression commands
+// =====================
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressImageArgs {
+    pub src_path: String,
+    pub dest_path: String,
+    pub format: Option<String>,        // 'jpeg' | 'png' | 'webp' | 'preserve'
+    pub quality: Option<u8>,           // 1-100 (jpeg/webp only)
+    pub max_width: Option<u32>,
+    pub max_height: Option<u32>,
+    pub strip_metadata: Option<bool>,  // not used; re-encode strips by default
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressImageResult {
+    pub path: String,
+    pub before_size: u64,
+    pub after_size: u64,
+    pub width: u32,
+    pub height: u32,
+    pub format: String,
+}
+
+#[tauri::command]
+pub async fn compress_image(args: CompressImageArgs) -> Result<CompressImageResult, MediaError> {
+    tokio::task::spawn_blocking(move || -> Result<CompressImageResult, MediaError> {
+        let src = Path::new(&args.src_path);
+        if !src.exists() {
+            return Err(MediaError::new("not_found", format!("來源檔案不存在: {}", args.src_path)));
+        }
+        let before_meta = fs::metadata(src).map_err(|e| MediaError::new("io_error", format!("讀取來源檔案資訊失敗: {e}")))?;
+        let before_size = before_meta.len();
+
+        // decode
+        let bytes = fs::read(src).map_err(|e| MediaError::new("io_error", format!("讀取來源檔案失敗: {e}")))?;
+        let mut img = image::load_from_memory(&bytes).map_err(|e| MediaError::new("decode_error", format!("解碼影像失敗: {e}")))?;
+        let (mut w, mut h) = img.dimensions();
+
+        // downscale if needed
+        if let (Some(max_w), Some(max_h)) = (args.max_width, args.max_height) {
+            if max_w > 0 && max_h > 0 {
+                let scale_w = (max_w as f32) / (w as f32);
+                let scale_h = (max_h as f32) / (h as f32);
+                let scale = scale_w.min(scale_h);
+                if scale < 1.0 {
+                    let new_w = ((w as f32) * scale).floor().max(1.0) as u32;
+                    let new_h = ((h as f32) * scale).floor().max(1.0) as u32;
+                    img = img.resize(new_w, new_h, image::imageops::FilterType::Triangle);
+                    w = new_w; h = new_h;
+                }
+            }
+        } else if let Some(max_w) = args.max_width { // only width cap
+            if max_w > 0 && w > max_w {
+                let scale = (max_w as f32) / (w as f32);
+                let new_w = max_w;
+                let new_h = ((h as f32) * scale).floor().max(1.0) as u32;
+                img = img.resize(new_w, new_h, image::imageops::FilterType::Triangle);
+                w = new_w; h = new_h;
+            }
+        } else if let Some(max_h) = args.max_height { // only height cap
+            if max_h > 0 && h > max_h {
+                let scale = (max_h as f32) / (h as f32);
+                let new_h = max_h;
+                let new_w = ((w as f32) * scale).floor().max(1.0) as u32;
+                img = img.resize(new_w, new_h, image::imageops::FilterType::Triangle);
+                w = new_w; h = new_h;
+            }
+        }
+
+        let req_fmt = args.format.unwrap_or_else(|| "preserve".to_string()).to_lowercase();
+        let chosen_fmt = if req_fmt == "preserve" {
+            let ext = src.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+            if ext == "jpg" || ext == "jpeg" { "jpeg".to_string() }
+            else if ext == "png" { "png".to_string() }
+            else if ext == "webp" { "webp".to_string() }
+            else { "jpeg".to_string() }
+        } else { req_fmt };
+
+        let mut out: Vec<u8> = Vec::new();
+        match chosen_fmt.as_str() {
+            "jpeg" => {
+                use image::ColorType;
+                // flatten alpha onto white background if exists
+                let rgba = img.to_rgba8();
+                let (iw, ih) = (rgba.width(), rgba.height());
+                let mut bg = image::RgbaImage::from_pixel(iw, ih, image::Rgba([255, 255, 255, 255]));
+                image::imageops::overlay(&mut bg, &rgba, 0, 0);
+                let rgb = image::DynamicImage::ImageRgba8(bg).to_rgb8();
+                let q = args.quality.unwrap_or(82).clamp(1, 100);
+                let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(Cursor::new(&mut out), q);
+                enc.write_image(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
+                    .map_err(|e| MediaError::new("encode_error", format!("JPEG 編碼失敗: {e}")))?;
+            }
+            "png" => {
+                use image::ColorType;
+                let rgba = img.to_rgba8();
+                let mut enc = image::codecs::png::PngEncoder::new_with_quality(
+                    Cursor::new(&mut out),
+                    image::codecs::png::CompressionType::Default,
+                    image::codecs::png::FilterType::NoFilter,
+                );
+                enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
+                    .map_err(|e| MediaError::new("encode_error", format!("PNG 編碼失敗: {e}")))?;
+            }
+            "webp" => {
+                let rgba = img.to_rgba8();
+                let q = args.quality.unwrap_or(82).clamp(1, 100) as f32;
+                let encoder = webp::Encoder::from_rgba(&rgba, rgba.width(), rgba.height());
+                let encoded = encoder.encode(q);
+                out = encoded.to_vec();
+            }
+            other => {
+                return Err(MediaError::new("invalid_input", format!("不支援的輸出格式: {other}")));
+            }
+        }
+
+        // write
+        fs::write(&args.dest_path, &out).map_err(|e| MediaError::new("io_error", format!("寫入輸出檔失敗: {e}")))?;
+        let after_meta = fs::metadata(&args.dest_path).map_err(|e| MediaError::new("io_error", format!("讀取輸出檔資訊失敗: {e}")))?;
+        Ok(CompressImageResult {
+            path: args.dest_path,
+            before_size,
+            after_size: after_meta.len(),
+            width: w,
+            height: h,
+            format: chosen_fmt,
+        })
+    }).await.map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressPdfLosslessArgs {
+    pub src_path: String,
+    pub dest_path: String,
+    pub linearize: Option<bool>, // 保留參數占位，純 Rust v1 不處理 linearization
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressPdfLosslessResult {
+    pub path: String,
+    pub before_size: u64,
+    pub after_size: u64,
+}
+
+#[tauri::command]
+pub async fn compress_pdf_lossless(args: CompressPdfLosslessArgs) -> Result<CompressPdfLosslessResult, MediaError> {
+    // 純 Rust v1 佔位：暫以安全複製檔案實作，之後將改為使用 pdf/pdf-writer 重寫結構與重壓 streams。
+    tokio::task::spawn_blocking(move || -> Result<CompressPdfLosslessResult, MediaError> {
+        let src = Path::new(&args.src_path);
+        if !src.exists() {
+            return Err(MediaError::new("not_found", format!("來源檔案不存在: {}", args.src_path)));
+        }
+        let before_meta = fs::metadata(src).map_err(|e| MediaError::new("io_error", format!("讀取來源檔案資訊失敗: {e}")))?;
+        let before_size = before_meta.len();
+
+        // 若目標與來源相同，避免覆寫：回傳原檔資訊
+        if args.dest_path == args.src_path {
+            return Ok(CompressPdfLosslessResult { path: args.dest_path, before_size, after_size: before_size });
+        }
+
+        // 直接複製（no-op 最小可行版本）
+        fs::copy(&args.src_path, &args.dest_path)
+            .map_err(|e| MediaError::new("io_error", format!("寫入輸出檔失敗: {e}")))?;
+        let after_meta = fs::metadata(&args.dest_path).map_err(|e| MediaError::new("io_error", format!("讀取輸出檔資訊失敗: {e}")))?;
+        Ok(CompressPdfLosslessResult { path: args.dest_path, before_size, after_size: after_meta.len() })
+    }).await.map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
+}
+
 // Removed PdfInfo and pdf_info(): use pdf_open() result and pdf_page_size() instead.
 
 #[derive(Serialize)]

@@ -136,6 +136,38 @@ export async function imageToPdf(opts: { srcPath: string, destPath: string }): P
   return { path }
 }
 
+// ========= Compression Services =========
+export interface CompressImageOpts {
+  srcPath: string
+  destPath: string
+  format?: 'jpeg'|'png'|'webp'|'preserve'
+  quality?: number
+  maxWidth?: number
+  maxHeight?: number
+  stripMetadata?: boolean
+}
+
+export async function compressImage(opts: CompressImageOpts): Promise<{
+  path: string,
+  beforeSize: number,
+  afterSize: number,
+  width: number,
+  height: number,
+  format: string,
+}> {
+  return invoke('compress_image', { args: opts } as any)
+}
+
+export interface CompressPdfLosslessOpts {
+  srcPath: string
+  destPath: string
+  linearize?: boolean
+}
+
+export async function compressPdfLossless(opts: CompressPdfLosslessOpts): Promise<{ path: string, beforeSize: number, afterSize: number }>{
+  return invoke('compress_pdf_lossless', { args: opts })
+}
+
 export async function pdfInsertBlank(opts: { docId: number, index: number, widthPt: number, heightPt: number}): Promise<{ pages: number }> {
   const { docId, index, widthPt, heightPt } = opts
   return invoke<{ pages: number }>('pdf_insert_blank', { docId, index, widthPt, heightPt })

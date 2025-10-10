@@ -11,7 +11,7 @@ const targetEffectiveDpi = computed({
 
 const format = computed({
   get: () => settings.s.pdf.format,
-  set: (v: 'auto' | 'jpeg' | 'webp' | 'keep') => settings.s.pdf.format = v
+  set: (v: 'jpeg' | 'keep') => settings.s.pdf.format = v
 })
 
 const quality = computed({
@@ -19,10 +19,7 @@ const quality = computed({
   set: (v: number) => settings.s.pdf.quality = Math.max(50, Math.min(95, Math.round(v)))
 })
 
-const bwCompression = computed({
-  get: () => settings.s.pdf.bwCompression,
-  set: (v: 'auto' | 'ccitt') => settings.s.pdf.bwCompression = v
-})
+// 黑白（二值）策略已移除（v1 僅做 JPEG/Flate 與結構最佳化）
 
 const losslessOptimize = computed({
   get: () => settings.s.pdf.losslessOptimize,
@@ -46,7 +43,7 @@ const thresholdEffectiveDpi = computed({
 </script>
 
 <template>
-  <section class="max-w-4xl mx-auto">
+  <section class="max-w-4xl mx-auto h-full flex flex-col">
     <!-- 說明 -->
     <div class="mb-6 p-4 rounded-lg bg-[hsl(var(--muted))]/30 border border-[hsl(var(--border))]">
       <p class="text-sm text-[hsl(var(--foreground))]">
@@ -54,8 +51,9 @@ const thresholdEffectiveDpi = computed({
       </p>
     </div>
 
-    <!-- 表單區 -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- 可滾動的表單區 -->
+    <div class="flex-1 overflow-y-auto pr-2">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <!-- 左欄：影像處理 -->
       <div class="space-y-4 p-4 rounded-lg border border-[hsl(var(--border))]">
         <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">影像處理</h3>
@@ -111,9 +109,7 @@ const thresholdEffectiveDpi = computed({
             v-model="format" 
             class="w-full border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
           >
-            <option value="auto">自動（依內容選擇）</option>
             <option value="jpeg">JPEG</option>
-            <option value="webp">WebP</option>
             <option value="keep">保留原格式</option>
           </select>
         </div>
@@ -139,23 +135,9 @@ const thresholdEffectiveDpi = computed({
         </div>
       </div>
 
-      <!-- 右欄：黑白與結構 -->
+      <!-- 右欄：結構最佳化 -->
       <div class="space-y-4 p-4 rounded-lg border border-[hsl(var(--border))]">
-        <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">黑白與結構</h3>
-        
-        <!-- 黑白壓縮 -->
-        <div class="space-y-2">
-          <label class="block text-sm font-medium">黑白（二值）影像壓縮</label>
-          <select 
-            v-model="bwCompression" 
-            class="w-full border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
-          >
-            <option value="auto">自動</option>
-            <option value="ccitt">CCITT G4（無損）</option>
-          </select>
-        </div>
-
-        <!-- 最佳化選項 -->
+        <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">結構最佳化</h3>
         <div class="space-y-3 pt-2">
           <label class="flex items-start gap-3 cursor-pointer group">
             <input 
@@ -186,6 +168,7 @@ const thresholdEffectiveDpi = computed({
           </label>
         </div>
       </div>
+    </div>
     </div>
   </section>
 </template>

@@ -145,6 +145,8 @@ pub fn run() {
             frontend_ready,
             media::analyze_media,
             media::image_read,
+            media::compress_image,
+            media::compress_pdf_lossless,
             media::image_to_pdf,
             media::pdf_open,
             media::pdf_close,

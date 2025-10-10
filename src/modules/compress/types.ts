@@ -17,12 +17,10 @@ export interface CompressPdfSettings {
   // - whenAbove：僅當有效 DPI >= thresholdEffectiveDpi 才下採樣至 targetEffectiveDpi
   downsampleRule: 'always' | 'whenAbove'
   thresholdEffectiveDpi: number
-  // 彩色/灰階影像的重新編碼格式：自動（依內容挑選）/JPEG/WebP/保留原格式
-  format: 'auto' | 'jpeg' | 'webp' | 'keep'
-  // 有損品質（1-100），僅在 JPEG/WebP 時生效
+  // 彩色/灰階影像的重新編碼格式：JPEG 或保留原格式
+  format: 'jpeg' | 'keep'
+  // 有損品質（1-100），僅在 JPEG 時生效
   quality: number
-  // 黑白二值影像壓縮策略：自動或強制 CCITT G4
-  bwCompression: 'auto' | 'ccitt'
   // 無損結構最佳化（重新壓縮 streams、object streams、壓縮 xref、去冗）
   losslessOptimize: boolean
   // 移除文件與影像 metadata

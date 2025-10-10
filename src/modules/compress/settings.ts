@@ -16,9 +16,8 @@ export const defaultPdfSettings: CompressPdfSettings = {
   targetEffectiveDpi: 150,
   downsampleRule: 'always',
   thresholdEffectiveDpi: 200,
-  format: 'auto',
+  format: 'jpeg',
   quality: 82,
-  bwCompression: 'auto',
   losslessOptimize: true,
   removeMetadata: true,
 }
@@ -28,10 +27,14 @@ function loadFromStorage(): { image: CompressImageSettings; pdf: CompressPdfSett
     const txt = localStorage.getItem(LS_KEY)
     if (!txt) return { image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } }
     const obj = JSON.parse(txt)
-    return {
-      image: { ...defaultImageSettings, ...(obj?.image || {}) },
-      pdf: { ...defaultPdfSettings, ...(obj?.pdf || {}) },
-    }
+    const image: CompressImageSettings = { ...defaultImageSettings, ...(obj?.image || {}) }
+    const pdf: any = { ...defaultPdfSettings, ...(obj?.pdf || {}) }
+    // normalize legacy/invalid values
+    if (!['jpeg','keep'].includes(pdf.format)) pdf.format = defaultPdfSettings.format
+    if (!['always','whenAbove'].includes(pdf.downsampleRule)) pdf.downsampleRule = defaultPdfSettings.downsampleRule
+    pdf.targetEffectiveDpi = Math.max(72, Math.min(600, Math.round(pdf.targetEffectiveDpi || defaultPdfSettings.targetEffectiveDpi)))
+    pdf.thresholdEffectiveDpi = Math.max(72, Math.min(600, Math.round(pdf.thresholdEffectiveDpi || defaultPdfSettings.thresholdEffectiveDpi)))
+    return { image, pdf }
   } catch {
     return { image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } }
   }

@@ -135,7 +135,7 @@ MediaView 組件支援兩種檢視模式：
 ### Compression 模組（UI）
 
 - `Compression/CompressionView.vue`：壓縮主頁（PDF/圖片 Tab）。
-- `Compression/parts/PdfCompressPane.vue`：PDF 智慧壓縮參數（目標有效 DPI、格式、品質、黑白策略、結構最佳化）。
+- `Compression/parts/PdfCompressPane.vue`：PDF 壓縮參數（目標有效 DPI、格式（JPEG/保留）、品質、結構最佳化）。
 - `Compression/parts/ImageCompressPane.vue`：圖片壓縮參數（格式、品質、最大邊、移除中繼資料）。
 - 目前僅提供前端 UI 與設定持久化（`src/modules/compress/`），後端壓縮指令將於後續加入。
 
