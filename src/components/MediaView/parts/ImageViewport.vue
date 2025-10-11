@@ -94,15 +94,37 @@ function fitPercentBaseline(): number {
 function zoomIn() {
   const root = scrollRootEl.value
   const img = imageEl.value
-  if (viewMode.value !== 'actual') {
+  if (viewMode.value !== 'actual' && root && img) {
+    // 從 fit 切換到 actual，同時以視窗中心為錨點放大
     viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()  // 從當前 fit 的縮放值開始
+    const oldZoom = fitPercentBaseline()
+    const newZoom = Math.min(400, oldZoom + 10)
+    const zoomRatio = newZoom / oldZoom
+
+    // 記錄當前滾動位置和視窗中心點
+    const oldScrollLeft = root.scrollLeft
+    const oldScrollTop = root.scrollTop
+    const viewportCenterX = root.clientWidth / 2
+    const viewportCenterY = root.clientHeight / 2
+
+    // 視窗中心點在內容中的位置（以舊縮放為基準）
+    const contentCenterX = oldScrollLeft + viewportCenterX
+    const contentCenterY = oldScrollTop + viewportCenterY
+
+    zoomTarget.value = newZoom
+
     nextTick(() => {
-      if (root) {
-        root.scrollTop = 0
-        root.scrollLeft = 0
-      }
+      requestAnimationFrame(() => {
+        // 縮放後的內容中心點位置
+        const newContentCenterX = contentCenterX * zoomRatio
+        const newContentCenterY = contentCenterY * zoomRatio
+
+        // 使中心點保持視窗中心
+        root.scrollLeft = newContentCenterX - viewportCenterX
+        root.scrollTop = newContentCenterY - viewportCenterY
+      })
     })
+    return
   } else if (root && img) {
     // 記錄縮放前的狀態
     const oldZoom = zoomTarget.value
@@ -134,21 +156,44 @@ function zoomIn() {
     })
     return
   }
+  // 後備：當 root/img 尚未就緒時仍調整數值
   zoomTarget.value = Math.min(400, zoomTarget.value + 10)
 }
 
 function zoomOut() {
   const root = scrollRootEl.value
   const img = imageEl.value
-  if (viewMode.value !== 'actual') {
+  if (viewMode.value !== 'actual' && root && img) {
+    // 從 fit 切換到 actual，同時以視窗中心為錨點縮小
     viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()  // 從當前 fit 的縮放值開始
+    const oldZoom = fitPercentBaseline()
+    const newZoom = Math.max(10, oldZoom - 10)
+    const zoomRatio = newZoom / oldZoom
+
+    // 記錄當前滾動位置和視窗中心點
+    const oldScrollLeft = root.scrollLeft
+    const oldScrollTop = root.scrollTop
+    const viewportCenterX = root.clientWidth / 2
+    const viewportCenterY = root.clientHeight / 2
+
+    // 視窗中心點在內容中的位置（以舊縮放為基準）
+    const contentCenterX = oldScrollLeft + viewportCenterX
+    const contentCenterY = oldScrollTop + viewportCenterY
+
+    zoomTarget.value = newZoom
+
     nextTick(() => {
-      if (root) {
-        root.scrollTop = 0
-        root.scrollLeft = 0
-      }
+      requestAnimationFrame(() => {
+        // 縮放後的內容中心點位置
+        const newContentCenterX = contentCenterX * zoomRatio
+        const newContentCenterY = contentCenterY * zoomRatio
+
+        // 使中心點保持視窗中心
+        root.scrollLeft = newContentCenterX - viewportCenterX
+        root.scrollTop = newContentCenterY - viewportCenterY
+      })
     })
+    return
   } else if (root && img) {
     // 記錄縮放前的狀態
     const oldZoom = zoomTarget.value
@@ -180,6 +225,7 @@ function zoomOut() {
     })
     return
   }
+  // 後備：當 root/img 尚未就緒時仍調整數值
   zoomTarget.value = Math.max(10, zoomTarget.value - 10)
 }
 
@@ -351,7 +397,6 @@ defineExpose({
   <div
     ref="scrollRootEl"
     class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain bg-muted min-h-0"
-    :class="viewMode === 'fit' ? 'flex items-center justify-center' : ''"
     style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: none;"
     data-image-view
     @wheel="handleWheel"
