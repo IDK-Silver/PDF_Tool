@@ -4,6 +4,7 @@ import { useMediaStore } from '@/modules/media/store'
 import { useCompressSettings } from './settings'
 import type { CompressionUiState } from './types'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
+import { dirname, join } from '@tauri-apps/api/path'
 import { useFileListStore } from '@/modules/filelist/store'
 import { compressImage, compressPdfSmart } from '@/modules/media/service'
 
@@ -38,12 +39,20 @@ export const useCompressionStore = defineStore('compression', () => {
         const s = settings.s.image
         const srcPath = d.path
         const ext = s.format === 'preserve' ? (srcPath.split('.').pop() || 'jpg') : (s.format === 'jpeg' ? 'jpg' : s.format)
-        const base = (d.name || 'image').replace(/\.[^.]+$/,'') + ' (compressed).' + ext
-        const destPath = await saveDialog({ defaultPath: base, filters: [{ name: 'Image', extensions: ['jpg','jpeg','png','webp'] }] })
-        if (!destPath) return
+        const overwrite = settings.s.saveBehavior === 'overwrite'
+        let destPath: string | null = null
+        if (overwrite) {
+          destPath = srcPath
+        } else {
+          const base = (d.name || 'image').replace(/\.[^.]+$/,'') + ' (compressed).' + ext
+          const dir = await dirname(srcPath)
+          const suggested = await join(dir, base)
+          destPath = await saveDialog({ defaultPath: suggested, filters: [{ name: 'Image', extensions: ['jpg','jpeg','png','webp'] }] })
+          if (!destPath) return
+        }
         const res = await compressImage({
           srcPath,
-          destPath,
+          destPath: destPath!,
           format: s.format === 'preserve' ? 'preserve' : (s.format as any),
           quality: s.quality,
           maxWidth: s.maxWidth,
@@ -55,13 +64,21 @@ export const useCompressionStore = defineStore('compression', () => {
       } else if (d.type === 'pdf') {
         // v1: JPEG/Flate 重編碼 + 基礎結構最佳化（純 Rust）
         const srcPath = d.path
-        const base = (d.name || 'document').replace(/\.[^.]+$/,'') + ' (optimized).pdf'
-        const destPath = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
-        if (!destPath) return
+        const overwrite = settings.s.saveBehavior === 'overwrite'
+        let destPath: string | null = null
+        if (overwrite) {
+          destPath = srcPath
+        } else {
+          const base = (d.name || 'document').replace(/\.[^.]+$/,'') + ' (optimized).pdf'
+          const dir = await dirname(srcPath)
+          const suggested = await join(dir, base)
+          destPath = await saveDialog({ defaultPath: suggested, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+          if (!destPath) return
+        }
         const s = settings.s.pdf
         const res = await compressPdfSmart({
           srcPath,
-          destPath,
+          destPath: destPath!,
           targetEffectiveDpi: s.targetEffectiveDpi,
           downsampleRule: s.downsampleRule,
           thresholdEffectiveDpi: s.thresholdEffectiveDpi,

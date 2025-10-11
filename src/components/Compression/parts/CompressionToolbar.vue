@@ -11,6 +11,7 @@ const emit = defineEmits<{ (e: 'start'): void; (e: 'cancel'): void }>()
 
 const canStart = computed(() => !!props.selectedName && !props.running)
 
+
 function onStart() { emit('start') }
 function onCancel() { emit('cancel') }
 </script>
@@ -22,6 +23,7 @@ function onCancel() { emit('cancel') }
       <span class="font-medium" v-if="selectedName">{{ selectedName }}</span>
       <span v-else class="text-[hsl(var(--muted-foreground))]">尚未選擇</span>
     </div>
+    
     <div v-if="!props.hideActions" class="flex-shrink-0 flex items-center gap-2">
       <button
         class="px-3 py-1 rounded transition-colors disabled:opacity-50 whitespace-nowrap"

@@ -164,6 +164,11 @@ PDF 頁面採用雙快取策略以平衡載入速度與顯示品質：
 - 壓縮設定：`$APPCONFIG/compress-settings.json`
 - 最近檔案：`$APPCONFIG/recent-files.json`
 
+使用者行為選項區分：
+- 編輯存檔行為（檢視/編輯頁）：另存新檔/覆蓋原檔（`settings.deleteBehavior`，設定頁面「檔案操作」段落）
+- 壓縮存檔行為（壓縮頁）：另存新檔/覆蓋原檔（`compressSettings.saveBehavior`，設定頁面「壓縮存檔行為」段落）
+  - 另存新檔時，預設儲存位置為來源檔所在資料夾。
+
 ## 檔案列表
 
 - 支援多檔案管理

@@ -30,3 +30,11 @@ export interface CompressPdfSettings {
 export interface CompressionUiState {
   activeTab: 'pdf' | 'image'
 }
+
+export type SaveBehavior = 'saveAsNew' | 'overwrite'
+
+export interface CompressSettingsState {
+  saveBehavior: SaveBehavior
+  image: CompressImageSettings
+  pdf: CompressPdfSettings
+}

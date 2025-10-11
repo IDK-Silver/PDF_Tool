@@ -6,6 +6,7 @@ import { analyzeMedia, imageRead, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize,
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
+import { dirname, join } from '@tauri-apps/api/path'
 
 export const useMediaStore = defineStore('media', () => {
   const selected = ref<FileItem | null>(null)
@@ -243,7 +244,9 @@ export const useMediaStore = defineStore('media', () => {
     const del = settings.s.deleteBehavior
     if (del === 'saveAsNew') {
       const base = (d.name?.replace(/\.pdf$/i, '') || 'output') + ' (edited).pdf'
-      const picked = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+      const dir = await dirname(d.path)
+      const suggested = await join(dir, base)
+      const picked = await saveDialog({ defaultPath: suggested, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
       if (!picked) throw new Error('SAVE_CANCELLED')
       const res = await pdfSave({ docId: id, destPath: picked, overwrite: true })
       try { filelist.add(res.path) } catch {}

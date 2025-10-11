@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
-import type { CompressImageSettings, CompressPdfSettings } from './types'
+import type { CompressImageSettings, CompressPdfSettings, CompressSettingsState } from './types'
 import { readJson, writeJson } from '@/modules/persist/json'
 
 export const defaultImageSettings: CompressImageSettings = {
@@ -24,14 +24,15 @@ export const defaultPdfSettings: CompressPdfSettings = {
 const FILE_NAME = 'compress-settings.json'
 
 export const useCompressSettings = defineStore('compress-settings', () => {
-  const s = ref({ image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
+  const s = ref<CompressSettingsState>({ saveBehavior: 'saveAsNew', image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
 
   // 初始載入 JSON 設定（不做相容處理）
   ;(async () => {
-    const loaded = await readJson<{ image: CompressImageSettings; pdf: CompressPdfSettings }>(FILE_NAME, { image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
+    const loaded = await readJson<CompressSettingsState>(FILE_NAME, { saveBehavior: 'saveAsNew', image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
     // 輕度正規化（維持基本安全範圍）
     loaded.pdf.targetEffectiveDpi = Math.max(72, Math.min(600, Math.round(loaded.pdf.targetEffectiveDpi)))
     loaded.pdf.thresholdEffectiveDpi = Math.max(72, Math.min(600, Math.round(loaded.pdf.thresholdEffectiveDpi)))
+    if (loaded.saveBehavior !== 'overwrite' && loaded.saveBehavior !== 'saveAsNew') loaded.saveBehavior = 'saveAsNew'
     Object.assign(s.value, loaded)
   })()
 

@@ -44,6 +44,12 @@
 - 尺寸限制：maxWidth/maxHeight；採樣器使用 Lanczos3（或 Triangle 兼顧速度）。
 - 中繼資料：可選擇移除 EXIF 等 metadata。
 
+### 存檔行為（壓縮頁專屬）
+
+- 以設定控制是否「覆蓋原檔」或「另存新檔」，與檢視/編輯頁的儲存行為分開管理。
+- 設定儲存在 `$APPCONFIG/compress-settings.json` 的 `saveBehavior` 欄位，可於「設定 > 壓縮存檔行為」調整。
+- 當選擇「另存新檔」時，預設儲存位置為來源檔案所在資料夾。
+
 ## 預設建議（Profiles）
 
 - 螢幕（Screen）：目標有效 DPI ≈ 120；JPEG 品質 75–82；結構最佳化開啟、移除 metadata。

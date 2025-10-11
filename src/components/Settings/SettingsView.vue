@@ -6,11 +6,13 @@ import { useRoute } from 'vue-router'
 import ExportSettings from './parts/ExportSettings.vue'
 import InsertDefaults from './parts/InsertDefaults.vue'
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
+import { useCompressSettings } from '@/modules/compress/settings'
 
 const settings = useSettingsStore()
 const s = settings.s
 const ui = useUiStore()
 const route = useRoute()
+const compressSettings = useCompressSettings()
 
 const number = (e: Event, fallback: number) => {
   const v = Number((e.target as HTMLInputElement).value)
@@ -297,7 +299,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         <h2 class="font-medium text-base">檔案操作</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
-            <label class="block mb-2">刪除頁面時的行為</label>
+            <label class="block mb-2">編輯存檔行為（檢視/編輯頁）</label>
             <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
               <label class="flex items-center gap-2">
                 <input type="radio" value="saveAsNew" v-model="s.deleteBehavior" />
@@ -309,7 +311,29 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               </label>
             </div>
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              「移除此頁」右鍵功能會依此行為執行；建議使用「另存新檔」以降低風險。
+              用於編輯動作（例如移除頁面）後的儲存策略；建議使用「另存新檔」以降低風險。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="compression-save" class="space-y-3">
+        <h2 class="font-medium text-base">壓縮存檔行為</h2>
+        <div class="rounded-md border p-4 space-y-3">
+          <div>
+            <label class="block mb-2">壓縮執行時的輸出策略</label>
+            <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
+              <label class="flex items-center gap-2">
+                <input type="radio" value="saveAsNew" v-model="compressSettings.s.saveBehavior" />
+                <span>另存新檔</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="radio" value="overwrite" v-model="compressSettings.s.saveBehavior" />
+                <span>覆蓋原檔</span>
+              </label>
+            </div>
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              影響壓縮頁面「開始壓縮」的預設行為；可於壓縮工具列快速切換。
             </p>
           </div>
         </div>
