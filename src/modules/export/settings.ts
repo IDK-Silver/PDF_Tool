@@ -2,28 +2,24 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { ExportSettingsState } from './types'
 import { defaultExportSettings } from './types'
+import { readJson, writeJson } from '@/modules/persist/json'
 
-const LS_KEY = 'kano_pdf_export_settings_v1'
-
-function loadFromStorage(): ExportSettingsState {
-  try {
-    const txt = localStorage.getItem(LS_KEY)
-    if (!txt) return { ...defaultExportSettings }
-    const obj = JSON.parse(txt)
-    return { ...defaultExportSettings, ...obj }
-  } catch {
-    return { ...defaultExportSettings }
-  }
-}
+const FILE_NAME = 'export-settings.json'
 
 export const useExportSettings = defineStore('export-settings', () => {
-  const s = ref<ExportSettingsState>(loadFromStorage())
+  const s = ref<ExportSettingsState>({ ...defaultExportSettings })
+
+  // 初始載入 JSON 設定（不做相容處理）
+  ;(async () => {
+    const loaded = await readJson<ExportSettingsState>(FILE_NAME, { ...defaultExportSettings })
+    Object.assign(s.value, loaded)
+  })()
 
   let persistTimer: number | null = null
   function schedulePersist(v: ExportSettingsState) {
     if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
     persistTimer = window.setTimeout(() => {
-      try { localStorage.setItem(LS_KEY, JSON.stringify(v)) } catch {}
+      void writeJson(FILE_NAME, v)
       persistTimer = null
     }, 200)
   }
@@ -34,4 +30,3 @@ export const useExportSettings = defineStore('export-settings', () => {
 
   return { s, reset }
 })
-

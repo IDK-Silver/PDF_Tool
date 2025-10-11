@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
+import { readJson, writeJson } from '@/modules/persist/json'
 
-const LS_KEY = 'kano_recent_files_v1'
+const FILE_NAME = 'recent-files.json'
 
 function baseName(p: string) {
   const parts = p.split(/[\\\/]/)
@@ -16,11 +17,9 @@ function guessFileType(path: string): 'pdf' | 'image' | 'unknown' {
   return 'unknown'
 }
 
-function loadFromStorage(): FileItem[] {
+async function loadFromStorage(): Promise<FileItem[]> {
   try {
-    const txt = localStorage.getItem(LS_KEY)
-    if (!txt) return []
-    const arr = JSON.parse(txt) as Array<{ path: string; name?: string; id?: string; lastPage?: number; type?: 'pdf' | 'image' | 'unknown' }>
+    const arr = await readJson<Array<{ path: string; name?: string; id?: string; lastPage?: number; type?: 'pdf' | 'image' | 'unknown' }>>(FILE_NAME, [])
     const seen = new Set<string>()
     const items: FileItem[] = []
     for (const e of arr) {
@@ -39,14 +38,17 @@ function loadFromStorage(): FileItem[] {
 }
 
 export const useFileListStore = defineStore('filelist', () => {
-  const items = ref<FileItem[]>(loadFromStorage())
+  const items = ref<FileItem[]>([])
+
+  // 初始載入
+  ;(async () => { items.value = await loadFromStorage() })()
 
   // Debounced persistence
   let timer: number | null = null
   function schedulePersist() {
     if (timer) { clearTimeout(timer); timer = null }
     timer = window.setTimeout(() => {
-      try { localStorage.setItem(LS_KEY, JSON.stringify(items.value)) } catch {}
+      void writeJson(FILE_NAME, items.value)
       timer = null
     }, 200)
   }

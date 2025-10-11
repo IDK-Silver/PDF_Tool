@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { CompressImageSettings, CompressPdfSettings } from './types'
-
-const LS_KEY = 'kano_compress_settings_v1'
+import { readJson, writeJson } from '@/modules/persist/json'
 
 export const defaultImageSettings: CompressImageSettings = {
   format: 'preserve',
@@ -22,32 +21,25 @@ export const defaultPdfSettings: CompressPdfSettings = {
   removeMetadata: true,
 }
 
-function loadFromStorage(): { image: CompressImageSettings; pdf: CompressPdfSettings } {
-  try {
-    const txt = localStorage.getItem(LS_KEY)
-    if (!txt) return { image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } }
-    const obj = JSON.parse(txt)
-    const image: CompressImageSettings = { ...defaultImageSettings, ...(obj?.image || {}) }
-    const pdf: any = { ...defaultPdfSettings, ...(obj?.pdf || {}) }
-    // normalize legacy/invalid values
-    if (!['jpeg','keep'].includes(pdf.format)) pdf.format = defaultPdfSettings.format
-    if (!['always','whenAbove'].includes(pdf.downsampleRule)) pdf.downsampleRule = defaultPdfSettings.downsampleRule
-    pdf.targetEffectiveDpi = Math.max(72, Math.min(600, Math.round(pdf.targetEffectiveDpi || defaultPdfSettings.targetEffectiveDpi)))
-    pdf.thresholdEffectiveDpi = Math.max(72, Math.min(600, Math.round(pdf.thresholdEffectiveDpi || defaultPdfSettings.thresholdEffectiveDpi)))
-    return { image, pdf }
-  } catch {
-    return { image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } }
-  }
-}
+const FILE_NAME = 'compress-settings.json'
 
 export const useCompressSettings = defineStore('compress-settings', () => {
-  const s = ref(loadFromStorage())
+  const s = ref({ image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
+
+  // 初始載入 JSON 設定（不做相容處理）
+  ;(async () => {
+    const loaded = await readJson<{ image: CompressImageSettings; pdf: CompressPdfSettings }>(FILE_NAME, { image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
+    // 輕度正規化（維持基本安全範圍）
+    loaded.pdf.targetEffectiveDpi = Math.max(72, Math.min(600, Math.round(loaded.pdf.targetEffectiveDpi)))
+    loaded.pdf.thresholdEffectiveDpi = Math.max(72, Math.min(600, Math.round(loaded.pdf.thresholdEffectiveDpi)))
+    Object.assign(s.value, loaded)
+  })()
 
   let persistTimer: number | null = null
   function schedulePersist() {
     if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
     persistTimer = window.setTimeout(() => {
-      try { localStorage.setItem(LS_KEY, JSON.stringify(s.value)) } catch {}
+      void writeJson(FILE_NAME, s.value)
       persistTimer = null
     }, 200)
   }

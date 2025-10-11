@@ -1,10 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { SettingsState } from './types'
-import { defaultSettings, migrateFromV1 } from './types'
-
-const LS_KEY = 'kano_pdf_settings_v2'
-const LS_KEY_OLD = 'kano_pdf_settings_v1'
+import { defaultSettings } from './types'
+import { readJson, writeJson } from '@/modules/persist/json'
 
 /**
  * 套用主題到 <html> 元素
@@ -18,34 +16,17 @@ function applyTheme(theme: 'light' | 'dark') {
   }
 }
 
-function loadFromStorage(): SettingsState {
-  try {
-    // 嘗試載入 v2
-    const v2 = localStorage.getItem(LS_KEY)
-    if (v2) {
-      const obj = JSON.parse(v2)
-      return { ...defaultSettings, ...obj }
-    }
-    
-    // 回退：嘗試從 v1 遷移
-    const v1 = localStorage.getItem(LS_KEY_OLD)
-    if (v1) {
-      const oldObj = JSON.parse(v1)
-      const migrated = migrateFromV1(oldObj)
-      // 立即存為 v2
-      localStorage.setItem(LS_KEY, JSON.stringify(migrated))
-      localStorage.removeItem(LS_KEY_OLD) // 清除舊版
-      return migrated
-    }
-    
-    return { ...defaultSettings }
-  } catch {
-    return { ...defaultSettings }
-  }
-}
+const FILE_NAME = 'settings.json'
 
 export const useSettingsStore = defineStore('settings', () => {
-  const s = ref<SettingsState>(loadFromStorage())
+  const s = ref<SettingsState>({ ...defaultSettings })
+
+  // 初始載入 JSON 設定（不做相容處理）
+  ;(async () => {
+    const loaded = await readJson<SettingsState>(FILE_NAME, { ...defaultSettings })
+    Object.assign(s.value, loaded)
+    applyTheme(s.value.theme)
+  })()
 
   // 初始化時套用主題
   applyTheme(s.value.theme)
@@ -55,7 +36,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function schedulePersist(v: SettingsState) {
     if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
     persistTimer = window.setTimeout(() => {
-      try { localStorage.setItem(LS_KEY, JSON.stringify(v)) } catch {}
+      void writeJson(FILE_NAME, v)
       persistTimer = null
     }, 200)
   }

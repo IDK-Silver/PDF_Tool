@@ -12,7 +12,7 @@
     "dialog:default",
     "opener:default",
     "fs:default",
-    { "identifier": "fs:scope", "allow": [ { "path": "$HOME/**" } ] },
-    { "identifier": "fs:allow-write-file", "allow": [ { "path": "$HOME/**" } ] }
+    { "identifier": "fs:scope", "allow": [ { "path": "$HOME/**" }, { "path": "$APPCONFIG/**" } ] },
+    { "identifier": "fs:allow-write-file", "allow": [ { "path": "$HOME/**" }, { "path": "$APPCONFIG/**" } ] }
   ]
 }
