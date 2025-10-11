@@ -29,9 +29,11 @@ export const useCompressSettings = defineStore('compress-settings', () => {
   // 初始載入 JSON 設定（不做相容處理）
   ;(async () => {
     const loaded = await readJson<CompressSettingsState>(FILE_NAME, { saveBehavior: 'saveAsNew', image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
-    // 輕度正規化（維持基本安全範圍）
-    loaded.pdf.targetEffectiveDpi = Math.max(72, Math.min(600, Math.round(loaded.pdf.targetEffectiveDpi)))
-    loaded.pdf.thresholdEffectiveDpi = Math.max(72, Math.min(600, Math.round(loaded.pdf.thresholdEffectiveDpi)))
+    // 僅確保 > 0，不做額外限制或四捨五入
+    const t1 = Number(loaded.pdf.targetEffectiveDpi)
+    const t2 = Number(loaded.pdf.thresholdEffectiveDpi)
+    if (!Number.isFinite(t1) || t1 <= 0) loaded.pdf.targetEffectiveDpi = defaultPdfSettings.targetEffectiveDpi
+    if (!Number.isFinite(t2) || t2 <= 0) loaded.pdf.thresholdEffectiveDpi = defaultPdfSettings.thresholdEffectiveDpi
     if (loaded.saveBehavior !== 'overwrite' && loaded.saveBehavior !== 'saveAsNew') loaded.saveBehavior = 'saveAsNew'
     Object.assign(s.value, loaded)
   })()

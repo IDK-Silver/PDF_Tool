@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
-import { ArchiveBoxIcon, ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
+import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
 
 const props = defineProps({
   saving: { type: Boolean, default: false },
   canSave: { type: Boolean, default: false },
+  canReveal: { type: Boolean, default: false },
   currentPage: { type: Number, default: 0 },
   totalPages: { type: Number, default: 0 },
   viewMode: { type: String as PropType<'fit' | 'actual'>, default: 'fit' },
@@ -17,6 +18,7 @@ const props = defineProps({
 
 const emit = defineEmits<{
   (e: 'save'): void
+  (e: 'reveal'): void
   (e: 'set-fit-mode'): void
   (e: 'reset-zoom'): void
   (e: 'zoom-in'): void
@@ -42,6 +44,12 @@ const ui = useUiStore()
           :class="props.canSave ? 'bg-blue-400 text-white hover:bg-blue-700' : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
           title="儲存">
           <ArchiveBoxIcon class="w-4 h-4" />
+        </button>
+        <button @click="emit('reveal')" :disabled="!props.canReveal"
+          class="rounded w-8 h-8 flex items-center justify-center transition-colors"
+          :class="props.canReveal ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
+          title="在檔案管理器顯示">
+          <FolderOpenIcon class="w-4 h-4" />
         </button>
       </div>
 

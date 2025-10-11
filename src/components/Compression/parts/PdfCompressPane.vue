@@ -6,7 +6,10 @@ const settings = useCompressSettings()
 
 const targetEffectiveDpi = computed({
   get: () => settings.s.pdf.targetEffectiveDpi,
-  set: (v: number) => settings.s.pdf.targetEffectiveDpi = Math.max(96, Math.min(300, Math.round(v)))
+  set: (v: number) => {
+    const n = Number(v)
+    settings.s.pdf.targetEffectiveDpi = Number.isFinite(n) && n > 0 ? n : settings.s.pdf.targetEffectiveDpi
+  }
 })
 
 const format = computed({
@@ -38,7 +41,10 @@ const downsampleRule = computed({
 
 const thresholdEffectiveDpi = computed({
   get: () => settings.s.pdf.thresholdEffectiveDpi,
-  set: (v: number) => settings.s.pdf.thresholdEffectiveDpi = Math.max(72, Math.min(600, Math.round(v)))
+  set: (v: number) => {
+    const n = Number(v)
+    settings.s.pdf.thresholdEffectiveDpi = Number.isFinite(n) && n > 0 ? n : settings.s.pdf.thresholdEffectiveDpi
+  }
 })
 </script>
 
@@ -73,7 +79,7 @@ const thresholdEffectiveDpi = computed({
             <!-- 目標 DPI（永遠顯示） -->
             <div class="space-y-2">
               <label class="block text-sm font-medium">目標 DPI</label>
-              <input type="number" min="72" max="600" step="1" v-model.number="targetEffectiveDpi"
+              <input type="number" step="any" v-model.number="targetEffectiveDpi"
                 class="w-full border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
             </div>
 
@@ -83,7 +89,7 @@ const thresholdEffectiveDpi = computed({
                 門檻 DPI
                 <span class="text-xs text-[hsl(var(--muted-foreground))]">（僅處理超過此值的影像）</span>
               </label>
-              <input type="number" min="72" max="600" step="1" v-model.number="thresholdEffectiveDpi"
+              <input type="number" step="any" v-model.number="thresholdEffectiveDpi"
                 class="w-full border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]" />
             </div>
           </div>

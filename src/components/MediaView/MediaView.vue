@@ -8,6 +8,7 @@ import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
+import { openInFileManager } from '@/modules/media/openInFileManager'
 // save handled inside media store via saveCurrentIfNeeded
 
 const media = useMediaStore()
@@ -63,6 +64,8 @@ const isFileMissing = computed(() => {
   const msg = media.error || ''
   return msg.includes('檔案不存在') || /not\s*found/i.test(msg)
 })
+
+const canReveal = computed(() => !!media.selected?.path && !isFileMissing.value)
 
 watchEffect(() => {
   const controls = activeControls.value
@@ -147,6 +150,15 @@ async function onSaveNow() {
     saving.value = false
   }
 }
+
+async function onReveal() {
+  const p = media.selected?.path
+  if (!p) return
+  try { await openInFileManager(p) } catch (err) {
+    console.error('openInFileManager failed', err)
+    alert('無法在檔案管理器顯示該檔案')
+  }
+}
 </script>
 
 <template>
@@ -157,9 +169,9 @@ async function onSaveNow() {
       inflight: {{ media.inflightCount }} · queued: {{ media.queue.length }}
     </div>
 
-    <MediaToolbar :saving="saving" :can-save="media.dirty && isPdf" :current-page="currentPage"
+    <MediaToolbar :saving="saving" :can-save="media.dirty && isPdf" :can-reveal="canReveal" :current-page="currentPage"
       :total-pages="totalPages" :view-mode="viewMode" :display-zoom="displayZoom" :is-pdf="isPdf"
-      :can-zoom-in="canZoomIn" :can-zoom-out="canZoomOut" @save="onSaveNow" @set-fit-mode="handleSetFitMode"
+      :can-zoom-in="canZoomIn" :can-zoom-out="canZoomOut" @save="onSaveNow" @reveal="onReveal" @set-fit-mode="handleSetFitMode"
       @reset-zoom="handleResetZoom" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut" />
 
     <div class="flex-1 flex min-h-0">
