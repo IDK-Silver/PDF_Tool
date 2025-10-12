@@ -65,7 +65,6 @@ pub struct CompressImageArgs {
     pub quality: Option<u8>,           // 1-100 (jpeg/webp only)
     pub max_width: Option<u32>,
     pub max_height: Option<u32>,
-    pub strip_metadata: Option<bool>,  // not used; re-encode strips by default
 }
 
 #[derive(Serialize)]
@@ -191,7 +190,6 @@ pub async fn compress_image(args: CompressImageArgs) -> Result<CompressImageResu
 pub struct CompressPdfLosslessArgs {
     pub src_path: String,
     pub dest_path: String,
-    pub linearize: Option<bool>, // 保留參數占位，純 Rust v1 不處理 linearization
 }
 
 #[derive(Serialize)]

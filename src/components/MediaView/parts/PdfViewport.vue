@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
@@ -775,7 +775,7 @@ defineExpose({
           :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'mb-10 flex justify-center'"
           :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomTarget / 100)) + 'px' } : undefined"
           :data-pdf-page="idx"
-          :ref="(el) => observe(el as Element, idx)"
+            :ref="(el: Element | ComponentPublicInstance | null) => observe(el as Element | null, idx)"
           @contextmenu.prevent="onPageContextMenu(idx, $event)"
         >
           <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
