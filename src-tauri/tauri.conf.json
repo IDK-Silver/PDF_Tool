@@ -1,38 +1,24 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Kano PDF Tool",
-  "version": "3.1.0",
-  "identifier": "com.yufeng.kano-pdf-tool",
+  "productName": "pdf_tool",
+  "version": "0.1.0",
+  "identifier": "com.yufeng.pdf_tool",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "Kano PDF Tool",
+        "title": "pdf_tool",
         "width": 800,
-        "height": 600,
-        "minWidth": 900,
-        "minHeight": 700
+        "height": 600
       }
     ],
     "security": {
-      "csp": null,
-      "assetProtocol": {
-        "scope": [
-          "$APP/**",
-          "$RESOURCE/**",
-          "$HOME/**",
-          "$PICTURE/**",
-          "$VIDEO/**",
-          "$DOCUMENT/**",
-          "$DOWNLOAD/**",
-          "$TEMP/**"
-        ]
-      }
+      "csp": null
     }
   },
   "bundle": {
@@ -44,26 +30,6 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "resources": [
-      "resources/pdfium/*/*"
-    ],
-    "macOS": {
-      "entitlements": "macos/entitlements.plist"
-    },
-    "fileAssociations": [
-      {
-        "ext": ["pdf"],
-        "name": "PDF Document",
-        "role": "Viewer",
-        "description": "PDF file"
-      },
-      {
-        "ext": ["png", "jpg", "jpeg", "gif", "bmp", "webp", "tiff", "tif", "svg"],
-        "name": "Image File",
-        "role": "Viewer",
-        "description": "Image file"
-      }
     ]
   }
 }

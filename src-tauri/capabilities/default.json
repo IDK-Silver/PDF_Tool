@@ -5,14 +5,6 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "core:window:allow-close",
-    "core:window:allow-destroy",
-    "core:window:allow-set-size",
-    "core:window:allow-show",
-    "dialog:default",
-    "opener:default",
-    "fs:default",
-    { "identifier": "fs:scope", "allow": [ { "path": "$HOME/**" }, { "path": "$APPCONFIG/**" } ] },
-    { "identifier": "fs:allow-write-file", "allow": [ { "path": "$HOME/**" }, { "path": "$APPCONFIG/**" } ] }
+    "opener:default"
   ]
 }

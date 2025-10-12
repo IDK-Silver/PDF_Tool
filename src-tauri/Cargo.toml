@@ -1,9 +1,9 @@
 [package]
-name = "kano_pdf_tool"
+name = "pdf_tool"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
-edition = "2024"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,7 +11,7 @@ edition = "2024"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "kano_pdf_tool_lib"
+name = "pdf_tool_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -20,19 +20,6 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
-tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-tauri-plugin-log = "2"
-tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-once_cell = "1.19"
-tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
-pdfium-render = { version = "0.8.35", default-features = false, features = ["pdfium_latest", "thread_safe", "image_latest"] }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
-webp = "0.3"
-indexmap = "2.11.4"
-log = "0.4"
-urlencoding = "2"
-lopdf = "0.32"
-flate2 = "1.0"
+
