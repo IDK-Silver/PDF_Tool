@@ -480,6 +480,11 @@ function updateVisibleByScroll() {
     visibleStart.value = Math.max(0, Math.min(...visibleIndices) - overscan)
     visibleEnd.value = Math.min(tp - 1, Math.max(...visibleIndices) + overscan)
     media.enforceVisibleRange(visibleStart.value, visibleEnd.value)
+    // 即時預載：在捲動過程中，直接將 overscan 範圍加入待處理，提升預載體感
+    for (let i = visibleStart.value; i <= visibleEnd.value; i++) {
+      pendingIdx.add(i)
+    }
+    scheduleProcess()
   }
 }
 
