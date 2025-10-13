@@ -21,7 +21,11 @@ export interface SettingsState {
   dprCap: number                          // DPR 上限（避免超高清輸出）
   maxOutputWidth: number                  // 最大輸出寬度（px）
   actualModeDpiCap: number               // 實際大小模式 DPI 上限
-  zoomDebounceMs: number                 // 縮放停止後重渲染延遲
+
+  // === 互動延遲（可調）===
+  zoomRerenderDelayMs: number           // 縮放後觸發高清重渲染延遲
+  hiResRerenderDelayMs: number          // 預設高清重渲染延遲（未特別指定時）
+  scrollEndDebounceMs: number           // 偵測捲動結束的延遲
 
   // === 效能控制 ===
   maxConcurrentRenders: number      // 最大並行渲染數
@@ -57,7 +61,11 @@ export const defaultSettings: SettingsState = {
   dprCap: 1.5,
   maxOutputWidth: 1200,
   actualModeDpiCap: 144,
-  zoomDebounceMs: 10,
+
+  // 互動延遲（實務預設）
+  zoomRerenderDelayMs: 150,
+  hiResRerenderDelayMs: 300,
+  scrollEndDebounceMs: 500,
 
   // 效能控制
   maxConcurrentRenders: 4,    // 激進降至 2（大檔案單頁 500ms）
@@ -90,7 +98,10 @@ export function migrateFromV1(old: any): SettingsState {
     dprCap: old.dprCap ?? defaultSettings.dprCap,
     maxOutputWidth: old.maxTargetWidth ?? defaultSettings.maxOutputWidth,
     actualModeDpiCap: old.actualDpiCap ?? defaultSettings.actualModeDpiCap,
-    zoomDebounceMs: old.highQualityDelayMs ?? defaultSettings.zoomDebounceMs,
+    // 新字段：若舊版有 highQualityDelayMs，可映射為 hiResRerenderDelayMs
+    zoomRerenderDelayMs: defaultSettings.zoomRerenderDelayMs,
+    hiResRerenderDelayMs: old.highQualityDelayMs ?? defaultSettings.hiResRerenderDelayMs,
+    scrollEndDebounceMs: defaultSettings.scrollEndDebounceMs,
     
     maxConcurrentRenders: old.maxConcurrentRenders ?? defaultSettings.maxConcurrentRenders,
     highResOverscan: old.highResOverscan ?? old.highRadius ?? old.preloadRange ?? defaultSettings.highResOverscan,

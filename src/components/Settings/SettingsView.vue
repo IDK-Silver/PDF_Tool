@@ -175,13 +175,31 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               </p>
             </div>
             <div>
-              <label class="block mb-1">縮放防抖延遲（ms）</label>
+              <label class="block mb-1">縮放重渲染延遲（ms）</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.zoomDebounceMs"
-                @input="s.zoomDebounceMs = number($event, s.zoomDebounceMs)"
+                :value="s.zoomRerenderDelayMs"
+                @input="s.zoomRerenderDelayMs = number($event, s.zoomRerenderDelayMs)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放停止後延遲再請求高清渲染。預設 10 ms。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放操作後觸發高清重渲染的延遲。預設 150 ms。</p>
+            </div>
+            <div>
+              <label class="block mb-1">高清重渲染預設延遲（ms）</label>
+              <input
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.hiResRerenderDelayMs"
+                @input="s.hiResRerenderDelayMs = number($event, s.hiResRerenderDelayMs)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">未指定延遲時使用的預設值。預設 300 ms。</p>
+            </div>
+            <div>
+              <label class="block mb-1">捲動結束延遲（ms）</label>
+              <input
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.scrollEndDebounceMs"
+                @input="s.scrollEndDebounceMs = number($event, s.scrollEndDebounceMs)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">辨識「捲動結束」後再批次渲染的延遲。預設 500 ms。</p>
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
@@ -84,7 +84,8 @@ function dpiForActual() {
 function handleZoomIn() {
   zoomIn(scrollRootEl.value, centerIndex.value, () => {
     // 延遲渲染，讓縮放動畫先完成
-    triggerRerender(150)
+    const ms = Math.max(0, Number(settings.s.zoomRerenderDelayMs) || 0)
+    triggerRerender(ms)
   })
 }
 
@@ -92,7 +93,8 @@ function handleZoomIn() {
 function handleZoomOut() {
   zoomOut(scrollRootEl.value, centerIndex.value, () => {
     // 延遲渲染，讓縮放動畫先完成
-    triggerRerender(150)
+    const ms = Math.max(0, Number(settings.s.zoomRerenderDelayMs) || 0)
+    triggerRerender(ms)
   })
 }
 
@@ -111,7 +113,12 @@ function handleSetFitMode() {
 /** 統一的重新渲染觸發函式 */
 function triggerRerender(delay: number = 0) {
   pendingIdx.clear()
-  for (const i of visibleIdx) pendingIdx.add(i)
+  const tp = totalPages.value || 0
+  if (tp > 0) {
+    const start = Math.max(0, visibleStart.value)
+    const end = Math.min(tp - 1, visibleEnd.value)
+    for (let i = start; i <= end; i++) pendingIdx.add(i)
+  }
   rafScheduled = false
   scheduleHiResRerender(delay)
 }
@@ -425,13 +432,10 @@ const renderIndices = computed(() => {
   return Array.from({ length: tp }, (_, i) => i)
 })
 
-let io: IntersectionObserver | null = null
 let resizeObs: ResizeObserver | null = null
 const scrollRootEl = ref<HTMLElement | null>(null)
-const refs = new Map<Element, number>()
 let rafScheduled = false
 const pendingIdx = new Set<number>()
-const visibleIdx = new Set<number>()
 const containerW = ref(0)
 let hiResTimer: number | null = null
 
@@ -495,13 +499,14 @@ function onScroll() {
     scrollRaf = 0 as any
     updateVisibleByScroll()
     if (scrollEndTimer) clearTimeout(scrollEndTimer)
+    const endMs = Math.max(0, Number(settings.s.scrollEndDebounceMs) || 0)
     scrollEndTimer = window.setTimeout(() => {
       centerIndex.value = displayPageIndex.value
       requestAnimationFrame(() => {
         scheduleHiResRerender()
       })
       scrollEndTimer = null
-    }, 500)
+    }, endMs)
   })
 }
 
@@ -510,7 +515,7 @@ function scheduleHiResRerender(delay?: number) {
     clearTimeout(hiResTimer)
     hiResTimer = null
   }
-  const ms = typeof delay === 'number' ? delay : 300
+  const ms = typeof delay === 'number' ? delay : (Number(settings.s.hiResRerenderDelayMs) || 0)
   hiResTimer = window.setTimeout(() => {
     const tp = totalPages.value || 0
     if (tp <= 0) {
@@ -527,11 +532,7 @@ function scheduleHiResRerender(delay?: number) {
   }, ms)
 }
 
-function observe(el: Element | null, idx: number) {
-  if (!el) return
-  refs.set(el, idx)
-  io?.observe(el)
-}
+// IntersectionObserver 已移除，改由 scroll + overscan 即時預載
 
 function scheduleProcess() {
   if (rafScheduled) return
@@ -600,38 +601,10 @@ onMounted(() => {
     })
     resizeObs.observe(scrollRootEl.value)
   }
-  io = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        const idx = refs.get(e.target)
-        if (idx == null) continue
-        if (e.isIntersecting) {
-          pendingIdx.add(idx)
-          visibleIdx.add(idx)
-        } else {
-          media.cancelQueued(idx)
-          try {
-            media.cancelInflight(idx)
-          } catch {}
-          visibleIdx.delete(idx)
-        }
-      }
-      scheduleProcess()
-    },
-    { root: scrollRootEl.value, rootMargin: '400px', threshold: 0.01 },
-  )
-  scrollRootEl.value?.querySelectorAll('[data-pdf-page]').forEach((el) => {
-    const idx = Number((el as HTMLElement).dataset.pdfPage)
-    if (Number.isFinite(idx)) {
-      refs.set(el as Element, idx)
-      io?.observe(el as Element)
-    }
-  })
+  // IntersectionObserver 移除後，預載由 updateVisibleByScroll + scheduleProcess 觸發
 })
 
 onBeforeUnmount(() => {
-  io?.disconnect()
-  refs.clear()
   if (scrollEndTimer) clearTimeout(scrollEndTimer)
   if (hiResTimer) clearTimeout(hiResTimer)
   if (fitTimer) clearTimeout(fitTimer)
@@ -797,7 +770,6 @@ defineExpose({
           :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'mb-10 flex justify-center'"
           :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomTarget / 100)) + 'px' } : undefined"
           :data-pdf-page="idx"
-            :ref="(el: Element | ComponentPublicInstance | null) => observe(el as Element | null, idx)"
           @contextmenu.prevent="onPageContextMenu(idx, $event)"
         >
           <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
