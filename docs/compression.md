@@ -47,7 +47,7 @@
 ### 存檔行為（壓縮頁專屬）
 
 - 以設定控制是否「覆蓋原檔」或「另存新檔」，與檢視/編輯頁的儲存行為分開管理。
-- 設定儲存在 `$APPCONFIG/compress-settings.json` 的 `saveBehavior` 欄位，可於「設定 > 壓縮存檔行為」調整。
+- 設定儲存在 `localStorage`（鍵 `compress-settings`）的 `saveBehavior` 欄位，可於「設定 > 壓縮存檔行為」調整。
 - 當選擇「另存新檔」時，預設儲存位置為來源檔案所在資料夾。
 
 ## 預設建議（Profiles）

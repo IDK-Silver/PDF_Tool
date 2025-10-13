@@ -188,9 +188,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               <option value="png">PNG（無損）</option>
               <option value="jpeg">JPEG（相容性佳）</option>
             </select>
-            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              大頁面仍會自動降為 JPEG 以避免長時間編碼。
-            </p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">大頁面仍會自動降為 JPEG 以避免長時間編碼。</p>
           </div>
 
           <div v-if="s.renderFormat === 'raw'">
@@ -213,9 +211,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.highResDpiCap"
                 @input="s.highResDpiCap = number($event, s.highResDpiCap)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                限制高清渲染 DPI，避免卡頓。預設 96。
-              </p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制高清渲染 DPI，避免卡頓。預設 144。</p>
             </div>
             <div>
               <label class="block mb-1">DPR 上限</label>
@@ -224,9 +220,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.dprCap"
                 @input="s.dprCap = number($event, s.dprCap)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                控制裝置像素比對輸出寬度的放大。預設 2.0。
-              </p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">控制裝置像素比對輸出寬度的放大。預設 1.5。</p>
             </div>
             <div>
               <label class="block mb-1">最大輸出寬度（px）</label>
@@ -235,9 +229,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.maxOutputWidth"
                 @input="s.maxOutputWidth = number($event, s.maxOutputWidth)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                避免超寬容器時輸出位圖過大。預設 1920。
-              </p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">避免超寬容器時輸出位圖過大。預設 1200。</p>
             </div>
             <div>
               <label class="block mb-1">實際大小 DPI 上限</label>
@@ -257,9 +249,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.zoomDebounceMs"
                 @input="s.zoomDebounceMs = number($event, s.zoomDebounceMs)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                縮放停止後延遲再請求高清渲染。預設 300 ms。
-              </p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放停止後延遲再請求高清渲染。預設 10 ms。</p>
             </div>
           </div>
         </div>
@@ -276,9 +266,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.maxConcurrentRenders"
                 @input="s.maxConcurrentRenders = number($event, s.maxConcurrentRenders)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                限制同時間的渲染頁數，預設 2。
-              </p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制同時間的渲染頁數。預設 4。</p>
             </div>
             <div>
               <label class="block mb-1">高清預載範圍</label>
@@ -287,9 +275,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.highResOverscan"
                 @input="s.highResOverscan = number($event, s.highResOverscan)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                向可見區域上下預載的頁數。預設 2。
-              </p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">向可見區域上下預載的頁數。預設 4。</p>
             </div>
           </div>
         </div>

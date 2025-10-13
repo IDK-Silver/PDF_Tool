@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
-import { readJson, writeJson } from '@/modules/persist/json'
-
-const FILE_NAME = 'recent-files.json'
+import { readLocalJson, writeLocalJson } from '@/modules/persist/local'
+// Persist file list in localStorage to restore previous behavior
+const STORAGE_KEY = 'recent-files'
 
 function baseName(p: string) {
   const parts = p.split(/[\\\/]/)
@@ -19,7 +19,7 @@ function guessFileType(path: string): 'pdf' | 'image' | 'unknown' {
 
 async function loadFromStorage(): Promise<FileItem[]> {
   try {
-    const arr = await readJson<Array<{ path: string; name?: string; id?: string; lastPage?: number; type?: 'pdf' | 'image' | 'unknown' }>>(FILE_NAME, [])
+    const arr = await readLocalJson<Array<{ path: string; name?: string; id?: string; lastPage?: number; type?: 'pdf' | 'image' | 'unknown' }>>(STORAGE_KEY, [])
     const seen = new Set<string>()
     const items: FileItem[] = []
     for (const e of arr) {
@@ -48,7 +48,7 @@ export const useFileListStore = defineStore('filelist', () => {
   function schedulePersist() {
     if (timer) { clearTimeout(timer); timer = null }
     timer = window.setTimeout(() => {
-      void writeJson(FILE_NAME, items.value)
+      void writeLocalJson(STORAGE_KEY, items.value)
       timer = null
     }, 200)
   }

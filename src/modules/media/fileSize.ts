@@ -1,18 +1,3 @@
-import { stat } from '@tauri-apps/plugin-fs'
-
-/**
- * 獲取檔案大小（bytes）
- */
-export async function getFileSize(path: string): Promise<number | null> {
-  try {
-    const info = await stat(path)
-    return info.size
-  } catch (err) {
-    console.warn('Failed to get file size:', err)
-    return null
-  }
-}
-
 /**
  * 格式化檔案大小為人類可讀格式
  */

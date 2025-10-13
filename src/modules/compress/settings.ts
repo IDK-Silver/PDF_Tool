@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { CompressImageSettings, CompressPdfSettings, CompressSettingsState } from './types'
-import { readJson, writeJson } from '@/modules/persist/json'
+import { readLocalJson, writeLocalJson } from '@/modules/persist/local'
 
 export const defaultImageSettings: CompressImageSettings = {
   format: 'preserve',
@@ -21,14 +21,14 @@ export const defaultPdfSettings: CompressPdfSettings = {
   removeMetadata: true,
 }
 
-const FILE_NAME = 'compress-settings.json'
+const STORAGE_KEY = 'compress-settings'
 
 export const useCompressSettings = defineStore('compress-settings', () => {
   const s = ref<CompressSettingsState>({ saveBehavior: 'saveAsNew', image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
 
-  // 初始載入 JSON 設定（不做相容處理）
+  // 初始載入（localStorage）
   ;(async () => {
-    const loaded = await readJson<CompressSettingsState>(FILE_NAME, { saveBehavior: 'saveAsNew', image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
+    const loaded = await readLocalJson<CompressSettingsState>(STORAGE_KEY, { saveBehavior: 'saveAsNew', image: { ...defaultImageSettings }, pdf: { ...defaultPdfSettings } })
     // 僅確保 > 0，不做額外限制或四捨五入
     const t1 = Number(loaded.pdf.targetEffectiveDpi)
     const t2 = Number(loaded.pdf.thresholdEffectiveDpi)
@@ -42,7 +42,7 @@ export const useCompressSettings = defineStore('compress-settings', () => {
   function schedulePersist() {
     if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
     persistTimer = window.setTimeout(() => {
-      void writeJson(FILE_NAME, s.value)
+      void writeLocalJson(STORAGE_KEY, s.value)
       persistTimer = null
     }, 200)
   }

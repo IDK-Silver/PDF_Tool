@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { SettingsState } from './types'
 import { defaultSettings } from './types'
-import { readJson, writeJson } from '@/modules/persist/json'
+import { readLocalJson, writeLocalJson } from '@/modules/persist/local'
 
 /**
  * 套用主題到 <html> 元素
@@ -16,14 +16,14 @@ function applyTheme(theme: 'light' | 'dark') {
   }
 }
 
-const FILE_NAME = 'settings.json'
+const STORAGE_KEY = 'settings'
 
 export const useSettingsStore = defineStore('settings', () => {
   const s = ref<SettingsState>({ ...defaultSettings })
 
-  // 初始載入 JSON 設定（不做相容處理）
+  // 初始載入（localStorage）
   ;(async () => {
-    const loaded = await readJson<SettingsState>(FILE_NAME, { ...defaultSettings })
+    const loaded = await readLocalJson<SettingsState>(STORAGE_KEY, { ...defaultSettings })
     Object.assign(s.value, loaded)
     applyTheme(s.value.theme)
   })()
@@ -36,7 +36,7 @@ export const useSettingsStore = defineStore('settings', () => {
   function schedulePersist(v: SettingsState) {
     if (persistTimer) { clearTimeout(persistTimer); persistTimer = null }
     persistTimer = window.setTimeout(() => {
-      void writeJson(FILE_NAME, v)
+      void writeLocalJson(STORAGE_KEY, v)
       persistTimer = null
     }, 200)
   }

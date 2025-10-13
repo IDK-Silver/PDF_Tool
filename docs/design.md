@@ -158,11 +158,11 @@ PDF 頁面採用雙快取策略以平衡載入速度與顯示品質：
 - 快取大小限制
 - 等等...
 
-持久化：設定改為以 JSON 檔案儲存於系統的 App Config 目錄（Tauri BaseDirectory.AppConfig），不做舊版相容或遷移。
-- 主要設定：`$APPCONFIG/settings.json`
-- 匯出設定：`$APPCONFIG/export-settings.json`
-- 壓縮設定：`$APPCONFIG/compress-settings.json`
-- 最近檔案：`$APPCONFIG/recent-files.json`
+持久化：全部改為使用 `localStorage`，不再讀寫 AppConfig JSON 檔。
+- 主要設定：`localStorage` 鍵 `settings`
+- 匯出設定：`localStorage` 鍵 `export-settings`
+- 壓縮設定：`localStorage` 鍵 `compress-settings`
+- 最近檔案：`localStorage` 鍵 `recent-files`
 
 使用者行為選項區分：
 - 編輯存檔行為（檢視/編輯頁）：另存新檔/覆蓋原檔（`settings.deleteBehavior`，設定頁面「檔案操作」段落）
