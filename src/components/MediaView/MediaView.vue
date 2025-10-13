@@ -106,11 +106,22 @@ function isEditableTarget(el: EventTarget | null): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || (t as any).isContentEditable === true
 }
 
-function onKeydown(e: KeyboardEvent) {
+async function onKeydown(e: KeyboardEvent) {
+  const code = (e.code || '').toLowerCase()
+  const k = e.key
+  // ESC：關閉目前檔案（回到初始狀態）。若有開啟的快顯選單則優先由內部處理。
+  if (k === 'Escape') {
+    if (isEditableTarget(e.target)) return
+    // 若有浮動選單存在，讓其處理關閉，不進行檔案關閉
+    if (document.querySelector('[data-context-menu], [data-export-submenu]')) return
+    try { await media.closeDoc() } catch {}
+    media.clear()
+    return
+  }
+
+  // 其餘快捷鍵需搭配 Cmd/Ctrl
   if (!e.metaKey && !e.ctrlKey) return
   if (isEditableTarget(e.target)) return
-  const k = e.key
-  const code = (e.code || '').toLowerCase()
   if (k === '+' || k === '=' || code === 'equal') {
     e.preventDefault()
     handleZoomIn()

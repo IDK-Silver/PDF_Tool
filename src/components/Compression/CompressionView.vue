@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, ref, watch } from 'vue'
+import { onMounted, onBeforeUnmount, computed, ref, watch } from 'vue'
 import { useCompressionStore } from '@/modules/compress/store'
 import CompressionToolbar from './parts/CompressionToolbar.vue'
 import PdfCompressPane from './parts/PdfCompressPane.vue'
@@ -17,6 +17,30 @@ const ui = useUiStore()
 
 onMounted(() => {
   compression.ensureTabForSelection()
+})
+
+function isEditableTarget(el: EventTarget | null): boolean {
+  const t = el as HTMLElement | null
+  if (!t) return false
+  const tag = t.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || (t as any).isContentEditable === true
+}
+
+async function onKeydown(e: KeyboardEvent) {
+  const k = e.key
+  if (k !== 'Escape') return
+  if (isEditableTarget(e.target)) return
+  // 若有媒體視圖的快顯選單存在時，由其自行處理（避免誤關閉）
+  if (document.querySelector('[data-context-menu], [data-export-submenu]')) return
+  try { await media.closeDoc() } catch {}
+  media.clear()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown, { passive: false })
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown as any)
 })
 
 // 單一來源真理：從 media.descriptor 取得類型
