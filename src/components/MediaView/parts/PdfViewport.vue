@@ -644,15 +644,48 @@ onMounted(async () => {
         if (oldW > 0 && w !== oldW) {
           const root = scrollRootEl.value
           const currentPageEl = root?.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement
+          
+          // 在實際大小模式下，保存水平和垂直滾動位置
+          const isActualMode = viewMode.value === 'actual'
+          const savedScrollLeft = root?.scrollLeft || 0
+          const savedScrollTop = root?.scrollTop || 0
+          
           containerW.value = w
           scheduleUpdateFitPercent()
+          
           nextTick(() => {
             requestAnimationFrame(() => {
               if (currentPageEl && root) {
-                currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
+                if (isActualMode) {
+                  // 實際大小模式：完全保持滾動位置不變（不使用 scrollIntoView）
+                  // 只在垂直方向微調，確保當前頁面仍在可見範圍內
+                  const elementTop = currentPageEl.offsetTop
+                  const elementHeight = currentPageEl.offsetHeight
+                  const containerHeight = root.clientHeight
+                  const currentScrollTop = root.scrollTop
+                  
+                  // 檢查當前頁面是否仍在視野中
+                  const isVisible = 
+                    elementTop < currentScrollTop + containerHeight &&
+                    elementTop + elementHeight > currentScrollTop
+                  
+                  if (isVisible) {
+                    // 頁面仍在視野中，完全保持滾動位置
+                    root.scrollTop = savedScrollTop
+                    root.scrollLeft = savedScrollLeft
+                  } else {
+                    // 頁面不在視野中，調整垂直位置但保持水平不變
+                    root.scrollTop = elementTop - containerHeight / 2 + elementHeight / 2
+                    root.scrollLeft = savedScrollLeft
+                  }
+                } else {
+                  // 符合寬度模式：正常置中
+                  currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
+                }
               }
             })
           })
+          
           const sizeDiff = Math.abs(w - oldW)
           const shouldRerender = oldW > 0 ? sizeDiff / oldW > 0.1 : false
           if (shouldRerender && w !== lastResizeWidth) {
