@@ -39,9 +39,13 @@ async function loadFromStorage(): Promise<FileItem[]> {
 
 export const useFileListStore = defineStore('filelist', () => {
   const items = ref<FileItem[]>([])
+  const ready = ref(false)
 
   // 初始載入
-  ;(async () => { items.value = await loadFromStorage() })()
+  ;(async () => {
+    items.value = await loadFromStorage()
+    ready.value = true
+  })()
 
   // Debounced persistence
   let timer: number | null = null
@@ -54,6 +58,15 @@ export const useFileListStore = defineStore('filelist', () => {
   }
 
   watch(items, () => schedulePersist(), { deep: true })
+
+  function whenReady(): Promise<void> {
+    if (ready.value) return Promise.resolve()
+    return new Promise((resolve) => {
+      const stop = watch(ready, (v) => {
+        if (v) { stop(); resolve() }
+      })
+    })
+  }
 
   function upsertToTop(path: string): FileItem {
     const idx = items.value.findIndex(i => i.path === path)
@@ -100,6 +113,8 @@ export const useFileListStore = defineStore('filelist', () => {
 
   return {
     items,
+    ready,
+    whenReady,
     add,
     addPaths,
     remove,

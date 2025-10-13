@@ -122,6 +122,7 @@ export const useMediaStore = defineStore('media', () => {
 
   async function selectPath(path: string) {
     if (!(await ensureCanSwitch(path))) return
+    try { useFileListStore().add(path) } catch {}
     selected.value = { id: path, name: path.split('/').pop() || path, path }
     await loadDescriptor(path)
   }

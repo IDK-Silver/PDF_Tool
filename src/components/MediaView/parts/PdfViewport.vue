@@ -6,6 +6,8 @@ import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useExportSettings } from '@/modules/export/settings'
 import { useZoom } from '@/modules/media/useZoom'
+
+console.log('[PdfViewport] Component script setup executed')
 import {
   pdfDeletePagesDoc,
   pdfInsertBlank,
@@ -149,21 +151,59 @@ async function gotoPage(page: number) {
 
 watch(
   () => media.descriptor?.path,
-  async (p) => {
+  async (p, oldP) => {
     const d = media.descriptor
     if (!p || !d || d.type !== 'pdf') return
+    
+    console.log('[PdfViewport] Path changed from', oldP, 'to', p)
     
     // 初始化 displayPageIndex 為 0（確保 currentPage 計算正確）
     displayPageIndex.value = 0
     centerIndex.value = 0
     
+    // 等待檔案列表載入完成後再取最後頁碼（避免競態）
+    try { await filelist.whenReady() } catch {}
     const last = filelist.getLastPage(p)
-    if (typeof last === 'number' && last > 1) {
-      await nextTick()
+    console.log('[PdfViewport] Last page from storage:', last)
+    
+    if (typeof last === 'number' && last >= 1) {
+      // 等待 media store 完成載入
+      await new Promise<void>((resolve) => {
+        const checkLoading = () => {
+          if (!media.loading) {
+            console.log('[PdfViewport] Loading complete')
+            resolve()
+          } else {
+            requestAnimationFrame(checkLoading)
+          }
+        }
+        checkLoading()
+      })
+      
+      // 等待 DOM 元素真的渲染出來
+      await new Promise<void>((resolve) => {
+        const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
+        console.log('[PdfViewport] Waiting for DOM element, targetIdx:', targetIdx)
+        const checkDOM = () => {
+          const root = scrollRootEl.value
+          const el = root?.querySelector(`[data-pdf-page="${targetIdx}"]`)
+          if (el) {
+            console.log('[PdfViewport] DOM element found')
+            resolve()
+          } else {
+            requestAnimationFrame(checkDOM)
+          }
+        }
+        // 先等一次 nextTick，再開始輪詢
+        nextTick().then(() => checkDOM())
+      })
+      
       try {
+        console.log('[PdfViewport] Calling gotoPage:', last)
         await gotoPage(last)
-      } catch {
-        /* noop */
+        console.log('[PdfViewport] gotoPage completed')
+      } catch (e) {
+        console.error('[PdfViewport] gotoPage failed:', e)
       }
     }
   },
@@ -565,7 +605,34 @@ function scheduleProcess() {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
+  console.log('[PdfViewport] Component mounted, descriptor:', media.descriptor?.path)
+  
+  // 首次掛載時，檢查是否需要跳轉到 lastPage
+  const p = media.descriptor?.path
+  const d = media.descriptor
+  if (p && d && d.type === 'pdf') {
+    try { await filelist.whenReady() } catch {}
+    const last = filelist.getLastPage(p)
+    console.log('[PdfViewport] onMounted - last page from storage:', last)
+    if (typeof last === 'number' && last >= 1) {
+      // 等待 DOM 元素渲染
+      await nextTick()
+      const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
+      const el = scrollRootEl.value?.querySelector(`[data-pdf-page="${targetIdx}"]`)
+      console.log('[PdfViewport] onMounted - target element exists:', !!el, 'targetIdx:', targetIdx)
+      if (el) {
+        try {
+          console.log('[PdfViewport] onMounted - calling gotoPage:', last)
+          await gotoPage(last)
+          console.log('[PdfViewport] onMounted - gotoPage completed')
+        } catch (e) {
+          console.error('[PdfViewport] onMounted - gotoPage failed:', e)
+        }
+      }
+    }
+  }
+  
   scrollRootEl.value?.addEventListener('scroll', onScroll, { passive: true })
   updateVisibleByScroll()
   if (scrollRootEl.value && 'ResizeObserver' in window) {
