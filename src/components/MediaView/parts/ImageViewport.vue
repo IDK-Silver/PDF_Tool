@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
-import { openInFileManager } from '@/modules/media/openInFileManager'
+// removed: openInFileManager (no longer used in context menu)
 import { imageToPdf } from '@/modules/media/service'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useFileListStore } from '@/modules/filelist/store'
@@ -50,17 +50,6 @@ function onEsc(e: KeyboardEvent) {
   }
 }
 
-async function revealInFileManagerFromMenu() {
-  const path = media.descriptor?.path
-  closeMenu()
-  if (!path) return
-  try {
-    await openInFileManager(path)
-  } catch (err) {
-    console.error('展示檔案於檔案管理器失敗', err)
-    alert('無法在檔案管理器中開啟此檔案。')
-  }
-}
 
 async function convertImageToPdfFromMenu() {
   closeMenu()
@@ -428,9 +417,7 @@ defineExpose({
       class="fixed z-[2000] bg-card border border-border rounded shadow text-sm w-max"
       :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
     >
-      <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="revealInFileManagerFromMenu">
-        在檔案管理器中開啟
-      </button>
+      
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="convertImageToPdfFromMenu">
         轉成 PDF…
       </button>
