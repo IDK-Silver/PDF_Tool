@@ -48,8 +48,25 @@ function getPageDisplayUrl(idx: number): string | undefined {
   const page = media.pdfPages[idx]
   if (!page) return undefined
   if (page.highResUrl) return page.highResUrl
-  if (settings.s.enableLowRes && page.lowResUrl) return page.lowResUrl
   return undefined
+}
+
+function isRawPage(idx: number): boolean {
+  const page = media.pdfPages[idx]
+  return !!page && page.format === 'raw' && !!page.rawImageData
+}
+
+function drawRawInto(el: HTMLCanvasElement | null, idx: number) {
+  if (!el) return
+  const page = media.pdfPages[idx]
+  if (!page || page.format !== 'raw' || !page.rawImageData) return
+  const d = page.rawImageData
+  // 設定實體像素尺寸
+  if (el.width !== d.width) el.width = d.width
+  if (el.height !== d.height) el.height = d.height
+  const ctx = el.getContext('2d')
+  if (!ctx) return
+  ctx.putImageData(d, 0, 0)
 }
 
 const totalPages = computed(() => media.descriptor?.pages ?? 0)
@@ -789,13 +806,22 @@ defineExpose({
                 :alt="`page-${idx}`"
                 :class="[
                   viewMode === 'fit' ? 'w-full block' : 'block',
-                  media.pdfPages[idx]?.isLowRes && settings.s.enableLowRes && 'blur-[0.3px]',
                   'disable-live-text',
                 ]"
                 :style="imgStyle(idx)"
                 decoding="async"
                 loading="lazy"
                 draggable="false"
+              />
+              <canvas
+                v-else-if="isRawPage(idx)"
+                :class="[
+                  viewMode === 'fit' ? 'w-full block' : 'block',
+                  'disable-live-text',
+                ]"
+                :style="imgStyle(idx)"
+                :data-raw-page="idx"
+                :ref="(el: any) => drawRawInto(el as HTMLCanvasElement | null, idx)"
               />
               <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
             </div>

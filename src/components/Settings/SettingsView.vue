@@ -103,75 +103,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="low-res-rendering" class="space-y-3">
-        <h2 class="font-medium text-base">低清渲染</h2>
-        <div class="rounded-md border p-4 space-y-3">
-          <div class="flex items-start gap-2">
-            <input type="checkbox" id="enableLowRes" v-model="s.enableLowRes" class="mt-1 w-4 h-4" />
-            <label for="enableLowRes" class="flex-1">
-              <span class="font-medium">啟用低清渲染</span>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                滾動時先顯示低清圖，停止後升級為高清。關閉可直接輸出高清，速度較慢但最清晰。
-              </p>
-            </label>
-          </div>
-
-          <p class="text-xs text-[hsl(var(--muted-foreground))]">
-            低清圖片固定使用 Raw 格式，避免額外的解碼延遲。
-          </p>
-
-          <div class="flex items-start gap-2" :class="{ 'opacity-50': !s.enableLowRes }">
-            <input type="checkbox" id="useLowResDpr" v-model="s.useLowResDpr" class="mt-1 w-4 h-4" :disabled="!s.enableLowRes" />
-            <label for="useLowResDpr" class="flex-1">
-              <span class="font-medium">啟用 DPR 調整</span>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                針對高 DPI 螢幕輸出更清楚的低清圖，速度會略慢。
-                <span v-if="!s.enableLowRes" class="block">需先啟用低清渲染。</span>
-              </p>
-            </label>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3" :class="{ 'opacity-50': !s.enableLowRes }">
-            <div>
-              <label class="block mb-1">低清 DPI</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.lowResDpi"
-                @input="s.lowResDpi = number($event, s.lowResDpi)"
-                :disabled="!s.enableLowRes"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                一般頁面的低清 DPI。預設 60（A4 約 0.6M 像素）。
-              </p>
-            </div>
-            <div>
-              <label class="block mb-1">大頁面低清 DPI</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.largePageLowResDpi"
-                @input="s.largePageLowResDpi = number($event, s.largePageLowResDpi)"
-                :disabled="!s.enableLowRes"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                A3/A2 等大頁面的專用 DPI。預設 48。
-              </p>
-            </div>
-            <div :class="{ 'opacity-50': !s.enableLowRes || !s.useLowResDpr }">
-              <label class="block mb-1">DPR 倍數上限</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.lowResDprMultiplier"
-                @input="s.lowResDprMultiplier = number($event, s.lowResDprMultiplier)"
-                :disabled="!s.enableLowRes || !s.useLowResDpr"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                控制低清輸出時的 DPR 倍數。預設 1.0。
-                <span v-if="!s.useLowResDpr" class="block">需先啟用 DPR 調整。</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      
 
       <section id="high-res-rendering" class="space-y-3">
         <h2 class="font-medium text-base">高清渲染</h2>
@@ -188,7 +120,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               <option value="png">PNG（無損）</option>
               <option value="jpeg">JPEG（相容性佳）</option>
             </select>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">大頁面仍會自動降為 JPEG 以避免長時間編碼。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">格式完全依設定選擇，無大頁面強制降級。</p>
           </div>
 
           <div v-if="s.renderFormat === 'raw'">

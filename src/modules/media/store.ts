@@ -29,7 +29,7 @@ export const useMediaStore = defineStore('media', () => {
   const dirty = ref(false)
   const pageSizesPt = ref<Record<number, { widthPt: number; heightPt: number }>>({})
   const inflightCount = ref(0)
-  const queue = ref<Array<{ index: number; targetWidth?: number; dpi?: number; format: 'png'|'jpeg'|'webp'|'raw'; isLowRes?: boolean }>>([])
+  const queue = ref<Array<{ index: number; targetWidth?: number; dpi?: number; format: 'png'|'jpeg'|'webp'|'raw' }>>([])
   const settings = useSettingsStore()
   const pdfInflight = new Set<number>()
   const pageGen = ref<Record<number, number>>({})
@@ -41,7 +41,7 @@ export const useMediaStore = defineStore('media', () => {
   
   // Batch DOM-reactive updates to next animation frame to reduce jank
   let applyScheduled = false
-  const pendingApply: Array<{ idx: number; page: PageRender; isLowRes: boolean }> = []
+  const pendingApply: Array<{ idx: number; page: PageRender }> = []
   function scheduleApplyFrame() {
     if (applyScheduled) return
     applyScheduled = true
@@ -49,26 +49,17 @@ export const useMediaStore = defineStore('media', () => {
       applyScheduled = false
       // apply in order; revoke old blobs to avoid leaks
       while (pendingApply.length) {
-        const { idx, page, isLowRes } = pendingApply.shift()!
+        const { idx, page } = pendingApply.shift()!
         const old = pdfPages.value[idx]
-        
-        if (isLowRes) {
-          // 低解析度：只更新 lowResUrl，保留 highResUrl
-          if (old) {
-            pdfPages.value[idx] = {
-              ...old,
-              lowResUrl: page.contentUrl,
-              isLowRes: !old.highResUrl, // 若無高清則標記為低解析度狀態
-            }
-          } else {
-            pdfPages.value[idx] = {
-              ...page,
-              lowResUrl: page.contentUrl,
-              isLowRes: true,
-            }
+        if (page.format === 'raw') {
+          // 高解析度 raw：直接以 raw 畫布呈現
+          pdfPages.value[idx] = {
+            ...(old || page),
+            ...page,
+            rawImageData: page.rawImageData,
           }
+          highResPages.add(idx)
         } else {
-          // 高解析度：更新 highResUrl，保留 lowResUrl
           if (old?.highResUrl && old.highResUrl !== page.contentUrl) {
             try { URL.revokeObjectURL(old.highResUrl) } catch {}
           }
@@ -76,12 +67,9 @@ export const useMediaStore = defineStore('media', () => {
             ...(old || page),
             ...page,
             highResUrl: page.contentUrl,
-            lowResUrl: old?.lowResUrl, // 保留原有低解析度
-            isLowRes: false,
           }
           highResPages.add(idx)
         }
-        
         if (idx === 0) pdfFirstPage.value = pdfPages.value[0]
       }
     })
@@ -93,10 +81,10 @@ export const useMediaStore = defineStore('media', () => {
     return g
   }
 
-  function enqueueJob(index: number, targetWidth: number | undefined, format: 'png'|'jpeg'|'webp'|'raw', dpi?: number, isLowRes = false) {
+  function enqueueJob(index: number, targetWidth: number | undefined, format: 'png'|'jpeg'|'webp'|'raw', dpi?: number) {
     // 同頁只保留最新需求（無論寬度或 dpi），避免重複入隊
-    queue.value = queue.value.filter(j => j.index !== index || j.isLowRes !== isLowRes)
-    queue.value.push({ index, targetWidth, dpi, format, isLowRes })
+    queue.value = queue.value.filter(j => j.index !== index)
+    queue.value.push({ index, targetWidth, dpi, format })
     // 控制隊列上限，避免暴增
     if (queue.value.length > 100) {
       queue.value.splice(0, queue.value.length - 100)
@@ -151,11 +139,10 @@ export const useMediaStore = defineStore('media', () => {
       try { await pdfClose(docId.value) } catch(_) {}
       docId.value = null
     }
-    // 釋放舊 PDF blob URLs（雙快取）
+    // 釋放舊 PDF blob URLs
     try {
       for (const p of pdfPages.value) {
         if (p?.contentUrl) URL.revokeObjectURL(p.contentUrl)
-        if (p?.lowResUrl) URL.revokeObjectURL(p.lowResUrl)
         if (p?.highResUrl) URL.revokeObjectURL(p.highResUrl)
       }
     } catch (_) {}
@@ -179,43 +166,18 @@ export const useMediaStore = defineStore('media', () => {
         // 初始化頁框
         pdfPages.value = Array.from({ length: opened.pages }, () => null)
         highResPages.clear()
-        
-        // 雙階段載入第 0 頁：先低解析度，再高解析度
+        // 直接載入第 0 頁高清內容（RAW 預設足夠快速）
         const containerWidth = 800
-        
-        // 低解析度（72dpi，快速）
-        const lowRes = await pdfRenderPage({ 
-          docId: opened.docId, 
-          pageIndex: 0, 
-          targetWidth: 600, 
-          format: 'jpeg',
-          quality: 60
-        })
-        pdfPages.value[0] = {
-          ...lowRes,
-          lowResUrl: lowRes.contentUrl,
-          isLowRes: true,
+        const fmt = settings.s.renderFormat
+        const q = fmt === 'jpeg' ? 82 : (fmt === 'webp' ? 85 : (fmt === 'png' ? (settings.s.pngCompression === 'fast' ? 25 : settings.s.pngCompression === 'best' ? 100 : 50) : undefined))
+        const hi = await pdfRenderPage({ docId: opened.docId, pageIndex: 0, targetWidth: containerWidth, format: fmt, quality: q })
+        if (hi.format === 'raw') {
+          pdfPages.value[0] = { ...hi, rawImageData: hi.rawImageData }
+        } else {
+          pdfPages.value[0] = { ...hi, highResUrl: hi.contentUrl }
         }
         pdfFirstPage.value = pdfPages.value[0]
-        
-        // 高解析度（異步，不阻塞）
-        pdfRenderPage({ 
-          docId: opened.docId, 
-          pageIndex: 0, 
-          targetWidth: containerWidth, 
-          format: settings.s.renderFormat 
-        }).then(highRes => {
-          const existing = pdfPages.value[0]
-          pdfPages.value[0] = {
-            ...existing,
-            ...highRes,
-            highResUrl: highRes.contentUrl,
-            lowResUrl: existing?.lowResUrl,
-            isLowRes: false,
-          }
-          pdfFirstPage.value = pdfPages.value[0]
-          highResPages.add(0)
-        }).catch(e => console.warn('第 0 頁高解析度載入失敗', e))
+        highResPages.add(0)
       }
     } catch (e: any) {
       error.value = e?.message || String(e)
@@ -329,41 +291,14 @@ export const useMediaStore = defineStore('media', () => {
     
     const existing = pdfPages.value[index]
     
-    // 1. 若無低解析度，立即請求（可選關閉低清，直接高清）
-    if (settings.s.enableLowRes && !existing?.lowResUrl && !pdfInflight.has(index)) {
-      const size = pageSizesPt.value[index] || await getPageSizePt(index)
-      
-      // 🔵 從 Settings 讀取低清 DPI（大頁面用專屬設定）
-      const isLargePage = size && (size.widthPt > 650 || size.heightPt > 900) // A3: 842×1191pt
-      let baseLowResDpi = isLargePage ? settings.s.largePageLowResDpi : settings.s.lowResDpi
-      
-      // 🔵 可選：低清也考慮 DPR（Retina 螢幕適配）
-      if (settings.s.useLowResDpr) {
-        const dpr = Math.min(window.devicePixelRatio || 1, settings.s.dprCap)
-        const dprMultiplier = settings.s.lowResDprMultiplier || 1.0
-        baseLowResDpi = Math.round(baseLowResDpi * Math.min(dpr, dprMultiplier))
-      }
-      
-      const lowResWidth = size ? Math.floor(size.widthPt * baseLowResDpi / 72) : 500
-      
-      enqueueJob(index, lowResWidth, 'raw', undefined, true)  // ⚡ 低清固定用 raw（零編碼）
-    }
-    
-    // 2. 若已有高解析度且解析度足夠則略過
+    // 若已有高解析度且解析度足夠則略過
     let requiredWidth: number | null = null
     if (typeof targetWidth === 'number' && targetWidth > 0) {
       const size = pageSizesPt.value[index] || await getPageSizePt(index)
       if (size) {
-        // 🎯 從 targetWidth 反推 DPI，並套用 DPI 上限
+        // 🎯 從 targetWidth 反推 DPI，僅套用使用者設定的上限
         const impliedDpi = (targetWidth * 72) / size.widthPt
-        let cappedDpi = Math.min(impliedDpi, settings.s.highResDpiCap)
-        
-        // ⚡ 大頁面額外限制
-        const isLargePage = size.widthPt > 650 || size.heightPt > 900
-        if (isLargePage) {
-          cappedDpi = Math.min(cappedDpi, 96)
-        }
-        
+        const cappedDpi = Math.min(impliedDpi, settings.s.highResDpiCap)
         requiredWidth = Math.floor(size.widthPt * cappedDpi / 72)
       } else {
         requiredWidth = targetWidth
@@ -371,36 +306,23 @@ export const useMediaStore = defineStore('media', () => {
     } else if (typeof dpi === 'number' && dpi > 0) {
       const size = pageSizesPt.value[index] || await getPageSizePt(index)
       if (size) {
-        // ⚡ 套用高清 DPI 上限（防卡頓）
-        let cappedDpi = Math.min(dpi, settings.s.highResDpiCap)
-        
-        // ⚡ 大頁面額外限制（雙重保險）
-        const isLargePage = size && (size.widthPt > 650 || size.heightPt > 900)
-        if (isLargePage) {
-          cappedDpi = Math.min(cappedDpi, 96)  // 大頁面絕對不超過 96dpi
-        }
-        
+        // ⚡ 套用高清 DPI 上限（防卡頓），不再有大頁面 96dpi 限制
+        const cappedDpi = Math.min(dpi, settings.s.highResDpiCap)
         requiredWidth = Math.max(1, Math.floor(size.widthPt * cappedDpi / 72))
       }
     }
-    if (existing?.highResUrl && requiredWidth != null && (existing.widthPx >= requiredWidth)) return
+    if (requiredWidth != null) {
+      const hasHiResUrl = !!(existing?.highResUrl) && (existing!.widthPx >= requiredWidth)
+      const hasHiResRaw = (existing?.format === 'raw') && !!(existing as any)?.rawImageData && (existing!.widthPx >= requiredWidth)
+      if (hasHiResUrl || hasHiResRaw) return
+    }
     
-    // 3. 請求高解析度（根據設定選擇格式）
+    // 請求高解析度（根據設定選擇格式）
     if (!pdfInflight.has(index)) {
-      const size = pageSizesPt.value[index] || await getPageSizePt(index)
-      const isLargePage = size && (size.widthPt > 650 || size.heightPt > 900)
-      
       let finalFormat: 'png'|'jpeg'|'webp'|'raw'
       const userFormat = format ?? settings.s.renderFormat
-      if (userFormat === 'raw') {
-        finalFormat = 'raw'
-      } else if (isLargePage && userFormat !== 'jpeg') {
-        finalFormat = 'jpeg'
-      } else {
-        finalFormat = userFormat
-      }
-      
-      enqueueJob(index, targetWidth, finalFormat, dpi, false)
+      finalFormat = userFormat
+      enqueueJob(index, targetWidth, finalFormat, dpi)
     }
     
     processQueue()
@@ -420,7 +342,6 @@ export const useMediaStore = defineStore('media', () => {
       }
       const job = queue.value.splice(pickAt, 1)[0]
       const idx = job.index
-      const isLowRes = job.isLowRes ?? false
       if (pdfInflight.has(idx)) continue
       const d = descriptor.value
       if (!d || d.type !== 'pdf') return
@@ -428,7 +349,7 @@ export const useMediaStore = defineStore('media', () => {
       pdfInflight.add(idx)
       inflightCount.value++
       const q = (job.format === 'jpeg') 
-        ? (isLowRes ? 65 : 82)  // 低清 JPEG 65（極速），高清 JPEG 82（平衡品質與速度）
+        ? 82  // 高清 JPEG 82（平衡品質與速度）
         : (job.format === 'webp')
         ? 85  // WebP 統一品質 85
         : (job.format === 'png'
@@ -439,14 +360,11 @@ export const useMediaStore = defineStore('media', () => {
         .then(p => {
           // 只在世代一致時套用，避免過期回應覆蓋
           if (pageGen.value[idx] === gen) {
-            pendingApply.push({ idx, page: p, isLowRes })
+            pendingApply.push({ idx, page: p })
             scheduleApplyFrame()
-            
-            // 高解析度完成後執行 LRU 淘汰（批次優化：每 3 次執行一次）
-            if (!isLowRes) {
-              if (++evictCounter % 3 === 0) {
-                evictHighResCache()
-              }
+            // 完成後執行 LRU 淘汰（批次優化：每 3 次執行一次）
+            if (++evictCounter % 3 === 0) {
+              evictHighResCache()
             }
           } else if (p.contentUrl) {
             // 過期回應，釋放本次 blob
@@ -483,7 +401,12 @@ export const useMediaStore = defineStore('media', () => {
         pdfPages.value[idx] = {
           ...page,
           highResUrl: undefined,
-          isLowRes: !!page.lowResUrl, // 若有低解析度則標記回低解析度狀態
+        }
+      } else if (page?.format === 'raw' && page.rawImageData) {
+        // 釋放 raw 參照
+        pdfPages.value[idx] = {
+          ...page,
+          rawImageData: undefined,
         }
       }
       highResPages.delete(idx)
@@ -506,8 +429,8 @@ export const useMediaStore = defineStore('media', () => {
     try {
       for (const p of pdfPages.value) {
         if (p?.contentUrl) URL.revokeObjectURL(p.contentUrl)
-        if (p?.lowResUrl) URL.revokeObjectURL(p.lowResUrl)
         if (p?.highResUrl) URL.revokeObjectURL(p.highResUrl)
+        if (p) (p as any).rawImageData = undefined
       }
     } catch (_) {}
     pdfFirstPage.value = null

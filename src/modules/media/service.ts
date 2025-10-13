@@ -34,21 +34,13 @@ export async function pdfRenderPage(opts: {
   // ⚡ 使用異步命令（真正並行渲染）
   const raw = await invoke<PageRenderBytesRaw>('pdf_render_page_async', { args: opts })
   
-  // ⚡ Raw bitmap 模式：直接繪製到 Canvas（零解碼開銷）
+  // ⚡ Raw bitmap 模式：直接回傳 ImageData（零解碼開銷，不做前端編碼）
   if (raw.format === 'raw') {
-    const canvas = document.createElement('canvas')
-    canvas.width = raw.widthPx
-    canvas.height = raw.heightPx
-    const ctx = canvas.getContext('2d')!
-    
     const imageData = new ImageData(
       new Uint8ClampedArray(raw.imageBytes),
       raw.widthPx,
       raw.heightPx
     )
-    ctx.putImageData(imageData, 0, 0)
-    
-    const url = canvas.toDataURL('image/png', 0.9)  // 快速 PNG 編碼（可選）
     return {
       pageIndex: raw.pageIndex,
       widthPx: raw.widthPx,
@@ -57,7 +49,8 @@ export async function pdfRenderPage(opts: {
       dpi: raw.dpi,
       format: 'raw',
       imagePath: '',
-      contentUrl: url,
+      contentUrl: undefined,
+      rawImageData: imageData,
     }
   }
   

@@ -21,10 +21,10 @@ export interface PageRender {
   imagePath: string
   // helper
   contentUrl?: string
-  // 雙快取策略
-  lowResUrl?: string   // 低解析度縮圖（快速載入、常駐）
-  highResUrl?: string  // 高解析度版本（按需載入、可 LRU 淘汰）
-  isLowRes?: boolean   // 標記當前是否為低解析度狀態
+  // raw 渲染的像素資料（避免於前端再編碼）
+  rawImageData?: ImageData
+  // 高解析度內容（按需載入、可 LRU 淘汰）
+  highResUrl?: string
 }
 
 export interface PageRenderBytesRaw {
