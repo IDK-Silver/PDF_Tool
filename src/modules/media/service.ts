@@ -197,3 +197,8 @@ export async function pdfRotatePageRelative(opts: { docId: number, index: number
   const { docId, index, deltaDeg } = opts
   return invoke<number>('pdf_rotate_page_relative', { docId, index, deltaDeg })
 }
+
+export async function pdfCopyPage(opts: { srcDocId: number, srcIndex: number, destDocId: number, destIndex: number }): Promise<{ pages: number }> {
+  const { srcDocId, srcIndex, destDocId, destIndex } = opts
+  return invoke<{ pages: number }>('pdf_copy_page', { srcDocId, srcIndex, destDocId, destIndex } as any)
+}

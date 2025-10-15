@@ -63,8 +63,8 @@ const filtered = computed(() => {
 
 <template>
   <!-- 搜尋欄固定在頂部 -->
-  <div class="flex-shrink-0 pb-2">
-    <div class="flex gap-2 items-center">
+  <div class="flex-shrink-0">
+    <div class="flex gap-2 items-center pb-2">
       <div class="relative flex-1">
         <input v-model="q" class="w-full h-8 border rounded text-sm pl-8" placeholder="Search" />
         <MagnifyingGlassIcon class="w-5 h-5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />

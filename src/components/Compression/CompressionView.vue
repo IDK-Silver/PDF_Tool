@@ -6,14 +6,10 @@ import PdfCompressPane from './parts/PdfCompressPane.vue'
 import ImageCompressPane from './parts/ImageCompressPane.vue'
 import { useMediaStore } from '@/modules/media/store'
 import { formatFileSize } from '@/modules/media/fileSize'
-import { openInFileManager } from '@/modules/media/openInFileManager'
-import { FolderOpenIcon, ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
-import { useUiStore } from '@/modules/ui/store'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
 
 const compression = useCompressionStore()
 const media = useMediaStore()
-const ui = useUiStore()
 
 onMounted(() => {
   compression.ensureTabForSelection()
@@ -76,56 +72,20 @@ watch([filePath, descriptorSize], ([path, size]) => {
 
 function onStart() { compression.start() }
 function onCancel() { compression.cancel() }
-function onExpandSidebar() { ui.setSidebarCollapsed(false) }
-
-async function onReveal() {
-  const p = filePath.value
-  if (!p) return
-  try { await openInFileManager(p) } catch (err) {
-    console.error('openInFileManager failed', err)
-    alert('無法在檔案管理器顯示該檔案')
-  }
-}
 </script>
 
 <template>
   <div class="h-full flex flex-col">
-    <!-- 僅在有有效檔案時顯示標題列 -->
-    <header v-if="hasValidFile"
-      class="px-3 pt-3 pb-2 border-b border-[hsl(var(--border))] flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-      <div class="flex items-center gap-2">
-        <!-- 展開側欄按鈕，放在模式顯示的左邊 -->
-        <button v-if="ui.sidebarCollapsed"
-          class="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-[hsl(var(--selection))] transition"
-          title="展開左側欄" aria-label="展開左側欄" @click="onExpandSidebar">
-          <ChevronDoubleRightIcon class="w-5 h-5" />
 
-        </button>
-        <button
-          class="ml-2 inline-flex items-center justify-center w-5 h-5 rounded hover:bg-[hsl(var(--selection))] transition"
-          :disabled="!hasValidFile" :title="hasValidFile ? '在檔案管理器顯示' : ''" aria-label="在檔案管理器顯示" @click="onReveal">
-          <FolderOpenIcon class="w-5 h-5" />
-        </button>
-        <div class="flex items-center gap-2">
-          <span class="font-medium">檔案大小：</span>
-          <span class="font-mono">{{ fileSizeText }}</span>
-        </div>
-      </div>
-      <div
-        class="sm:ml-auto flex flex-row items-center gap-3 text-xs text-[hsl(var(--muted-foreground))] w-full sm:w-auto">
-
-        <div class="text-sm">
-          <span class="mr-2">模式：</span>
-          <span class="px-2 py-0.5 rounded bg-[hsl(var(--selection))]">
-            {{ isPdf ? 'PDF 壓縮' : '圖片壓縮' }}
-          </span>
-        </div>
-      </div>
-    </header>
-
-    <!-- 工具列：永遠顯示，展開側邊欄按鈕在最左邊 -->
-    <CompressionToolbar class="border-b border-[hsl(var(--border))]" :running="compression.running"
-      :selected-name="fileName" :hide-actions="isFileMissing" @start="onStart" @cancel="onCancel" />
+    <!-- 工具列：永遠顯示，置頂吸附與半透明背景，與檢視模式一致 -->
+    <CompressionToolbar
+      :running="compression.running"
+      :selected-name="fileName"
+      :file-size-text="hasValidFile ? fileSizeText : undefined"
+      :mode-label="isPdf ? 'PDF 壓縮' : (isImage ? '圖片壓縮' : '')"
+      :hide-actions="isFileMissing"
+      @start="onStart" @cancel="onCancel"
+    />
 
     <!-- 內容區：根據檔案類型顯示對應面板 -->
     <div class="flex-1 min-h-0 overflow-auto p-4">

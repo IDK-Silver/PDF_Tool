@@ -14,7 +14,13 @@ import {
   pdfRotatePageRelative,
   pdfExportPageImage,
   pdfExportPagePdf,
+  pdfOpen,
+  pdfClose,
+  pdfCopyPage,
+  imageToPdf,
 } from '@/modules/media/service'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
+import { tempDir, join } from '@tauri-apps/api/path'
 // removed: openInFileManager (no longer used in context menu)
 
 const media = useMediaStore()
@@ -141,9 +147,14 @@ async function gotoPage(page: number) {
   displayPageIndex.value = idx
   await nextTick()
   const root = scrollRootEl.value
-  const el = root?.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
+  if (!root) return
+  const el = root.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
   if (el) {
-    el.scrollIntoView({ block: 'center' })
+    // 手動計算滾動位置，避免 scrollIntoView 影響外層 body
+    const offsetTop = el.offsetTop
+    const scrollTarget = offsetTop - (root.clientHeight / 2) + (el.clientHeight / 2)
+    root.scrollTop = scrollTarget
+    
     pendingIdx.add(idx)
     scheduleProcess()
   }
@@ -437,6 +448,67 @@ async function insertBlankQuick(pageIndex: number) {
   await insertBlankAt(pageIndex, before)
 }
 
+async function insertFileQuick(pageIndex: number) {
+  const before = !!menu.value.aboveHalf
+  await insertFileAt(pageIndex, before)
+}
+
+async function insertFileAt(pageIndex: number, before: boolean) {
+  closeMenu()
+  const d = media.descriptor
+  const id = media.docId
+  if (!d || d.type !== 'pdf' || id == null) return
+  // 讓使用者選擇 PDF 或圖片
+  const picked = await openDialog({
+    multiple: false,
+    filters: [
+      { name: 'PDF / 圖片', extensions: ['pdf','png','jpg','jpeg','webp','gif','bmp','tiff','tif'] },
+    ],
+  })
+  if (!picked) return
+  const path = Array.isArray(picked) ? picked[0] : picked
+  const lower = path.toLowerCase()
+  const insertIndex = Math.max(0, Math.min((d.pages || 0), before ? pageIndex : pageIndex + 1))
+  let inserted = 0
+  let finalPages = d.pages || 0
+  try {
+    // PDF：直接開啟並逐頁複製
+    if (lower.endsWith('.pdf')) {
+      const src = await pdfOpen(path)
+      for (let i = 0; i < src.pages; i++) {
+        const res = await pdfCopyPage({ srcDocId: src.docId as any, srcIndex: i, destDocId: id, destIndex: insertIndex + inserted })
+        inserted++
+        finalPages = res.pages
+      }
+      try { await pdfClose((src as any).docId) } catch {}
+    } else {
+      // 圖片：轉成臨時單頁 PDF 再插入
+      const dir = await tempDir()
+      const tempPath = await join(dir, `insert-${Date.now()}.pdf`)
+      await imageToPdf({ srcPath: path, destPath: tempPath })
+      const src = await pdfOpen(tempPath)
+      const res = await pdfCopyPage({ srcDocId: src.docId as any, srcIndex: 0, destDocId: id, destIndex: insertIndex })
+      inserted = 1
+      finalPages = res.pages
+      try { await pdfClose((src as any).docId) } catch {}
+      // 臨時檔案清理由系統 TMP 負責；如需立即清除，可加上 fs.unlink
+    }
+    // 更新前端狀態與重新渲染
+    if (inserted > 0) {
+      const oldCenter = centerIndex.value
+      media.markDirty()
+      media.descriptor = { ...d, pages: finalPages } as any
+      if (insertIndex <= oldCenter) centerIndex.value = oldCenter + inserted
+      pendingIdx.clear()
+      const tp = finalPages
+      for (let i = insertIndex; i < Math.min(tp, insertIndex + inserted + 6); i++) pendingIdx.add(i)
+      scheduleHiResRerender(0)
+    }
+  } catch (e: any) {
+    alert(e?.message || String(e))
+  }
+}
+
 async function rotatePlus90(pageIndex: number) {
   closeMenu()
   const d = media.descriptor
@@ -668,8 +740,10 @@ onMounted(async () => {
                     root.scrollLeft = savedScrollLeft
                   }
                 } else {
-                  // 符合寬度模式：正常置中
-                  currentPageEl.scrollIntoView({ block: 'center', behavior: 'auto' })
+                  // 符合寬度模式：手動置中，避免影響外層 body
+                  const offsetTop = currentPageEl.offsetTop
+                  const scrollTarget = offsetTop - (root.clientHeight / 2) + (currentPageEl.clientHeight / 2)
+                  root.scrollTop = scrollTarget
                 }
               }
             })
@@ -909,6 +983,9 @@ defineExpose({
         <div class="border-t border-border my-1"></div>
         <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="insertBlankQuick(menu.pageIndex)">
           插入空白頁（{{ menu.aboveHalf ? '之前' : '之後' }}）
+        </button>
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="insertFileQuick(menu.pageIndex)">
+          插入檔案（{{ menu.aboveHalf ? '之前' : '之後' }}）
         </button>
         <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="rotatePlus90(menu.pageIndex)">
           旋轉 +90°

@@ -103,6 +103,10 @@ struct MediaDescriptor {
 
 呼叫後端分析檔案類型。
 
+##### `pdfCopyPage({ srcDocId, srcIndex, destDocId, destIndex }): Promise<{ pages: number }>`
+
+將來源 PDF 的單一頁插入至目前開啟文件的指定索引位置，回傳最新頁數。
+
 ### 檢視模式
 
 MediaView 組件支援兩種檢視模式：
@@ -131,6 +135,10 @@ MediaView 組件支援兩種檢視模式：
 - `MediaView/parts/MediaToolbar.vue`：檔案儲存與縮放控制列，透過事件呼叫檢視器動作。
 - `MediaView/parts/PdfViewport.vue`：專責 PDF 頁面渲染、快取與右鍵操作。
 - `MediaView/parts/ImageViewport.vue`：圖片檢視與縮放控制，保持與 PDF 相同的檢視體驗。
+
+右鍵選單：
+- 插入空白頁（自動判斷插入於頁面「之前/之後」）
+- 插入檔案（PDF 逐頁插入；圖片將轉為單頁 PDF 後插入；同樣自動判斷「之前/之後」）
 
 ### Compression 模組（UI）
 
