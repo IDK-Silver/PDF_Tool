@@ -6,6 +6,7 @@ import PdfCompressPane from './parts/PdfCompressPane.vue'
 import ImageCompressPane from './parts/ImageCompressPane.vue'
 import { useMediaStore } from '@/modules/media/store'
 import { formatFileSize } from '@/modules/media/fileSize'
+import { openInFileManager } from '@/modules/media/openInFileManager'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
 
 const compression = useCompressionStore()
@@ -72,6 +73,15 @@ watch([filePath, descriptorSize], ([path, size]) => {
 
 function onStart() { compression.start() }
 function onCancel() { compression.cancel() }
+const canReveal = computed(() => !!filePath.value && !isFileMissing.value)
+async function onReveal() {
+  const p = filePath.value
+  if (!p) return
+  try { await openInFileManager(p) } catch (err) {
+    console.error('openInFileManager failed', err)
+    alert('無法在檔案管理器顯示該檔案')
+  }
+}
 </script>
 
 <template>
@@ -84,6 +94,8 @@ function onCancel() { compression.cancel() }
       :file-size-text="hasValidFile ? fileSizeText : undefined"
       :mode-label="isPdf ? 'PDF 壓縮' : (isImage ? '圖片壓縮' : '')"
       :hide-actions="isFileMissing"
+      :can-reveal="canReveal"
+      @reveal="onReveal"
       @start="onStart" @cancel="onCancel"
     />
 
