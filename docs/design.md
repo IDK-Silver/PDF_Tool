@@ -149,6 +149,12 @@ MediaView 組件支援兩種檢視模式：
 
 更多壓縮設計與策略詳見：`docs/compression.md`。
 
+### 導覽行為（Dirty State）
+
+- 從 `media_view` 切換到 `compress` 時，若 `media.dirty` 為 `true`，彈出確認對話框詢問是否放棄未儲存變更。
+- 使用者選擇「捨棄」後，會以目前選擇的路徑重新載入描述資訊（自磁碟），以確保記憶體中的暫存修改被丟棄；選擇「取消」則中止導覽。
+- 實作位置：`src/components/MediaView/MediaView.vue` 內的 `onBeforeRouteLeave`。
+
 ### 快取策略（PDF）
 
 PDF 頁面僅維持高解析度快取（RAW 預設），按需載入並以 LRU 策略淘汰，確保視覺品質與互動流暢。低清預覽已移除。

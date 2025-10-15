@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, unref, watchEffect, onMounted, onBeforeUnmount } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import type { Ref } from 'vue'
 import MediaToolbar from './parts/MediaToolbar.vue'
 import PdfViewport from './parts/PdfViewport.vue'
@@ -9,6 +10,7 @@ import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
 import { openInFileManager } from '@/modules/media/openInFileManager'
+import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 // save handled inside media store via saveCurrentIfNeeded
 
 const media = useMediaStore()
@@ -139,6 +141,24 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown as any)
+})
+
+// 當從媒體檢視切換到「壓縮」頁面且目前文件有未儲存變更時，提示是否放棄
+onBeforeRouteLeave(async (to) => {
+  if (to.name === 'compress' && media.dirty) {
+    const ok = await confirmDialog('此文件有未儲存變更，是否放棄並前往壓縮？', {
+      title: '放棄變更',
+      okLabel: '捨棄',
+      cancelLabel: '取消',
+    })
+    if (!ok) return false
+    // 為了真正丟棄記憶體中的未儲存修改，重新自磁碟載入目前檔案
+    const p = media.selected?.path
+    if (p) {
+      try { await media.loadDescriptor(p) } catch (_) {}
+    }
+  }
+  return true
 })
 
 async function onSaveNow() {

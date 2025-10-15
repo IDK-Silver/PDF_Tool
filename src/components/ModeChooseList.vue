@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 import { computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter, isNavigationFailure } from 'vue-router';
 import { EyeIcon, ArchiveBoxIcon } from '@heroicons/vue/24/outline';
 import type { Component } from 'vue';
 
@@ -21,15 +21,14 @@ const current_mode = computed<Mode>(() => (route.name as Mode) || 'media_view');
 async function setMode(mode: Mode) {
   try {
     await router.push({ name: mode })
-  } catch (_) {
-    // ignore
-  }
-  const toHash = mode === 'media_view' ? '#/media' : (mode === 'compress' ? '#/compress' : '#/editor')
-  setTimeout(() => {
-    if ((route.name as any) !== mode) {
+  } catch (err) {
+    // 若為導航守衛中止/取消等預期情況，不做任何 fallback 以尊重守衛
+    if (!isNavigationFailure(err)) {
+      // 非預期錯誤時才採用保守 fallback（理論上很少發生）
+      const toHash = mode === 'media_view' ? '#/media' : (mode === 'compress' ? '#/compress' : '#/editor')
       window.location.hash = toHash
     }
-  }, 0)
+  }
 }
 </script>
 
