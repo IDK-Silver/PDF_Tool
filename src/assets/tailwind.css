@@ -48,7 +48,7 @@
 
     /* Remove default page margins and page-level scrollbars */
     html, body {
-        margin: 8px;
+        margin: 6px;
         height: 100%;
         overflow: hidden; /* prevent whole-page scrollbars */
     }
