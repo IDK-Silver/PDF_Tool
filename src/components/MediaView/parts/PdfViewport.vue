@@ -469,42 +469,91 @@ async function insertFileAt(pageIndex: number, before: boolean) {
   const path = Array.isArray(picked) ? picked[0] : picked
   const lower = path.toLowerCase()
   const insertIndex = Math.max(0, Math.min((d.pages || 0), before ? pageIndex : pageIndex + 1))
+
+  // 快照：用於錯誤時回滾
+  const oldPagesArr = media.pdfPages.slice()
+  const oldDescriptor = { ...d }
+  const oldSizes: Record<number, { widthPt: number; heightPt: number }> = { ...media.pageSizesPt }
+  const oldCenter = centerIndex.value
+
   let inserted = 0
   let finalPages = d.pages || 0
+
   try {
-    // PDF：直接開啟並逐頁複製
     if (lower.endsWith('.pdf')) {
+      // 先開啟來源 PDF 取得頁數，做「樂觀更新」讓 UI 立刻出現占位
       const src = await pdfOpen(path)
+      inserted = src.pages
+
+      // 前端陣列與尺寸索引位移 + 插入占位
+      media.pdfPages.splice(insertIndex, 0, ...Array(inserted).fill(null))
+      const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
+      for (const k of Object.keys(oldSizes)) {
+        const idx = Number(k)
+        const v = oldSizes[idx]
+        if (idx < insertIndex) shifted[idx] = v
+        else shifted[idx + inserted] = v
+      }
+      const def = insertDefaultDimsPt()
+      for (let i = 0; i < inserted; i++) shifted[insertIndex + i] = def
+      media.pageSizesPt = shifted as any
+      media.descriptor = { ...d, pages: Math.max(0, (d.pages || 0) + inserted) } as any
+      if (insertIndex <= oldCenter) centerIndex.value = oldCenter + inserted
+      media.markDirty()
+      pendingIdx.clear()
+      for (let i = insertIndex; i < insertIndex + Math.min(inserted + 6, (media.descriptor?.pages || 0) - insertIndex); i++) pendingIdx.add(i)
+      scheduleHiResRerender(0)
+
+      // 實際複製頁面
       for (let i = 0; i < src.pages; i++) {
-        const res = await pdfCopyPage({ srcDocId: src.docId as any, srcIndex: i, destDocId: id, destIndex: insertIndex + inserted })
-        inserted++
+        const res = await pdfCopyPage({ srcDocId: src.docId as any, srcIndex: i, destDocId: id, destIndex: insertIndex + i })
         finalPages = res.pages
       }
       try { await pdfClose((src as any).docId) } catch {}
     } else {
-      // 圖片：轉成臨時單頁 PDF 再插入
+      // 圖片：先「樂觀更新」插入 1 頁占位
+      inserted = 1
+      media.pdfPages.splice(insertIndex, 0, null)
+      const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
+      for (const k of Object.keys(oldSizes)) {
+        const idx = Number(k)
+        const v = oldSizes[idx]
+        if (idx < insertIndex) shifted[idx] = v
+        else shifted[idx + inserted] = v
+      }
+      shifted[insertIndex] = insertDefaultDimsPt()
+      media.pageSizesPt = shifted as any
+      media.descriptor = { ...d, pages: Math.max(0, (d.pages || 0) + 1) } as any
+      if (insertIndex <= oldCenter) centerIndex.value = oldCenter + 1
+      media.markDirty()
+      pendingIdx.clear()
+      for (let i = insertIndex; i < insertIndex + Math.min(inserted + 6, (media.descriptor?.pages || 0) - insertIndex); i++) pendingIdx.add(i)
+      scheduleHiResRerender(0)
+
+      // 轉檔 + 複製
       const dir = await tempDir()
       const tempPath = await join(dir, `insert-${Date.now()}.pdf`)
       await imageToPdf({ srcPath: path, destPath: tempPath })
       const src = await pdfOpen(tempPath)
       const res = await pdfCopyPage({ srcDocId: src.docId as any, srcIndex: 0, destDocId: id, destIndex: insertIndex })
-      inserted = 1
       finalPages = res.pages
       try { await pdfClose((src as any).docId) } catch {}
-      // 臨時檔案清理由系統 TMP 負責；如需立即清除，可加上 fs.unlink
     }
-    // 更新前端狀態與重新渲染
+
+    // 複製完成後，更新頁數並觸發重新渲染（確保尺寸同步）
     if (inserted > 0) {
-      const oldCenter = centerIndex.value
-      media.markDirty()
-      media.descriptor = { ...d, pages: finalPages } as any
-      if (insertIndex <= oldCenter) centerIndex.value = oldCenter + inserted
+      media.descriptor = { ...media.descriptor!, pages: finalPages } as any
       pendingIdx.clear()
       const tp = finalPages
       for (let i = insertIndex; i < Math.min(tp, insertIndex + inserted + 6); i++) pendingIdx.add(i)
       scheduleHiResRerender(0)
     }
   } catch (e: any) {
+    // 回滾
+    media.pdfPages = oldPagesArr as any
+    media.pageSizesPt = oldSizes as any
+    media.descriptor = oldDescriptor as any
+    centerIndex.value = oldCenter
     alert(e?.message || String(e))
   }
 }
