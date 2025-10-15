@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
-import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon } from '@heroicons/vue/24/outline'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
 
 const props = defineProps({
@@ -18,6 +19,7 @@ const props = defineProps({
 
 const emit = defineEmits<{
   (e: 'save'): void
+  (e: 'discard'): void
   (e: 'reveal'): void
   (e: 'set-fit-mode'): void
   (e: 'reset-zoom'): void
@@ -26,6 +28,21 @@ const emit = defineEmits<{
 }>()
 
 const ui = useUiStore()
+
+// Shift 鍵狀態：按下 Shift 時，儲存按鈕改為「捨棄變更」
+const shiftDown = ref(false)
+function updateShiftState(e: KeyboardEvent) {
+  // 以事件內的修飾鍵狀態為準；keyup 也會帶 shiftKey=false
+  shiftDown.value = !!e.shiftKey
+}
+onMounted(() => {
+  window.addEventListener('keydown', updateShiftState)
+  window.addEventListener('keyup', updateShiftState)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', updateShiftState)
+  window.removeEventListener('keyup', updateShiftState)
+})
 </script>
 
 <template>
@@ -39,11 +56,14 @@ const ui = useUiStore()
           title="展開側欄">
           <ChevronDoubleRightIcon class="w-4 h-4" />
         </button>
-        <button @click="emit('save')" :disabled="props.saving || !props.canSave"
+        <button
+          @click="shiftDown ? emit('discard') : emit('save')"
+          :disabled="props.saving || !props.canSave"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"
-          :class="props.canSave ? 'bg-blue-400 text-white hover:bg-blue-700' : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
-          title="儲存">
-          <ArchiveBoxIcon class="w-4 h-4" />
+          :class="props.canSave ? (shiftDown ? 'bg-red-500 text-white hover:bg-red-700' : 'bg-blue-400 text-white hover:bg-blue-700') : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
+          :title="shiftDown ? '捨棄變更' : '儲存'"
+        >
+          <component :is="shiftDown ? XMarkIcon : ArchiveBoxIcon" class="w-4 h-4" />
         </button>
         <button @click="emit('reveal')" :disabled="!props.canReveal"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"

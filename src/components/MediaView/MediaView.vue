@@ -143,6 +143,16 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown as any)
 })
 
+async function onDiscardNow() {
+  const p = media.selected?.path
+  if (!p) return
+  try {
+    await media.loadDescriptor(p)
+  } catch (e: any) {
+    alert(e?.message || String(e))
+  }
+}
+
 // 當從媒體檢視切換到「壓縮」頁面且目前文件有未儲存變更時，提示是否放棄
 onBeforeRouteLeave(async (to) => {
   if (to.name === 'compress' && media.dirty) {
@@ -202,7 +212,7 @@ async function onReveal() {
 
     <MediaToolbar :saving="saving" :can-save="media.dirty && isPdf" :can-reveal="canReveal" :current-page="currentPage"
       :total-pages="totalPages" :view-mode="viewMode" :display-zoom="displayZoom" :is-pdf="isPdf"
-      :can-zoom-in="canZoomIn" :can-zoom-out="canZoomOut" @save="onSaveNow" @reveal="onReveal" @set-fit-mode="handleSetFitMode"
+      :can-zoom-in="canZoomIn" :can-zoom-out="canZoomOut" @save="onSaveNow" @discard="onDiscardNow" @reveal="onReveal" @set-fit-mode="handleSetFitMode"
       @reset-zoom="handleResetZoom" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut" />
 
     <div class="flex-1 flex min-h-0">

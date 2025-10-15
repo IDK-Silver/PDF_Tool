@@ -279,6 +279,18 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onEsc)
 })
 
+// Shift 鍵狀態：按下時反轉插入方向（前/後）
+const shiftDown = ref(false)
+function updateShiftState(e: KeyboardEvent) { shiftDown.value = !!e.shiftKey }
+onMounted(() => {
+  window.addEventListener('keydown', updateShiftState)
+  window.addEventListener('keyup', updateShiftState)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', updateShiftState)
+  window.removeEventListener('keyup', updateShiftState)
+})
+
 async function deletePageFromMenu(pageIndex: number) {
   closeMenu()
   const d = media.descriptor
@@ -444,13 +456,13 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
 }
 
 async function insertBlankQuick(pageIndex: number) {
-  const before = !!menu.value.aboveHalf
-  await insertBlankAt(pageIndex, before)
+  const before = (menu.value.aboveHalf ? 1 : 0) ^ (shiftDown.value ? 1 : 0)
+  await insertBlankAt(pageIndex, !!before)
 }
 
 async function insertFileQuick(pageIndex: number) {
-  const before = !!menu.value.aboveHalf
-  await insertFileAt(pageIndex, before)
+  const before = (menu.value.aboveHalf ? 1 : 0) ^ (shiftDown.value ? 1 : 0)
+  await insertFileAt(pageIndex, !!before)
 }
 
 async function insertFileAt(pageIndex: number, before: boolean) {
@@ -564,7 +576,8 @@ async function rotatePlus90(pageIndex: number) {
   const id = media.docId
   if (!d || d.type !== 'pdf' || id == null) return
   try {
-    await pdfRotatePageRelative({ docId: id, index: pageIndex, deltaDeg: 90 })
+    const delta = (shiftDown.value ? -90 : 90)
+    await pdfRotatePageRelative({ docId: id, index: pageIndex, deltaDeg: delta })
     media.markDirty()
     try {
       media.cancelInflight(pageIndex)
@@ -1031,13 +1044,13 @@ defineExpose({
         </button>
         <div class="border-t border-border my-1"></div>
         <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="insertBlankQuick(menu.pageIndex)">
-          插入空白頁（{{ menu.aboveHalf ? '之前' : '之後' }}）
+          插入空白頁（{{ (menu.aboveHalf !== shiftDown) ? '之前' : '之後' }}）
         </button>
         <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="insertFileQuick(menu.pageIndex)">
-          插入檔案（{{ menu.aboveHalf ? '之前' : '之後' }}）
+          插入檔案（{{ (menu.aboveHalf !== shiftDown) ? '之前' : '之後' }}）
         </button>
         <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="rotatePlus90(menu.pageIndex)">
-          旋轉 +90°
+          旋轉 {{ shiftDown ? '-90°' : '+90°' }}
         </button>
         <div class="border-t border-border my-1"></div>
         <button
