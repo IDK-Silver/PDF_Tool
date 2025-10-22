@@ -34,7 +34,8 @@ type ViewportExpose = {
   zoomOut: () => void
 }
 
-const pdfViewportRef = ref<InstanceType<typeof PdfViewport> | null>(null)
+type PdfViewportExposeExtended = ViewportExpose & { gotoPage: (page: number) => Promise<void> }
+const pdfViewportRef = ref<PdfViewportExposeExtended | null>(null)
 const imageViewportRef = ref<InstanceType<typeof ImageViewport> | null>(null)
 
 const isPdf = computed(() => media.descriptor?.type === 'pdf')
@@ -99,6 +100,15 @@ function handleZoomIn() {
 }
 function handleZoomOut() {
   activeControls.value?.zoomOut()
+}
+
+async function handleJumpToPage(page: number) {
+  if (!pdfViewportRef.value) return
+  try {
+    await pdfViewportRef.value.gotoPage(page)
+  } catch (_) {
+    // noop
+  }
 }
 
 function isEditableTarget(el: EventTarget | null): boolean {
@@ -213,7 +223,7 @@ async function onReveal() {
     <MediaToolbar :saving="saving" :can-save="media.dirty && isPdf" :can-reveal="canReveal" :current-page="currentPage"
       :total-pages="totalPages" :view-mode="viewMode" :display-zoom="displayZoom" :is-pdf="isPdf"
       :can-zoom-in="canZoomIn" :can-zoom-out="canZoomOut" @save="onSaveNow" @discard="onDiscardNow" @reveal="onReveal" @set-fit-mode="handleSetFitMode"
-      @reset-zoom="handleResetZoom" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut" />
+      @reset-zoom="handleResetZoom" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut" @jump-to-page="handleJumpToPage" />
 
     <div class="flex-1 flex min-h-0">
       <div v-if="media.loading" class="p-4">讀取中…</div>

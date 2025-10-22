@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
 
@@ -25,6 +25,7 @@ const emit = defineEmits<{
   (e: 'reset-zoom'): void
   (e: 'zoom-in'): void
   (e: 'zoom-out'): void
+  (e: 'jump-to-page', page: number): void
 }>()
 
 const ui = useUiStore()
@@ -43,6 +44,36 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', updateShiftState)
   window.removeEventListener('keyup', updateShiftState)
 })
+
+// 頁碼輸入：以輸入欄直接跳頁（Enter/Blur 提交，Esc 取消）
+const pageFocused = ref(false)
+const pageText = ref('0')
+
+function syncPageText() {
+  pageText.value = String(props.currentPage || 0)
+}
+syncPageText()
+
+watch(() => props.currentPage, () => { if (!pageFocused.value) syncPageText() })
+
+function clampToValidPage(n: number): number {
+  const total = Math.max(0, props.totalPages || 0)
+  if (total <= 0) return 0
+  return Math.min(total, Math.max(1, Math.floor(n)))
+}
+
+function commitPageInput() {
+  if (!props.isPdf || props.totalPages <= 0) { syncPageText(); return }
+  const parsed = Number(String(pageText.value || '').replace(/[^0-9]/g, ''))
+  if (!Number.isFinite(parsed) || parsed <= 0) { syncPageText(); return }
+  const page = clampToValidPage(parsed)
+  if (page && page !== props.currentPage) emit('jump-to-page', page)
+}
+
+function cancelPageInput(el?: HTMLInputElement | null) {
+  syncPageText()
+  if (el) el.blur()
+}
 </script>
 
 <template>
@@ -77,7 +108,20 @@ onBeforeUnmount(() => {
       <div class="flex items-center gap-3">
         <div class="flex items-center text-sm tabular-nums text-[hsl(var(--muted-foreground))]">
           <template v-if="props.isPdf && props.totalPages > 0">
-            <span class="text-[hsl(var(--foreground))]">{{ props.currentPage }}</span>
+            <input
+              :value="pageText"
+              :size="Math.max(1, String(pageText || '').length)"
+              @input="(e:any)=> pageText = e.target.value"
+              @focus="pageFocused = true; ($event.target as HTMLInputElement).select()"
+              @blur="pageFocused = false; commitPageInput()"
+              @keydown.enter.prevent="commitPageInput(); ($event.target as HTMLInputElement).blur()"
+              @keydown.esc.prevent="cancelPageInput($event.target as HTMLInputElement)"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              class="text-center text-[hsl(var(--foreground))] bg-transparent border-0 px-0 focus:outline-none w-auto"
+              title="輸入頁碼後按 Enter 跳轉"
+            />
             <span class="mx-1">/</span>
             <span>{{ props.totalPages }}</span>
           </template>

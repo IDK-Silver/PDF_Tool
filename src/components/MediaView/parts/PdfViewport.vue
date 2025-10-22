@@ -974,6 +974,8 @@ defineExpose({
   resetZoom: handleResetZoom,
   zoomIn: handleZoomIn,
   zoomOut: handleZoomOut,
+  // 讓外層可呼叫跳轉頁數
+  gotoPage,
 })
 </script>
 
