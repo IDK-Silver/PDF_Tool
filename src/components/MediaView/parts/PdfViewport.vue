@@ -61,8 +61,9 @@ let searchDebounceTimer: number | null = null
 let activeSearchToken = 0
 const pageNormalizedCache = new Map<number, { normalized: string; map: number[]; source: PageTextContent }>()
 let pendingScrollAnimation = 0 as number | 0
-const searchAnchor = ref<{ top: number; left: number } | null>(null)
-const SEARCH_PANEL_WIDTH = 240
+const searchAnchor = ref<{ top: number; left: number; width: number } | null>(null)
+const SEARCH_PANEL_MIN_WIDTH = 280
+const SEARCH_PANEL_MAX_WIDTH = 400
 const SEARCH_PANEL_MARGIN = 12
 
 function getRenderFormat() {
@@ -154,14 +155,44 @@ function setSearchAnchor(rect?: DOMRect | null, force = false) {
     return
   }
   const viewportWidth = window.innerWidth || 0
-  const center = targetRect.left + targetRect.width / 2
-  let left = center - SEARCH_PANEL_WIDTH / 2
+  const viewportHeight = window.innerHeight || 0
+  
+  // 計算搜尋面板的適當寬度：在可用空間內調整
+  let panelWidth = SEARCH_PANEL_MIN_WIDTH
   if (viewportWidth > 0) {
-    const maxLeft = viewportWidth - SEARCH_PANEL_MARGIN - SEARCH_PANEL_WIDTH
-    left = Math.min(Math.max(SEARCH_PANEL_MARGIN, left), Math.max(SEARCH_PANEL_MARGIN, maxLeft))
+    const availableWidth = viewportWidth - SEARCH_PANEL_MARGIN * 2
+    // 如果可用寬度小於最小寬度，就使用可用寬度（允許面板縮到更小）
+    if (availableWidth < SEARCH_PANEL_MIN_WIDTH) {
+      panelWidth = Math.max(200, availableWidth) // 絕對最小 200px
+    } else {
+      panelWidth = Math.min(SEARCH_PANEL_MAX_WIDTH, availableWidth)
+    }
   }
-  const top = Math.max(SEARCH_PANEL_MARGIN, targetRect.bottom + 8)
-  searchAnchor.value = { top, left }
+  
+  const center = targetRect.left + targetRect.width / 2
+  let left = center - panelWidth / 2
+  
+  // 確保搜尋面板不超出視窗左右邊界
+  if (viewportWidth > 0) {
+    // 先確保不超出左邊
+    left = Math.max(SEARCH_PANEL_MARGIN, left)
+    // 再確保不超出右邊
+    const maxLeft = viewportWidth - SEARCH_PANEL_MARGIN - panelWidth
+    if (left > maxLeft) {
+      left = Math.max(SEARCH_PANEL_MARGIN, maxLeft)
+    }
+  }
+  
+  // 確保搜尋面板不超出底部
+  let top = targetRect.bottom + 8
+  const estimatedPanelHeight = 48 // 估計面板高度
+  if (viewportHeight > 0 && top + estimatedPanelHeight > viewportHeight - SEARCH_PANEL_MARGIN) {
+    // 若底部空間不足，改為顯示在觸發元素上方
+    top = targetRect.top - estimatedPanelHeight - 8
+  }
+  top = Math.max(SEARCH_PANEL_MARGIN, top)
+  
+  searchAnchor.value = { top, left, width: panelWidth }
 }
 
 const searchPanelStyle = computed(() => {
@@ -170,13 +201,25 @@ const searchPanelStyle = computed(() => {
     return {
       top: `${anchor.top}px`,
       left: `${anchor.left}px`,
-      width: `${SEARCH_PANEL_WIDTH}px`,
+      width: `${anchor.width}px`,
+    }
+  }
+  // 預設位置：右上角，動態寬度
+  const viewportWidth = window.innerWidth || 0
+  let panelWidth = SEARCH_PANEL_MIN_WIDTH
+  if (viewportWidth > 0) {
+    const availableWidth = viewportWidth - SEARCH_PANEL_MARGIN * 2
+    // 如果可用寬度小於最小寬度，就使用可用寬度
+    if (availableWidth < SEARCH_PANEL_MIN_WIDTH) {
+      panelWidth = Math.max(200, availableWidth)
+    } else {
+      panelWidth = Math.min(SEARCH_PANEL_MAX_WIDTH, availableWidth)
     }
   }
   return {
     top: '72px',
-    right: '24px',
-    width: `${SEARCH_PANEL_WIDTH}px`,
+    right: `${SEARCH_PANEL_MARGIN}px`,
+    width: `${panelWidth}px`,
   }
 })
 
@@ -599,7 +642,31 @@ function onPageContextMenu(idx: number, e: MouseEvent) {
   const target = (e.currentTarget as HTMLElement) || (e.target as HTMLElement)
   const rect = target?.getBoundingClientRect()
   const aboveHalf = rect ? e.clientY < rect.top + rect.height / 2 : true
-  menu.value = { open: true, x: e.clientX, y: e.clientY, pageIndex: idx, aboveHalf }
+  
+  // 確保選單不超出視窗邊界
+  const viewportWidth = window.innerWidth || 0
+  const viewportHeight = window.innerHeight || 0
+  const estimatedMenuWidth = 200 // 估計選單寬度
+  const estimatedMenuHeight = 240 // 估計選單高度
+  
+  let x = e.clientX
+  let y = e.clientY
+  
+  // 檢查右側邊界
+  if (viewportWidth > 0 && x + estimatedMenuWidth > viewportWidth - 12) {
+    x = viewportWidth - estimatedMenuWidth - 12
+  }
+  
+  // 檢查底部邊界
+  if (viewportHeight > 0 && y + estimatedMenuHeight > viewportHeight - 12) {
+    y = viewportHeight - estimatedMenuHeight - 12
+  }
+  
+  // 確保不超出左上角
+  x = Math.max(12, x)
+  y = Math.max(12, y)
+  
+  menu.value = { open: true, x, y, pageIndex: idx, aboveHalf }
   exportMenu.value.open = false
 }
 
@@ -1558,35 +1625,39 @@ defineExpose({
           v-model="searchTerm"
           type="text"
           placeholder="搜尋..."
-          class="px-2 py-1 rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary/60 bg-background text-foreground flex-1 min-w-[140px]"
+          class="px-2 py-1 rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary/60 bg-background text-foreground flex-1 min-w-0"
+          style="width: 0;"
         />
-        <span class="text-xs text-muted-foreground min-w-[64px] text-center">
-          <template v-if="searchBusy">搜尋中…</template>
-          <template v-else-if="searchError">{{ searchError }}</template>
+        <span class="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 min-w-[48px] text-center">
+          <template v-if="searchBusy">搜尋中</template>
+          <template v-else-if="searchError">無</template>
           <template v-else>{{ searchSummary }}</template>
         </span>
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 flex-shrink-0">
           <button
-            class="px-2 py-1 rounded border border-transparent hover:bg-hover disabled:opacity-40"
+            class="px-2 py-1 rounded border border-transparent hover:bg-hover disabled:opacity-40 flex-shrink-0"
             type="button"
             :disabled="!searchMatches.length || searchBusy"
             @click="showPrevMatch"
+            title="上一個 (Shift+Enter)"
           >
             ↑
           </button>
           <button
-            class="px-2 py-1 rounded border border-transparent hover:bg-hover disabled:opacity-40"
+            class="px-2 py-1 rounded border border-transparent hover:bg-hover disabled:opacity-40 flex-shrink-0"
             type="button"
             :disabled="!searchMatches.length || searchBusy"
             @click="showNextMatch"
+            title="下一個 (Enter)"
           >
             ↓
           </button>
         </div>
         <button
-          class="px-2 py-1 rounded border border-transparent hover:bg-hover text-muted-foreground"
+          class="px-2 py-1 rounded border border-transparent hover:bg-hover text-muted-foreground flex-shrink-0"
           type="button"
           @click="closeSearch"
+          title="關閉 (Esc)"
         >
           ✕
         </button>
@@ -1596,30 +1667,30 @@ defineExpose({
       <div
         v-if="menu.open"
         data-context-menu
-        class="fixed z-[2000] bg-card border border-border rounded shadow text-sm w-max"
+        class="fixed z-[2000] bg-card border border-border rounded shadow text-sm w-max max-w-[calc(100vw-24px)]"
         :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
       >
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="deletePageFromMenu(menu.pageIndex)">
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="deletePageFromMenu(menu.pageIndex)">
           刪除此頁
         </button>
         <div class="border-t border-border my-1"></div>
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="insertBlankQuick(menu.pageIndex)">
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="insertBlankQuick(menu.pageIndex)">
           插入空白頁（{{ (menu.aboveHalf !== shiftDown) ? '之前' : '之後' }}）
         </button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="insertFileQuick(menu.pageIndex)">
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="insertFileQuick(menu.pageIndex)">
           插入檔案（{{ (menu.aboveHalf !== shiftDown) ? '之前' : '之後' }}）
         </button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="rotatePlus90(menu.pageIndex)">
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="rotatePlus90(menu.pageIndex)">
           旋轉 {{ shiftDown ? '-90°' : '+90°' }}
         </button>
         <div class="border-t border-border my-1"></div>
         <button
-          class="w-full text-left px-3 py-2 hover:bg-hover flex items-center justify-between gap-4 whitespace-nowrap"
+          class="w-full text-left px-3 py-2 hover:bg-hover flex items-center justify-between gap-4 whitespace-nowrap overflow-hidden"
           @pointerenter="(ev: any) => { cancelExportClose(); const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); exportMenu.x = Math.round(r.right + 2); exportMenu.y = Math.round(r.top); exportMenu.open = true }"
           @pointerleave="() => scheduleExportClose(180)"
         >
-          <span>匯出</span>
-          <span class="opacity-60">▸</span>
+          <span class="overflow-hidden text-ellipsis">匯出</span>
+          <span class="opacity-60 flex-shrink-0">▸</span>
         </button>
       </div>
     </teleport>
@@ -1627,15 +1698,15 @@ defineExpose({
       <div
         v-if="exportMenu.open"
         data-export-submenu
-        class="fixed z-[2010] bg-card border border-border rounded shadow text-sm w-max"
+        class="fixed z-[2010] bg-card border border-border rounded shadow text-sm w-max max-w-[calc(100vw-24px)]"
         :style="{ left: exportMenu.x + 'px', top: exportMenu.y + 'px' }"
         @pointerenter="cancelExportClose"
         @pointerleave="() => scheduleExportClose(120)"
       >
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="exportPageAsImage(menu.pageIndex)">
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="exportPageAsImage(menu.pageIndex)">
           圖片…
         </button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="exportPageAsPdf(menu.pageIndex)">
+        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="exportPageAsPdf(menu.pageIndex)">
           PDF…
         </button>
       </div>
