@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { pdfGetPageText } from '@/modules/media/service'
+import { storeToRefs } from 'pinia'
+import { useMediaStore } from '@/modules/media/store'
 import type { PageTextContent, TextChar } from '@/modules/media/types'
 
 const props = defineProps<{
@@ -12,11 +13,18 @@ const props = defineProps<{
   pxPerPointY: number
   layerWidthPx: number
   layerHeightPx: number
+  highlightRanges?: Array<{ start: number; end: number; active?: boolean }>
 }>()
 
-const textContent = ref<PageTextContent | null>(null)
+const media = useMediaStore()
+const { pageText } = storeToRefs(media)
+const textContent = computed<PageTextContent | null>(() => {
+  const info = pageText.value[props.pageIndex]
+  return info ?? null
+})
 const loading = ref(false)
 const error = ref<string | null>(null)
+let fetchToken = 0
 
 const safeWidth = computed(() => {
   const w = props.layerWidthPx
@@ -35,16 +43,23 @@ watch(
 
     loading.value = true
     error.value = null
+    const token = ++fetchToken
 
     try {
-      textContent.value = await pdfGetPageText(props.docId, props.pageIndex)
-      console.log(`[PdfTextLayer] Loaded ${textContent.value.chars.length} chars for page ${props.pageIndex}`)
+      const result = await media.getPageTextContent(props.pageIndex)
+      if (token !== fetchToken) return
+      if (result) {
+        console.log(`[PdfTextLayer] Loaded ${result.chars.length} chars for page ${props.pageIndex}`)
+      } else {
+        error.value = '無法取得頁面文字'
+      }
     } catch (err) {
       console.error('[PdfTextLayer] Failed to load text:', err)
       error.value = err instanceof Error ? err.message : String(err)
-      textContent.value = null
     } finally {
-      loading.value = false
+      if (token === fetchToken) {
+        loading.value = false
+      }
     }
   },
   { immediate: true }
@@ -68,6 +83,35 @@ function getCharStyle(char: TextChar) {
 
   // Return as string to allow !important
   return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; cursor: text; pointer-events: auto !important;`
+}
+
+const highlightMap = computed<Record<number, 'active' | 'match'>>(() => {
+  const ranges = props.highlightRanges ?? []
+  const map: Record<number, 'active' | 'match'> = {}
+  const total = textContent.value?.chars.length ?? 0
+  if (!ranges.length || total <= 0) return map
+  const maxIndex = total - 1
+  for (const range of ranges) {
+    if (!range) continue
+    let start = Number.isFinite(range.start) ? Math.floor(range.start) : 0
+    let end = Number.isFinite(range.end) ? Math.floor(range.end) : start
+    if (start > end) [start, end] = [end, start]
+    start = Math.max(0, Math.min(start, maxIndex))
+    end = Math.max(0, Math.min(end, maxIndex))
+    const role: 'active' | 'match' = range.active ? 'active' : 'match'
+    for (let i = start; i <= end; i++) {
+      if (map[i] === 'active') continue
+      map[i] = role
+    }
+  }
+  return map
+})
+
+function getCharClass(idx: number) {
+  const role = highlightMap.value[idx]
+  if (role === 'active') return 'match-active'
+  if (role === 'match') return 'match-highlight'
+  return ''
 }
 </script>
 
@@ -106,7 +150,8 @@ function getCharStyle(char: TextChar) {
         v-for="(char, idx) in textContent.chars"
         :key="idx"
         :style="getCharStyle(char)"
-        class="text-char"
+        :class="['text-char', getCharClass(idx)]"
+        :data-char-index="idx"
       >{{ char.text }}</span>
     </div>
   </div>
@@ -130,5 +175,13 @@ function getCharStyle(char: TextChar) {
   -ms-user-select: text !important;
   cursor: text !important;
   pointer-events: auto !important;
+}
+
+.match-highlight {
+  background: rgba(255, 246, 0, 0.35) !important;
+}
+
+.match-active {
+  background: rgba(255, 184, 0, 0.55) !important;
 }
 </style>

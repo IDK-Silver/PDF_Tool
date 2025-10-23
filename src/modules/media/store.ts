@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
-import type { MediaDescriptor, PageRender } from './types'
-import { analyzeMedia, imageRead, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel, pdfSave } from './service'
+import type { MediaDescriptor, PageRender, PageTextContent } from './types'
+import { analyzeMedia, imageRead, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel, pdfSave, pdfGetPageText } from './service'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
@@ -28,6 +28,7 @@ export const useMediaStore = defineStore('media', () => {
   const docId = ref<number | null>(null)
   const dirty = ref(false)
   const pageSizesPt = ref<Record<number, { widthPt: number; heightPt: number }>>({})
+  const pageText = ref<Record<number, PageTextContent | null>>({})
   const inflightCount = ref(0)
   const queue = ref<Array<{ index: number; targetWidth?: number; dpi?: number; format: 'png'|'jpeg'|'webp'|'raw' }>>([])
   const settings = useSettingsStore()
@@ -133,6 +134,7 @@ export const useMediaStore = defineStore('media', () => {
     descriptor.value = null
     pdfFirstPage.value = null
     pdfPages.value = []
+    pageText.value = {}
     // 切換或重新載入文件時，未儲存變更不再有效（舊 session 會被關閉）
     dirty.value = false
     // 關閉上一份文件 session
@@ -439,6 +441,7 @@ export const useMediaStore = defineStore('media', () => {
     loading.value = false
     pdfPages.value = []
     pageSizesPt.value = {}
+    pageText.value = {}
     highResPages.clear()
   }
 
@@ -465,6 +468,30 @@ export const useMediaStore = defineStore('media', () => {
     return size.widthPt * (96 / 72)
   }
 
+  async function getPageTextContent(index: number): Promise<PageTextContent | null> {
+    const d = descriptor.value
+    if (!d || d.type !== 'pdf') return null
+    if (index < 0) return null
+    const cached = pageText.value[index]
+    if (cached) return cached
+    if (docId.value == null) return null
+    try {
+      const res = await pdfGetPageText(docId.value, index)
+      pageText.value = { ...pageText.value, [index]: res }
+      return res
+    } catch (_) {
+      return null
+    }
+  }
+
+  function getCachedPageText(index: number): PageTextContent | null {
+    return pageText.value[index] || null
+  }
+
+  function resetPageTextCache() {
+    pageText.value = {}
+  }
+
   return {
     // state
     selected,
@@ -477,6 +504,7 @@ export const useMediaStore = defineStore('media', () => {
     dirty,
     inflightCount,
     queue,
+    pageText,
     // getters
     imageUrl,
     imageObjectUrl,
@@ -499,6 +527,9 @@ export const useMediaStore = defineStore('media', () => {
     pageSizesPt,
     getPageSizePt,
     baseCssWidthAt100,
+    getPageTextContent,
+    getCachedPageText,
+    resetPageTextCache,
     markDirty,
     clearDirty,
   }

@@ -7,6 +7,7 @@ import { useFileListStore } from '@/modules/filelist/store'
 import { useExportSettings } from '@/modules/export/settings'
 import { useZoom } from '@/modules/media/useZoom'
 import PdfTextLayer from './PdfTextLayer.vue'
+import type { PageTextContent } from '@/modules/media/types'
 
 console.log('[PdfViewport] Component script setup executed')
 import {
@@ -29,6 +30,12 @@ const settings = useSettingsStore()
 const filelist = useFileListStore()
 const exportSettings = useExportSettings()
 
+type SearchMatch = {
+  pageIndex: number
+  startCharIndex: number
+  endCharIndex: number
+}
+
 const {
   viewMode,
   zoomTarget,
@@ -43,6 +50,17 @@ const {
   setFitMode
 } = useZoom()
 
+const searchVisible = ref(false)
+const searchTerm = ref('')
+const searchMatches = ref<SearchMatch[]>([])
+const searchActiveIndex = ref(-1)
+const searchBusy = ref(false)
+const searchError = ref<string | null>(null)
+const searchInputEl = ref<HTMLInputElement | null>(null)
+let searchDebounceTimer: number | null = null
+let activeSearchToken = 0
+const pageNormalizedCache = new Map<number, { normalized: string; map: number[]; source: PageTextContent }>()
+let pendingScrollAnimation = 0 as number | 0
 
 function getRenderFormat() {
   return settings.s.renderFormat
@@ -88,6 +106,32 @@ function dpiForActual() {
   const dpi = Math.max(24, Math.round(96 * (zoomTarget.value / 100)))
   const cap = Math.max(48, settings.s.actualModeDpiCap || dpi)
   return Math.min(dpi, cap)
+}
+
+function normalizeSearchString(value: string) {
+  return value.replace(/\s+/g, '').toLowerCase()
+}
+
+function buildNormalizedPageData(pageIndex: number, content: PageTextContent | null) {
+  if (!content) return { normalized: '', map: [] as number[] }
+  const cached = pageNormalizedCache.get(pageIndex)
+  if (cached && cached.source === content) return cached
+  const normalizedParts: string[] = []
+  const indexMap: number[] = []
+  for (let i = 0; i < content.chars.length; i++) {
+    const ch = content.chars[i]
+    if (!ch) continue
+    const raw = ch.text || ''
+    if (!raw) continue
+    for (const unit of Array.from(raw)) {
+      if (/\s/.test(unit)) continue
+      normalizedParts.push(unit.toLowerCase())
+      indexMap.push(i)
+    }
+  }
+  const data = { normalized: normalizedParts.join(''), map: indexMap, source: content }
+  pageNormalizedCache.set(pageIndex, data)
+  return data
 }
 
 /** 包裝 composable 的 zoomIn，加入重新渲染邏輯 */
@@ -222,11 +266,248 @@ watch(
   },
 )
 
+function clearSearchResults() {
+  searchMatches.value = []
+  searchActiveIndex.value = -1
+}
+
+function closeSearch() {
+  searchVisible.value = false
+  searchTerm.value = ''
+  searchError.value = null
+  clearSearchResults()
+}
+
+function openSearch() {
+  if (searchVisible.value) {
+    nextTick(() => {
+      const el = searchInputEl.value
+      if (el) {
+        el.focus()
+        el.select()
+      }
+    })
+    return
+  }
+  searchVisible.value = true
+  searchError.value = null
+  clearSearchResults()
+  nextTick(() => {
+    searchInputEl.value?.focus()
+    searchInputEl.value?.select()
+  })
+  scheduleSearch(true)
+}
+
+function scheduleSearch(immediate = false) {
+  if (!searchVisible.value) return
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
+  if (immediate) {
+    runSearch()
+    return
+  }
+  searchDebounceTimer = window.setTimeout(() => {
+    searchDebounceTimer = null
+    runSearch()
+  }, 220)
+}
+
+async function runSearch() {
+  const term = normalizeSearchString(searchTerm.value)
+  const token = ++activeSearchToken
+  if (!searchVisible.value) return
+  if (!term) {
+    clearSearchResults()
+    searchError.value = null
+    searchBusy.value = false
+    return
+  }
+  searchBusy.value = true
+  searchError.value = null
+  try {
+    const total = totalPages.value || 0
+    const matches: SearchMatch[] = []
+    for (let pageIndex = 0; pageIndex < total; pageIndex++) {
+      if (token !== activeSearchToken) return
+      const content = await media.getPageTextContent(pageIndex)
+      if (token !== activeSearchToken) return
+      const { normalized, map } = buildNormalizedPageData(pageIndex, content)
+      if (!normalized || !map.length) continue
+      let from = 0
+      while (true) {
+        const found = normalized.indexOf(term, from)
+        if (found === -1) break
+        const last = found + term.length - 1
+        const startChar = map[found]
+        const endChar = map[last]
+        if (typeof startChar === 'number' && typeof endChar === 'number') {
+          matches.push({
+            pageIndex,
+            startCharIndex: Math.min(startChar, endChar),
+            endCharIndex: Math.max(startChar, endChar),
+          })
+        }
+        from = found + 1
+      }
+    }
+    if (token !== activeSearchToken) return
+    searchMatches.value = matches
+    if (matches.length) {
+      searchError.value = null
+      await focusMatchByIndex(0)
+    } else {
+      searchError.value = '找不到結果'
+      searchActiveIndex.value = -1
+    }
+  } finally {
+    if (token === activeSearchToken) {
+      searchBusy.value = false
+    }
+  }
+}
+
+async function focusMatchByIndex(index: number) {
+  if (index < 0) return
+  const match = searchMatches.value[index]
+  if (!match) return
+  searchActiveIndex.value = index
+  await scrollToMatch(match)
+}
+
+function ensurePageElement(match: SearchMatch) {
+  const root = scrollRootEl.value
+  if (!root) return { root: null, pageEl: null, charEl: null }
+  const pageEl = root.querySelector(`[data-pdf-page="${match.pageIndex}"]`) as HTMLElement | null
+  const charEl = pageEl?.querySelector(`.text-char[data-char-index="${match.startCharIndex}"]`) as HTMLElement | null
+  return { root, pageEl, charEl }
+}
+
+async function scrollToMatch(match: SearchMatch) {
+  await gotoPage(match.pageIndex + 1)
+  await nextTick()
+  if (pendingScrollAnimation) {
+    cancelAnimationFrame(pendingScrollAnimation)
+    pendingScrollAnimation = 0 as any
+  }
+  pendingScrollAnimation = requestAnimationFrame(() => {
+    pendingScrollAnimation = 0 as any
+    const { root, pageEl, charEl } = ensurePageElement(match)
+    if (!root || !pageEl) return
+    if (!charEl) {
+      pageEl.scrollIntoView({ block: 'center' })
+      return
+    }
+    const rootRect = root.getBoundingClientRect()
+    const charRect = charEl.getBoundingClientRect()
+    const offsetTop = charRect.top - rootRect.top
+    const targetTop = root.scrollTop + offsetTop - root.clientHeight / 2 + charRect.height
+    root.scrollTo({ top: Math.max(0, targetTop) })
+  })
+}
+
+async function showNextMatch() {
+  if (!searchMatches.value.length) return
+  const next = (searchActiveIndex.value + 1) % searchMatches.value.length
+  await focusMatchByIndex(next)
+}
+
+async function showPrevMatch() {
+  if (!searchMatches.value.length) return
+  const total = searchMatches.value.length
+  const prev = (searchActiveIndex.value - 1 + total) % total
+  await focusMatchByIndex(prev)
+}
+
+function isEditableElement(el: EventTarget | null) {
+  if (!(el instanceof HTMLElement)) return false
+  const tag = el.tagName
+  const editable = el.isContentEditable
+  return editable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
+function onGlobalKeyDown(e: KeyboardEvent) {
+  const key = e.key?.toLowerCase()
+  if ((e.ctrlKey || e.metaKey) && key === 'f') {
+    e.preventDefault()
+    openSearch()
+    return
+  }
+  if (!searchVisible.value) return
+  if (key === 'escape') {
+    e.preventDefault()
+    closeSearch()
+    return
+  }
+  if (key === 'enter') {
+    if (isEditableElement(e.target) && e.target !== searchInputEl.value) return
+    e.preventDefault()
+    if (e.shiftKey) showPrevMatch()
+    else showNextMatch()
+  }
+}
+
+const pageHighlightMap = computed(() => {
+  const map = new Map<number, Array<{ start: number; end: number; active?: boolean }>>()
+  const matches = searchMatches.value
+  const active = searchActiveIndex.value
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i]
+    const list = map.get(match.pageIndex) || []
+    list.push({
+      start: match.startCharIndex,
+      end: match.endCharIndex,
+      active: i === active,
+    })
+    map.set(match.pageIndex, list)
+  }
+  return map
+})
+
+function getPageHighlightRanges(idx: number) {
+  return pageHighlightMap.value.get(idx) || []
+}
+
+const searchSummary = computed(() => {
+  if (!searchTerm.value.trim()) return ''
+  if (!searchMatches.value.length) return '0 / 0'
+  return `${searchActiveIndex.value + 1} / ${searchMatches.value.length}`
+})
+
 watch([() => media.descriptor?.path, currentPage], ([p, cp]) => {
   const d = media.descriptor
   if (!p || !d || d.type !== 'pdf') return
   if (typeof cp === 'number' && cp > 0) filelist.setLastPage(p, cp)
 })
+
+watch(searchTerm, () => {
+  if (!searchVisible.value) return
+  scheduleSearch()
+})
+
+watch(searchVisible, (visible) => {
+  if (!visible) {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer)
+      searchDebounceTimer = null
+    }
+    clearSearchResults()
+    searchBusy.value = false
+    searchError.value = null
+  } else {
+    scheduleSearch(true)
+  }
+})
+
+watch(
+  () => media.descriptor?.path,
+  () => {
+    pageNormalizedCache.clear()
+    closeSearch()
+  },
+)
 
 const menu = ref<{ open: boolean; x: number; y: number; pageIndex: number; aboveHalf: boolean }>({
   open: false,
@@ -802,6 +1083,7 @@ function scheduleProcess() {
 
 onMounted(async () => {
   console.log('[PdfViewport] Component mounted, descriptor:', media.descriptor?.path)
+  window.addEventListener('keydown', onGlobalKeyDown, { capture: true })
   
   // 首次掛載時，檢查是否需要跳轉到 lastPage
   const p = media.descriptor?.path
@@ -905,6 +1187,15 @@ onBeforeUnmount(() => {
   if (scrollEndTimer) clearTimeout(scrollEndTimer)
   if (hiResTimer) clearTimeout(hiResTimer)
   if (fitTimer) clearTimeout(fitTimer)
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
+  if (pendingScrollAnimation) {
+    cancelAnimationFrame(pendingScrollAnimation)
+    pendingScrollAnimation = 0 as any
+  }
+  window.removeEventListener('keydown', onGlobalKeyDown, { capture: true })
   scrollRootEl.value?.removeEventListener('scroll', onScroll)
   for (const obs of pageCardObservers.values()) {
     try { obs.disconnect() } catch {
@@ -1092,7 +1383,11 @@ function getPageTextLayerProps(idx: number) {
 
 function getPageTextLayerPropsList(idx: number) {
   const props = getPageTextLayerProps(idx)
-  return props ? [props] : []
+  if (!props) return []
+  return [{
+    ...props,
+    highlightRanges: getPageHighlightRanges(idx),
+  }]
 }
 
 defineExpose({
@@ -1180,6 +1475,51 @@ defineExpose({
         </div>
       </div>
     </div>
+    <teleport to="body">
+      <div
+        v-if="searchVisible"
+        class="fixed top-4 right-4 z-[2100] flex items-center gap-2 bg-card/95 backdrop-blur border border-border rounded-md shadow px-3 py-2 text-sm"
+        role="search"
+      >
+        <input
+          ref="searchInputEl"
+          v-model="searchTerm"
+          type="text"
+          placeholder="搜尋..."
+          class="px-2 py-1 rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary/60 bg-background text-foreground w-40"
+        />
+        <span class="text-xs text-muted-foreground min-w-[64px] text-center">
+          <template v-if="searchBusy">搜尋中…</template>
+          <template v-else-if="searchError">{{ searchError }}</template>
+          <template v-else>{{ searchSummary }}</template>
+        </span>
+        <div class="flex items-center gap-1">
+          <button
+            class="px-2 py-1 rounded border border-transparent hover:bg-hover disabled:opacity-40"
+            type="button"
+            :disabled="!searchMatches.length || searchBusy"
+            @click="showPrevMatch"
+          >
+            ↑
+          </button>
+          <button
+            class="px-2 py-1 rounded border border-transparent hover:bg-hover disabled:opacity-40"
+            type="button"
+            :disabled="!searchMatches.length || searchBusy"
+            @click="showNextMatch"
+          >
+            ↓
+          </button>
+        </div>
+        <button
+          class="px-2 py-1 rounded border border-transparent hover:bg-hover text-muted-foreground"
+          type="button"
+          @click="closeSearch"
+        >
+          ✕
+        </button>
+      </div>
+    </teleport>
     <teleport to="body">
       <div
         v-if="menu.open"
