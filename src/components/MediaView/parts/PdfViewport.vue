@@ -54,6 +54,8 @@ const searchVisible = ref(false)
 const searchTerm = ref('')
 const searchMatches = ref<SearchMatch[]>([])
 const searchActiveIndex = ref(-1)
+const searchPageMap = ref<Record<number, number[]>>({})
+const searchPageIndex = ref<Record<number, number>>({})
 const searchBusy = ref(false)
 const searchError = ref<string | null>(null)
 const searchInputEl = ref<HTMLInputElement | null>(null)
@@ -62,8 +64,8 @@ let activeSearchToken = 0
 const pageNormalizedCache = new Map<number, { normalized: string; map: number[]; source: PageTextContent }>()
 let pendingScrollAnimation = 0 as number | 0
 const searchAnchor = ref<{ top: number; left: number; width: number } | null>(null)
-const SEARCH_PANEL_MIN_WIDTH = 280
-const SEARCH_PANEL_MAX_WIDTH = 400
+const SEARCH_PANEL_MIN_WIDTH = 240
+const SEARCH_PANEL_MAX_WIDTH = 360
 const SEARCH_PANEL_MARGIN = 12
 
 function getRenderFormat() {
@@ -138,61 +140,31 @@ function buildNormalizedPageData(pageIndex: number, content: PageTextContent | n
   return data
 }
 
-function getSearchTriggerRect(): DOMRect | null {
-  const el = document.querySelector('[data-search-trigger]') as HTMLElement | null
-  if (!el) return null
-  return el.getBoundingClientRect()
-}
-
-function setSearchAnchor(rect?: DOMRect | null, force = false) {
-  let targetRect = rect ?? null
-  if (!targetRect) {
-    if (!force && searchAnchor.value) return
-    targetRect = getSearchTriggerRect()
-  }
-  if (!targetRect) {
+function setSearchAnchor(force = false) {
+  const rootRect = scrollRootEl.value?.getBoundingClientRect() ?? null
+  if (!rootRect) {
     if (force) searchAnchor.value = null
     return
   }
+  if (!force && searchAnchor.value) return
+
   const viewportWidth = window.innerWidth || 0
-  const viewportHeight = window.innerHeight || 0
-  
-  // 計算搜尋面板的適當寬度：在可用空間內調整
-  let panelWidth = SEARCH_PANEL_MIN_WIDTH
-  if (viewportWidth > 0) {
-    const availableWidth = viewportWidth - SEARCH_PANEL_MARGIN * 2
-    // 如果可用寬度小於最小寬度，就使用可用寬度（允許面板縮到更小）
-    if (availableWidth < SEARCH_PANEL_MIN_WIDTH) {
-      panelWidth = Math.max(200, availableWidth) // 絕對最小 200px
-    } else {
-      panelWidth = Math.min(SEARCH_PANEL_MAX_WIDTH, availableWidth)
-    }
+  const availableViewportWidth = viewportWidth > 0 ? viewportWidth - SEARCH_PANEL_MARGIN * 2 : SEARCH_PANEL_MAX_WIDTH
+  const availableRootWidth = Math.max(120, rootRect.width - SEARCH_PANEL_MARGIN * 2)
+  let panelWidth = Math.min(SEARCH_PANEL_MAX_WIDTH, Math.max(SEARCH_PANEL_MIN_WIDTH, Math.min(availableViewportWidth, availableRootWidth)))
+  const minWidth = Math.min(availableViewportWidth, availableRootWidth)
+  if (minWidth < SEARCH_PANEL_MIN_WIDTH) {
+    panelWidth = Math.max(200, minWidth)
   }
-  
-  const center = targetRect.left + targetRect.width / 2
-  let left = center - panelWidth / 2
-  
-  // 確保搜尋面板不超出視窗左右邊界
-  if (viewportWidth > 0) {
-    // 先確保不超出左邊
-    left = Math.max(SEARCH_PANEL_MARGIN, left)
-    // 再確保不超出右邊
-    const maxLeft = viewportWidth - SEARCH_PANEL_MARGIN - panelWidth
-    if (left > maxLeft) {
-      left = Math.max(SEARCH_PANEL_MARGIN, maxLeft)
-    }
-  }
-  
-  // 確保搜尋面板不超出底部
-  let top = targetRect.bottom + 8
-  const estimatedPanelHeight = 48 // 估計面板高度
-  if (viewportHeight > 0 && top + estimatedPanelHeight > viewportHeight - SEARCH_PANEL_MARGIN) {
-    // 若底部空間不足，改為顯示在觸發元素上方
-    top = targetRect.top - estimatedPanelHeight - 8
-  }
-  top = Math.max(SEARCH_PANEL_MARGIN, top)
-  
-  searchAnchor.value = { top, left, width: panelWidth }
+
+  const baseLeft = rootRect.left + SEARCH_PANEL_MARGIN
+  const maxLeftWithinRoot = rootRect.right - SEARCH_PANEL_MARGIN - panelWidth
+  let desiredLeft = baseLeft
+  desiredLeft = Math.max(baseLeft, desiredLeft)
+  desiredLeft = Math.min(desiredLeft, Math.max(baseLeft, maxLeftWithinRoot))
+
+  const top = rootRect.top + SEARCH_PANEL_MARGIN
+  searchAnchor.value = { top: Math.max(SEARCH_PANEL_MARGIN, top), left: desiredLeft, width: panelWidth }
 }
 
 const searchPanelStyle = computed(() => {
@@ -204,21 +176,21 @@ const searchPanelStyle = computed(() => {
       width: `${anchor.width}px`,
     }
   }
-  // 預設位置：右上角，動態寬度
+  const rootRect = scrollRootEl.value?.getBoundingClientRect() ?? null
   const viewportWidth = window.innerWidth || 0
-  let panelWidth = SEARCH_PANEL_MIN_WIDTH
-  if (viewportWidth > 0) {
-    const availableWidth = viewportWidth - SEARCH_PANEL_MARGIN * 2
-    // 如果可用寬度小於最小寬度，就使用可用寬度
-    if (availableWidth < SEARCH_PANEL_MIN_WIDTH) {
-      panelWidth = Math.max(200, availableWidth)
-    } else {
-      panelWidth = Math.min(SEARCH_PANEL_MAX_WIDTH, availableWidth)
-    }
+  const availableViewportWidth = viewportWidth > 0 ? viewportWidth - SEARCH_PANEL_MARGIN * 2 : SEARCH_PANEL_MAX_WIDTH
+  const availableRootWidth = rootRect ? Math.max(120, rootRect.width - SEARCH_PANEL_MARGIN * 2) : availableViewportWidth
+  let panelWidth = Math.min(SEARCH_PANEL_MAX_WIDTH, Math.max(SEARCH_PANEL_MIN_WIDTH, Math.min(availableViewportWidth, availableRootWidth)))
+  const minWidth = Math.min(availableViewportWidth, availableRootWidth)
+  if (minWidth < SEARCH_PANEL_MIN_WIDTH) {
+    panelWidth = Math.max(200, minWidth)
   }
+  const top = rootRect ? Math.max(SEARCH_PANEL_MARGIN, rootRect.top + SEARCH_PANEL_MARGIN) : 72
+  const fallbackLeft = viewportWidth > 0 ? viewportWidth - panelWidth - SEARCH_PANEL_MARGIN : SEARCH_PANEL_MARGIN
+  const left = rootRect ? Math.max(SEARCH_PANEL_MARGIN, rootRect.left + SEARCH_PANEL_MARGIN) : Math.max(SEARCH_PANEL_MARGIN, fallbackLeft)
   return {
-    top: '72px',
-    right: `${SEARCH_PANEL_MARGIN}px`,
+    top: `${top}px`,
+    left: `${left}px`,
     width: `${panelWidth}px`,
   }
 })
@@ -358,6 +330,8 @@ watch(
 function clearSearchResults() {
   searchMatches.value = []
   searchActiveIndex.value = -1
+  searchPageMap.value = {}
+  searchPageIndex.value = {}
 }
 
 function closeSearch() {
@@ -368,8 +342,8 @@ function closeSearch() {
   searchAnchor.value = null
 }
 
-function openSearch(anchorRect?: DOMRect | null) {
-  setSearchAnchor(anchorRect, true)
+function openSearch() {
+  setSearchAnchor(true)
   if (searchVisible.value) {
     nextTick(() => {
       const el = searchInputEl.value
@@ -390,11 +364,11 @@ function openSearch(anchorRect?: DOMRect | null) {
   scheduleSearch(true)
 }
 
-function toggleSearch(anchorRect?: DOMRect | null) {
+function toggleSearch() {
   if (searchVisible.value) {
     closeSearch()
   } else {
-    openSearch(anchorRect)
+    openSearch()
   }
 }
 
@@ -429,6 +403,7 @@ async function runSearch() {
   try {
     const total = totalPages.value || 0
     const matches: SearchMatch[] = []
+    const pageMap: Record<number, number[]> = {}
     for (let pageIndex = 0; pageIndex < total; pageIndex++) {
       if (token !== activeSearchToken) return
       const content = await media.getPageTextContent(pageIndex)
@@ -451,16 +426,37 @@ async function runSearch() {
         }
         from = found + 1
       }
+      if (matches.length) {
+        const indices: number[] = []
+        for (let i = 0; i < matches.length; i++) {
+          if (matches[i].pageIndex === pageIndex) indices.push(i)
+        }
+        if (indices.length) pageMap[pageIndex] = indices
+      }
     }
     if (token !== activeSearchToken) return
+    const prevActive = searchActiveIndex.value
     searchMatches.value = matches
-    if (matches.length) {
-      searchError.value = null
-      await focusMatchByIndex(0)
-    } else {
-      searchError.value = '找不到結果'
-      searchActiveIndex.value = -1
+    searchPageMap.value = pageMap
+    const initialPageIndices: Record<number, number> = {}
+    for (const key of Object.keys(pageMap)) {
+      const page = Number(key)
+      initialPageIndices[page] = 0
     }
+    let newActive = prevActive >= 0 && prevActive < matches.length ? prevActive : -1
+    const center = centerIndex.value
+    const centerMatches = pageMap[center] || []
+    if (centerMatches.length) {
+      if (centerMatches.includes(newActive)) {
+        initialPageIndices[center] = Math.max(0, centerMatches.indexOf(newActive))
+      } else {
+        newActive = centerMatches[0]
+        initialPageIndices[center] = 0
+      }
+    }
+    searchPageIndex.value = initialPageIndices
+    searchActiveIndex.value = newActive
+    searchError.value = null
   } finally {
     if (token === activeSearchToken) {
       searchBusy.value = false
@@ -473,6 +469,11 @@ async function focusMatchByIndex(index: number) {
   const match = searchMatches.value[index]
   if (!match) return
   searchActiveIndex.value = index
+  if (match.pageIndex in searchPageMap.value) {
+    const indices = searchPageMap.value[match.pageIndex]
+    const local = indices.indexOf(index)
+    if (local >= 0) searchPageIndex.value = { ...searchPageIndex.value, [match.pageIndex]: local }
+  }
   await scrollToMatch(match)
 }
 
@@ -509,14 +510,40 @@ async function scrollToMatch(match: SearchMatch) {
 
 async function showNextMatch() {
   if (!searchMatches.value.length) return
-  const next = (searchActiveIndex.value + 1) % searchMatches.value.length
+  let next = searchActiveIndex.value
+  if (next < 0) {
+    const perPage = searchPageMap.value[centerIndex.value] || []
+    if (perPage.length) {
+      const local = (searchPageIndex.value[centerIndex.value] ?? 0) + 1
+      const wrappedLocal = local % perPage.length
+      searchPageIndex.value = { ...searchPageIndex.value, [centerIndex.value]: wrappedLocal }
+      next = perPage[wrappedLocal]
+    } else {
+      next = 0
+    }
+  } else {
+    next = (next + 1) % searchMatches.value.length
+  }
   await focusMatchByIndex(next)
 }
 
 async function showPrevMatch() {
   if (!searchMatches.value.length) return
   const total = searchMatches.value.length
-  const prev = (searchActiveIndex.value - 1 + total) % total
+  let prev = searchActiveIndex.value
+  if (prev < 0) {
+    const perPage = searchPageMap.value[centerIndex.value] || []
+    if (perPage.length) {
+      const currentLocal = searchPageIndex.value[centerIndex.value] ?? 0
+      const wrappedLocal = (currentLocal - 1 + perPage.length) % perPage.length
+      searchPageIndex.value = { ...searchPageIndex.value, [centerIndex.value]: wrappedLocal }
+      prev = perPage[wrappedLocal]
+    } else {
+      prev = total - 1
+    }
+  } else {
+    prev = (prev - 1 + total) % total
+  }
   await focusMatchByIndex(prev)
 }
 
@@ -532,8 +559,7 @@ function onGlobalKeyDown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && key === 'f') {
     if (isEditableElement(e.target) && e.target !== searchInputEl.value) return
     e.preventDefault()
-    const anchor = getSearchTriggerRect()
-    toggleSearch(anchor)
+    toggleSearch()
     return
   }
   if (!searchVisible.value) return
@@ -552,7 +578,7 @@ function onGlobalKeyDown(e: KeyboardEvent) {
 
 function handleWindowResize() {
   if (!searchVisible.value) return
-  setSearchAnchor(undefined, true)
+  setSearchAnchor(true)
 }
 
 const pageHighlightMap = computed(() => {
@@ -577,9 +603,18 @@ function getPageHighlightRanges(idx: number) {
 }
 
 const searchSummary = computed(() => {
-  if (!searchTerm.value.trim()) return ''
-  if (!searchMatches.value.length) return '0 / 0'
-  return `${searchActiveIndex.value + 1} / ${searchMatches.value.length}`
+  const term = searchTerm.value.trim()
+  const total = searchMatches.value.length
+  if (!term || total <= 0) return '0 / 0'
+  if (searchActiveIndex.value >= 0) return `${searchActiveIndex.value + 1} / ${total}`
+  const center = centerIndex.value
+  const perPage = searchPageMap.value[center]
+  if (perPage && perPage.length) {
+    const localIdx = Math.max(0, Math.min(perPage.length - 1, searchPageIndex.value[center] ?? 0))
+    const globalIdx = perPage[localIdx]
+    if (typeof globalIdx === 'number') return `${globalIdx + 1} / ${total}`
+  }
+  return `0 / ${total}`
 })
 
 watch([() => media.descriptor?.path, currentPage], ([p, cp]) => {
@@ -604,7 +639,7 @@ watch(searchVisible, (visible) => {
     searchError.value = null
     searchAnchor.value = null
   } else {
-    setSearchAnchor(undefined, true)
+    setSearchAnchor(true)
     scheduleSearch(true)
   }
 })
@@ -1262,6 +1297,7 @@ onMounted(async () => {
           
           containerW.value = w
           scheduleUpdateFitPercent()
+          if (searchVisible.value) setSearchAnchor(true)
           
           nextTick(() => {
             requestAnimationFrame(() => {
@@ -1308,6 +1344,7 @@ onMounted(async () => {
         } else {
           containerW.value = w
           scheduleUpdateFitPercent()
+          if (searchVisible.value) setSearchAnchor(true)
         }
       }
     })

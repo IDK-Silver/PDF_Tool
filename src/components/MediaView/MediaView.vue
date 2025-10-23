@@ -37,8 +37,8 @@ type ViewportExpose = {
 
 type PdfViewportExposeExtended = ViewportExpose & {
   gotoPage: (page: number) => Promise<void>
-  toggleSearch: (anchorRect?: DOMRect | null) => void
-  openSearch: (anchorRect?: DOMRect | null) => void
+  toggleSearch: () => void
+  openSearch: () => void
   closeSearch: () => void
   searchVisible: Ref<boolean>
 }
@@ -224,12 +224,10 @@ async function onReveal() {
   }
 }
 
-function handleToggleSearch(ev: MouseEvent) {
+function handleToggleSearch() {
   const viewport = pdfViewportRef.value
   if (!viewport) return
-  const target = ev.currentTarget as HTMLElement | null
-  const rect = target?.getBoundingClientRect?.() ?? null
-  viewport.toggleSearch(rect)
+  viewport.toggleSearch()
 }
 </script>
 
