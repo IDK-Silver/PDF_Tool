@@ -61,6 +61,9 @@ let searchDebounceTimer: number | null = null
 let activeSearchToken = 0
 const pageNormalizedCache = new Map<number, { normalized: string; map: number[]; source: PageTextContent }>()
 let pendingScrollAnimation = 0 as number | 0
+const searchAnchor = ref<{ top: number; left: number } | null>(null)
+const SEARCH_PANEL_WIDTH = 240
+const SEARCH_PANEL_MARGIN = 12
 
 function getRenderFormat() {
   return settings.s.renderFormat
@@ -133,6 +136,49 @@ function buildNormalizedPageData(pageIndex: number, content: PageTextContent | n
   pageNormalizedCache.set(pageIndex, data)
   return data
 }
+
+function getSearchTriggerRect(): DOMRect | null {
+  const el = document.querySelector('[data-search-trigger]') as HTMLElement | null
+  if (!el) return null
+  return el.getBoundingClientRect()
+}
+
+function setSearchAnchor(rect?: DOMRect | null, force = false) {
+  let targetRect = rect ?? null
+  if (!targetRect) {
+    if (!force && searchAnchor.value) return
+    targetRect = getSearchTriggerRect()
+  }
+  if (!targetRect) {
+    if (force) searchAnchor.value = null
+    return
+  }
+  const viewportWidth = window.innerWidth || 0
+  const center = targetRect.left + targetRect.width / 2
+  let left = center - SEARCH_PANEL_WIDTH / 2
+  if (viewportWidth > 0) {
+    const maxLeft = viewportWidth - SEARCH_PANEL_MARGIN - SEARCH_PANEL_WIDTH
+    left = Math.min(Math.max(SEARCH_PANEL_MARGIN, left), Math.max(SEARCH_PANEL_MARGIN, maxLeft))
+  }
+  const top = Math.max(SEARCH_PANEL_MARGIN, targetRect.bottom + 8)
+  searchAnchor.value = { top, left }
+}
+
+const searchPanelStyle = computed(() => {
+  const anchor = searchAnchor.value
+  if (anchor) {
+    return {
+      top: `${anchor.top}px`,
+      left: `${anchor.left}px`,
+      width: `${SEARCH_PANEL_WIDTH}px`,
+    }
+  }
+  return {
+    top: '72px',
+    right: '24px',
+    width: `${SEARCH_PANEL_WIDTH}px`,
+  }
+})
 
 /** 包裝 composable 的 zoomIn，加入重新渲染邏輯 */
 function handleZoomIn() {
@@ -276,9 +322,11 @@ function closeSearch() {
   searchTerm.value = ''
   searchError.value = null
   clearSearchResults()
+  searchAnchor.value = null
 }
 
-function openSearch() {
+function openSearch(anchorRect?: DOMRect | null) {
+  setSearchAnchor(anchorRect, true)
   if (searchVisible.value) {
     nextTick(() => {
       const el = searchInputEl.value
@@ -297,6 +345,14 @@ function openSearch() {
     searchInputEl.value?.select()
   })
   scheduleSearch(true)
+}
+
+function toggleSearch(anchorRect?: DOMRect | null) {
+  if (searchVisible.value) {
+    closeSearch()
+  } else {
+    openSearch(anchorRect)
+  }
 }
 
 function scheduleSearch(immediate = false) {
@@ -431,8 +487,10 @@ function isEditableElement(el: EventTarget | null) {
 function onGlobalKeyDown(e: KeyboardEvent) {
   const key = e.key?.toLowerCase()
   if ((e.ctrlKey || e.metaKey) && key === 'f') {
+    if (isEditableElement(e.target) && e.target !== searchInputEl.value) return
     e.preventDefault()
-    openSearch()
+    const anchor = getSearchTriggerRect()
+    toggleSearch(anchor)
     return
   }
   if (!searchVisible.value) return
@@ -447,6 +505,11 @@ function onGlobalKeyDown(e: KeyboardEvent) {
     if (e.shiftKey) showPrevMatch()
     else showNextMatch()
   }
+}
+
+function handleWindowResize() {
+  if (!searchVisible.value) return
+  setSearchAnchor(undefined, true)
 }
 
 const pageHighlightMap = computed(() => {
@@ -496,7 +559,9 @@ watch(searchVisible, (visible) => {
     clearSearchResults()
     searchBusy.value = false
     searchError.value = null
+    searchAnchor.value = null
   } else {
+    setSearchAnchor(undefined, true)
     scheduleSearch(true)
   }
 })
@@ -1084,6 +1149,7 @@ function scheduleProcess() {
 onMounted(async () => {
   console.log('[PdfViewport] Component mounted, descriptor:', media.descriptor?.path)
   window.addEventListener('keydown', onGlobalKeyDown, { capture: true })
+  window.addEventListener('resize', handleWindowResize)
   
   // 首次掛載時，檢查是否需要跳轉到 lastPage
   const p = media.descriptor?.path
@@ -1196,6 +1262,7 @@ onBeforeUnmount(() => {
     pendingScrollAnimation = 0 as any
   }
   window.removeEventListener('keydown', onGlobalKeyDown, { capture: true })
+  window.removeEventListener('resize', handleWindowResize)
   scrollRootEl.value?.removeEventListener('scroll', onScroll)
   for (const obs of pageCardObservers.values()) {
     try { obs.disconnect() } catch {
@@ -1403,6 +1470,10 @@ defineExpose({
   zoomOut: handleZoomOut,
   // 讓外層可呼叫跳轉頁數
   gotoPage,
+  toggleSearch,
+  openSearch,
+  closeSearch,
+  searchVisible,
 })
 </script>
 
@@ -1478,15 +1549,16 @@ defineExpose({
     <teleport to="body">
       <div
         v-if="searchVisible"
-        class="fixed top-4 right-4 z-[2100] flex items-center gap-2 bg-card/95 backdrop-blur border border-border rounded-md shadow px-3 py-2 text-sm"
+        class="fixed z-[2100] flex items-center gap-2 bg-card/95 backdrop-blur border border-border rounded-md shadow px-3 py-2 text-sm"
         role="search"
+        :style="searchPanelStyle"
       >
         <input
           ref="searchInputEl"
           v-model="searchTerm"
           type="text"
           placeholder="搜尋..."
-          class="px-2 py-1 rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary/60 bg-background text-foreground w-40"
+          class="px-2 py-1 rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary/60 bg-background text-foreground flex-1 min-w-[140px]"
         />
         <span class="text-xs text-muted-foreground min-w-[64px] text-center">
           <template v-if="searchBusy">搜尋中…</template>

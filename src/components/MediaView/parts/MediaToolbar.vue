@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
 
 const props = defineProps({
@@ -15,12 +15,14 @@ const props = defineProps({
   isPdf: { type: Boolean, default: false },
   canZoomIn: { type: Boolean, default: true },
   canZoomOut: { type: Boolean, default: true },
+  searchActive: { type: Boolean, default: false },
 })
 
 const emit = defineEmits<{
   (e: 'save'): void
   (e: 'discard'): void
   (e: 'reveal'): void
+  (e: 'toggle-search', ev: MouseEvent): void
   (e: 'set-fit-mode'): void
   (e: 'reset-zoom'): void
   (e: 'zoom-in'): void
@@ -83,45 +85,42 @@ function cancelPageInput(el?: HTMLInputElement | null) {
       <div class="flex items-center gap-3">
         <!-- 展開側欄（僅在側欄收合時顯示） -->
         <button v-if="ui.sidebarCollapsed" @click="ui.setSidebarCollapsed(false)"
-          class="rounded w-8 h-8 flex items-center justify-center transition-colors hover:bg-hover"
-          title="展開側欄">
+          class="rounded w-8 h-8 flex items-center justify-center transition-colors hover:bg-hover" title="展開側欄">
           <ChevronDoubleRightIcon class="w-4 h-4" />
         </button>
-        <button
-          @click="shiftDown ? emit('discard') : emit('save')"
-          :disabled="props.saving || !props.canSave"
+        <button @click="shiftDown ? emit('discard') : emit('save')" :disabled="props.saving || !props.canSave"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"
           :class="props.canSave ? (shiftDown ? 'bg-red-500 text-white hover:bg-red-700' : 'bg-blue-400 text-white hover:bg-blue-700') : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
-          :title="shiftDown ? '捨棄變更' : '儲存'"
-        >
+          :title="shiftDown ? '捨棄變更' : '儲存'">
           <component :is="shiftDown ? XMarkIcon : ArchiveBoxIcon" class="w-4 h-4" />
+        </button>
+        <button v-if="props.isPdf" data-search-trigger @click="emit('toggle-search', $event)"
+          class="rounded w-8 h-8 flex items-center justify-center transition-colors"
+          :class="props.searchActive ? 'bg-blue-400 text-white hover:bg-blue-700' : 'hover:bg-hover text-[hsl(var(--foreground))]'"
+          title="搜尋 (Ctrl/Cmd + F)">
+          <MagnifyingGlassIcon class="w-4 h-4" />
         </button>
         <button @click="emit('reveal')" :disabled="!props.canReveal"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"
-          :class="props.canReveal ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
-          title="在檔案管理器顯示">
+          :class="props.canReveal ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'" title="在檔案管理器顯示">
           <FolderOpenIcon class="w-4 h-4" />
         </button>
+
       </div>
 
       <!-- 中間：頁碼導覽 -->
       <div class="flex items-center gap-3">
         <div class="flex items-center text-sm tabular-nums text-[hsl(var(--muted-foreground))]">
           <template v-if="props.isPdf && props.totalPages > 0">
-            <input
-              :value="pageText"
-              :size="Math.max(1, String(pageText || '').length)"
-              @input="(e:any)=> pageText = e.target.value"
+            <input :value="pageText" :size="Math.max(1, String(pageText || '').length)"
+              @input="(e: any) => pageText = e.target.value"
               @focus="pageFocused = true; ($event.target as HTMLInputElement).select()"
               @blur="pageFocused = false; commitPageInput()"
               @keydown.enter.prevent="commitPageInput(); ($event.target as HTMLInputElement).blur()"
-              @keydown.esc.prevent="cancelPageInput($event.target as HTMLInputElement)"
-              type="text"
-              inputmode="numeric"
+              @keydown.esc.prevent="cancelPageInput($event.target as HTMLInputElement)" type="text" inputmode="numeric"
               pattern="[0-9]*"
               class="text-center text-[hsl(var(--foreground))] bg-transparent border-0 px-0 focus:outline-none w-auto"
-              title="輸入頁碼後按 Enter 跳轉"
-            />
+              title="輸入頁碼後按 Enter 跳轉" />
             <span class="mx-1">/</span>
             <span>{{ props.totalPages }}</span>
           </template>

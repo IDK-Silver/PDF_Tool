@@ -32,9 +32,16 @@ type ViewportExpose = {
   resetZoom: () => void
   zoomIn: () => void
   zoomOut: () => void
+  searchVisible?: MaybeRef<boolean>
 }
 
-type PdfViewportExposeExtended = ViewportExpose & { gotoPage: (page: number) => Promise<void> }
+type PdfViewportExposeExtended = ViewportExpose & {
+  gotoPage: (page: number) => Promise<void>
+  toggleSearch: (anchorRect?: DOMRect | null) => void
+  openSearch: (anchorRect?: DOMRect | null) => void
+  closeSearch: () => void
+  searchVisible: Ref<boolean>
+}
 const pdfViewportRef = ref<PdfViewportExposeExtended | null>(null)
 const imageViewportRef = ref<InstanceType<typeof ImageViewport> | null>(null)
 
@@ -60,6 +67,7 @@ const currentPage = ref(0)
 const totalPages = ref(0)
 const canZoomIn = ref(true)
 const canZoomOut = ref(true)
+const searchActive = ref(false)
 
 // 當 filelist 已選擇且後端回報檔案不存在時，顯示預設佔位圖
 const isFileMissing = computed(() => {
@@ -87,6 +95,11 @@ watchEffect(() => {
   totalPages.value = unref(controls.totalPages)
   canZoomIn.value = unref(controls.canZoomIn)
   canZoomOut.value = unref(controls.canZoomOut)
+})
+
+watchEffect(() => {
+  const vp = pdfViewportRef.value
+  searchActive.value = !!(vp && unref(vp.searchVisible))
 })
 
 function handleSetFitMode() {
@@ -210,6 +223,14 @@ async function onReveal() {
     alert('無法在檔案管理器顯示該檔案')
   }
 }
+
+function handleToggleSearch(ev: MouseEvent) {
+  const viewport = pdfViewportRef.value
+  if (!viewport) return
+  const target = ev.currentTarget as HTMLElement | null
+  const rect = target?.getBoundingClientRect?.() ?? null
+  viewport.toggleSearch(rect)
+}
 </script>
 
 <template>
@@ -220,10 +241,28 @@ async function onReveal() {
       inflight: {{ media.inflightCount }} · queued: {{ media.queue.length }}
     </div>
 
-    <MediaToolbar :saving="saving" :can-save="media.dirty && isPdf" :can-reveal="canReveal" :current-page="currentPage"
-      :total-pages="totalPages" :view-mode="viewMode" :display-zoom="displayZoom" :is-pdf="isPdf"
-      :can-zoom-in="canZoomIn" :can-zoom-out="canZoomOut" @save="onSaveNow" @discard="onDiscardNow" @reveal="onReveal" @set-fit-mode="handleSetFitMode"
-      @reset-zoom="handleResetZoom" @zoom-in="handleZoomIn" @zoom-out="handleZoomOut" @jump-to-page="handleJumpToPage" />
+    <MediaToolbar
+      :saving="saving"
+      :can-save="media.dirty && isPdf"
+      :can-reveal="canReveal"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :view-mode="viewMode"
+      :display-zoom="displayZoom"
+      :is-pdf="isPdf"
+      :can-zoom-in="canZoomIn"
+      :can-zoom-out="canZoomOut"
+      :search-active="searchActive"
+      @save="onSaveNow"
+      @discard="onDiscardNow"
+      @reveal="onReveal"
+      @toggle-search="handleToggleSearch"
+      @set-fit-mode="handleSetFitMode"
+      @reset-zoom="handleResetZoom"
+      @zoom-in="handleZoomIn"
+      @zoom-out="handleZoomOut"
+      @jump-to-page="handleJumpToPage"
+    />
 
     <div class="flex-1 flex min-h-0">
       <div v-if="media.loading" class="p-4">讀取中…</div>
