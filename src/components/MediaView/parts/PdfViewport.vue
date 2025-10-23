@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
@@ -603,6 +603,35 @@ let rafScheduled = false
 const pendingIdx = new Set<number>()
 const containerW = ref(0)
 let hiResTimer: number | null = null
+const pageCardSizes = reactive(new Map<number, { width: number; height: number }>())
+const pageCardObservers = new Map<number, ResizeObserver>()
+
+function registerPageCard(idx: number, el: HTMLElement | null) {
+  const existing = pageCardObservers.get(idx)
+  if (existing) {
+    try { existing.disconnect() } catch (_) {}
+    pageCardObservers.delete(idx)
+  }
+  if (el) {
+    const width = el.clientWidth
+    const height = el.clientHeight
+    pageCardSizes.set(idx, { width, height })
+    if (typeof window !== 'undefined' && 'ResizeObserver' in window) {
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          pageCardSizes.set(idx, {
+            width: entry.contentRect.width,
+            height: entry.contentRect.height,
+          })
+        }
+      })
+      observer.observe(el)
+      pageCardObservers.set(idx, observer)
+    }
+  } else {
+    pageCardSizes.delete(idx)
+  }
+}
 
 const visibleStart = ref(0)
 const visibleEnd = ref(0)
@@ -836,6 +865,13 @@ onBeforeUnmount(() => {
   if (hiResTimer) clearTimeout(hiResTimer)
   if (fitTimer) clearTimeout(fitTimer)
   scrollRootEl.value?.removeEventListener('scroll', onScroll)
+  for (const obs of pageCardObservers.values()) {
+    try { obs.disconnect() } catch {
+      /* noop */
+    }
+  }
+  pageCardObservers.clear()
+  pageCardSizes.clear()
   try {
     resizeObs?.disconnect()
   } catch {
@@ -971,28 +1007,46 @@ function getPageTextLayerProps(idx: number) {
   if (!sizeInfo) return null
 
   const baseCssWidth = media.baseCssWidthAt100(idx) || sizeInfo.widthPt * (96 / 72)
+  const measured = pageCardSizes.get(idx)
 
-  let displayWidthPx = baseCssWidth
-  if (viewMode.value === 'fit') {
-    // Fit 模式：依據容器寬度換算實際顯示寬度（扣掉 px-6 padding）
-    const available = containerW.value ? Math.max(0, containerW.value - 48) : 0
-    if (available > 0) {
-      displayWidthPx = available
+  let displayWidthPx = measured?.width
+  let displayHeightPx = measured?.height
+
+  if (displayWidthPx == null || displayWidthPx <= 0) {
+    if (viewMode.value === 'fit') {
+      const available = containerW.value ? Math.max(0, containerW.value - 48) : 0
+      if (available > 0) {
+        displayWidthPx = available
+      } else {
+        displayWidthPx = baseCssWidth
+      }
+    } else {
+      const targetWidth = baseCssWidth * (zoomTarget.value / 100)
+      displayWidthPx = Math.max(50, Math.round(targetWidth))
     }
-  } else {
-    // Actual 模式：依據縮放百分比（基準已是 96 DPI）
-    const targetWidth = baseCssWidth * (zoomTarget.value / 100)
-    displayWidthPx = Math.max(50, Math.round(targetWidth))
   }
 
-  // point -> px 換算比例（保持與實際顯示寬度同步）
-  const pxPerPoint = displayWidthPx / Math.max(sizeInfo.widthPt, 0.001)
+  if (displayHeightPx == null || displayHeightPx <= 0) {
+    const aspect = sizeInfo.heightPt / Math.max(sizeInfo.widthPt, 0.001)
+    displayHeightPx = displayWidthPx * aspect
+  }
+
+  const pxPerPointX = displayWidthPx / Math.max(sizeInfo.widthPt, 0.001)
+  const pxPerPointY = displayHeightPx / Math.max(sizeInfo.heightPt, 0.001)
 
   return {
     pageWidthPt: sizeInfo.widthPt,
     pageHeightPt: sizeInfo.heightPt,
-    pxPerPoint,
+    pxPerPointX,
+    pxPerPointY,
+    layerWidthPx: displayWidthPx,
+    layerHeightPx: displayHeightPx,
   }
+}
+
+function getPageTextLayerPropsList(idx: number) {
+  const props = getPageTextLayerProps(idx)
+  return props ? [props] : []
 }
 
 defineExpose({
@@ -1035,6 +1089,7 @@ defineExpose({
             <div
               :class="['bg-card rounded-md shadow border border-border relative inline-block', viewMode === 'fit' ? 'overflow-hidden w-full' : 'overflow-visible']"
               :style="pageCardStyle(idx)"
+              :ref="(el) => registerPageCard(idx, el as HTMLElement | null)"
             >
               <img
                 v-if="getPageDisplayUrl(idx)"
@@ -1064,14 +1119,15 @@ defineExpose({
               <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
 
               <!-- Text selection layer -->
-              <PdfTextLayer
-                v-if="docId != null && getPageTextLayerProps(idx)"
-                :doc-id="docId"
-                :page-index="idx"
-                :page-width-pt="getPageTextLayerProps(idx)!.pageWidthPt"
-                :page-height-pt="getPageTextLayerProps(idx)!.pageHeightPt"
-                :px-per-point="getPageTextLayerProps(idx)!.pxPerPoint"
-              />
+              <template v-if="docId != null">
+                <PdfTextLayer
+                  v-for="layerProps in getPageTextLayerPropsList(idx)"
+                  :key="`text-layer-${idx}`"
+                  :doc-id="docId"
+                  :page-index="idx"
+                  v-bind="layerProps"
+                />
+              </template>
             </div>
             <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
           </div>

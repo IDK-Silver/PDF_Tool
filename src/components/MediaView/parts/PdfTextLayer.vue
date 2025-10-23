@@ -8,15 +8,24 @@ const props = defineProps<{
   pageIndex: number
   pageWidthPt: number
   pageHeightPt: number
-  pxPerPoint: number
+  pxPerPointX: number
+  pxPerPointY: number
+  layerWidthPx: number
+  layerHeightPx: number
 }>()
 
 const textContent = ref<PageTextContent | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-const layerWidthPx = computed(() => props.pageWidthPt * props.pxPerPoint)
-const layerHeightPx = computed(() => props.pageHeightPt * props.pxPerPoint)
+const safeWidth = computed(() => {
+  const w = props.layerWidthPx
+  return Number.isFinite(w) && w > 0 ? w : props.pageWidthPt * Math.max(props.pxPerPointX, 0.001)
+})
+const safeHeight = computed(() => {
+  const h = props.layerHeightPx
+  return Number.isFinite(h) && h > 0 ? h : props.pageHeightPt * Math.max(props.pxPerPointY, 0.001)
+})
 
 // Load text when docId or pageIndex changes
 watch(
@@ -43,14 +52,19 @@ watch(
 
 // Convert PDF coordinates to display coordinates
 function getCharStyle(char: TextChar) {
-  const pxScale = props.pxPerPoint
+  const scaleX = Number.isFinite(props.pxPerPointX) && props.pxPerPointX > 0
+    ? props.pxPerPointX
+    : safeWidth.value / Math.max(props.pageWidthPt, 0.001)
+  const scaleY = Number.isFinite(props.pxPerPointY) && props.pxPerPointY > 0
+    ? props.pxPerPointY
+    : safeHeight.value / Math.max(props.pageHeightPt, 0.001)
 
   // PDF 座標是從左下角開始，需要轉換為從左上角開始
-  const left = char.x * pxScale
-  const width = char.width * pxScale
-  const height = char.height * pxScale
-  const top = (props.pageHeightPt - char.y - char.height) * pxScale
-  const fontSize = char.fontSize * pxScale
+  const left = char.x * scaleX
+  const width = Math.max(0, char.width * scaleX)
+  const height = Math.max(0, char.height * scaleY)
+  const top = (props.pageHeightPt - char.y - char.height) * scaleY
+  const fontSize = Math.max(0, char.fontSize * scaleY)
 
   // Return as string to allow !important
   return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; cursor: text; pointer-events: auto !important;`
@@ -64,8 +78,8 @@ function getCharStyle(char: TextChar) {
       position: 'absolute',
       left: 0,
       top: 0,
-      width: `${layerWidthPx}px`,
-      height: `${layerHeightPx}px`,
+      width: `${safeWidth}px`,
+      height: `${safeHeight}px`,
       userSelect: 'text',
       WebkitUserSelect: 'text',
       overflow: 'hidden',
