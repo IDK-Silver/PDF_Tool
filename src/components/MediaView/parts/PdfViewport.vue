@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
@@ -603,8 +603,53 @@ let rafScheduled = false
 const pendingIdx = new Set<number>()
 const containerW = ref(0)
 let hiResTimer: number | null = null
-const pageCardSizes = reactive(new Map<number, { width: number; height: number }>())
+const pageCardSizes = ref<Record<number, { width: number; height: number }>>({})
+const pendingCardSizeUpdates = new Map<number, { width: number; height: number }>()
+let sizeFlushRaf: number | null = null
 const pageCardObservers = new Map<number, ResizeObserver>()
+
+function scheduleSizeFlush() {
+  if (sizeFlushRaf != null) return
+  if (typeof window === 'undefined' || !('requestAnimationFrame' in window)) {
+    flushPendingSizes()
+    return
+  }
+  sizeFlushRaf = window.requestAnimationFrame(() => {
+    sizeFlushRaf = null
+    flushPendingSizes()
+  })
+}
+
+function flushPendingSizes() {
+  if (!pendingCardSizeUpdates.size) return
+  const next = { ...pageCardSizes.value }
+  let changed = false
+  for (const [idx, size] of pendingCardSizeUpdates) {
+    const prev = next[idx]
+    if (!prev || prev.width !== size.width || prev.height !== size.height) {
+      next[idx] = size
+      changed = true
+    }
+  }
+  pendingCardSizeUpdates.clear()
+  if (changed) pageCardSizes.value = next
+}
+
+function queuePageCardSize(idx: number, width: number, height: number) {
+  const roundedWidth = Math.round(width * 100) / 100
+  const roundedHeight = Math.round(height * 100) / 100
+  const prev = pendingCardSizeUpdates.get(idx)
+  if (prev && prev.width === roundedWidth && prev.height === roundedHeight) return
+  pendingCardSizeUpdates.set(idx, { width: roundedWidth, height: roundedHeight })
+  scheduleSizeFlush()
+}
+
+function deletePageCardSize(idx: number) {
+  if (!(idx in pageCardSizes.value)) return
+  const next = { ...pageCardSizes.value }
+  delete next[idx]
+  pageCardSizes.value = next
+}
 
 function registerPageCard(idx: number, el: HTMLElement | null) {
   const existing = pageCardObservers.get(idx)
@@ -613,23 +658,19 @@ function registerPageCard(idx: number, el: HTMLElement | null) {
     pageCardObservers.delete(idx)
   }
   if (el) {
-    const width = el.clientWidth
-    const height = el.clientHeight
-    pageCardSizes.set(idx, { width, height })
+    queuePageCardSize(idx, el.clientWidth, el.clientHeight)
     if (typeof window !== 'undefined' && 'ResizeObserver' in window) {
       const observer = new ResizeObserver((entries) => {
         for (const entry of entries) {
-          pageCardSizes.set(idx, {
-            width: entry.contentRect.width,
-            height: entry.contentRect.height,
-          })
+          const { width, height } = entry.contentRect
+          queuePageCardSize(idx, width, height)
         }
       })
       observer.observe(el)
       pageCardObservers.set(idx, observer)
     }
   } else {
-    pageCardSizes.delete(idx)
+    deletePageCardSize(idx)
   }
 }
 
@@ -871,7 +912,12 @@ onBeforeUnmount(() => {
     }
   }
   pageCardObservers.clear()
-  pageCardSizes.clear()
+  pageCardSizes.value = {}
+  pendingCardSizeUpdates.clear()
+  if (sizeFlushRaf != null && typeof window !== 'undefined' && 'cancelAnimationFrame' in window) {
+    window.cancelAnimationFrame(sizeFlushRaf)
+    sizeFlushRaf = null
+  }
   try {
     resizeObs?.disconnect()
   } catch {
@@ -1007,7 +1053,7 @@ function getPageTextLayerProps(idx: number) {
   if (!sizeInfo) return null
 
   const baseCssWidth = media.baseCssWidthAt100(idx) || sizeInfo.widthPt * (96 / 72)
-  const measured = pageCardSizes.get(idx)
+  const measured = pageCardSizes.value[idx]
 
   let displayWidthPx = measured?.width
   let displayHeightPx = measured?.height
