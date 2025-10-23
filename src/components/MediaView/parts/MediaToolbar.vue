@@ -76,6 +76,14 @@ function cancelPageInput(el?: HTMLInputElement | null) {
   syncPageText()
   if (el) el.blur()
 }
+
+function handlePageMouseDown(e: MouseEvent) {
+  const el = e.currentTarget as HTMLInputElement | null
+  if (!el) return
+  e.preventDefault()
+  el.focus()
+  el.select()
+}
 </script>
 
 <template>
@@ -115,6 +123,7 @@ function cancelPageInput(el?: HTMLInputElement | null) {
             <input :value="pageText" :size="Math.max(1, String(pageText || '').length)"
               @input="(e: any) => pageText = e.target.value"
               @focus="pageFocused = true; ($event.target as HTMLInputElement).select()"
+              @mousedown.prevent="handlePageMouseDown"
               @blur="pageFocused = false; commitPageInput()"
               @keydown.enter.prevent="commitPageInput(); ($event.target as HTMLInputElement).blur()"
               @keydown.esc.prevent="cancelPageInput($event.target as HTMLInputElement)" type="text" inputmode="numeric"
