@@ -10,16 +10,18 @@ app.use(router)
 app.mount('#app')
 
 // Desktop-app feel: disable context menu and unwanted selections globally,
-// while preserving text selection inside form fields or elements marked .selectable
+// while preserving text selection inside form fields, elements marked .selectable, or PDF text layers
 function allowTextSelection(el: Element | null): boolean {
   let node: Element | null = el
   let depth = 0
-  while (node && depth < 6) {
+  while (node && depth < 10) {
     const he = node as HTMLElement
     const tag = he.tagName
     if (he.isContentEditable) return true
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
     if (he.classList && he.classList.contains('selectable')) return true
+    // Allow text selection in PDF text layer
+    if (he.classList && he.classList.contains('pdf-text-layer')) return true
     node = he.parentElement
     depth++
   }

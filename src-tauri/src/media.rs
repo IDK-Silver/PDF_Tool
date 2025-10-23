@@ -1122,6 +1122,11 @@ enum PdfRequest {
         dest_path: String,
         reply: mpsc::Sender<Result<String, MediaError>>,
     },
+    GetPageText {
+        doc_id: u64,
+        page_index: u32,
+        reply: mpsc::Sender<Result<PageTextContent, MediaError>>,
+    },
 }
 
 pub fn init_pdf_worker() {
@@ -1656,6 +1661,63 @@ pub fn init_pdf_worker() {
                     })();
                     let _ = reply.send(res);
                 }
+                Ok(PdfRequest::GetPageText {
+                    doc_id,
+                    page_index,
+                    reply,
+                }) => {
+                    let res = (|| -> Result<PageTextContent, MediaError> {
+                        let doc = docs.get(&doc_id).ok_or_else(|| {
+                            MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
+                        })?;
+                        let idx_u16: u16 = page_index.try_into().map_err(|_| {
+                            MediaError::new("invalid_input", format!("頁索引過大: {}", page_index))
+                        })?;
+                        let page = doc.pages().get(idx_u16).map_err(|_| {
+                            MediaError::new("not_found", format!("頁索引不存在: {}", page_index))
+                        })?;
+
+                        let width_pt = page.width().value as f32;
+                        let height_pt = page.height().value as f32;
+
+                        // Extract text with character positions
+                        let text_page = page.text().map_err(|e| {
+                            MediaError::new("parse_error", format!("無法提取文字: {e}"))
+                        })?;
+
+                        let mut chars = Vec::new();
+                        let char_count = text_page.chars().len();
+
+                        for i in 0..char_count {
+                            if let Ok(text_char) = text_page.chars().get(i) {
+                                if let Some(text_ch) = text_char.unicode_char() {
+                                    // Get character bounds in PDF coordinates (points)
+                                    if let Ok(bounds) = text_char.loose_bounds() {
+                                        // Use character height as approximate font size
+                                        let font_size = bounds.height().value as f32;
+
+                                        chars.push(TextChar {
+                                            text: text_ch.to_string(),
+                                            x: bounds.left().value as f32,
+                                            y: bounds.bottom().value as f32,
+                                            width: bounds.width().value as f32,
+                                            height: bounds.height().value as f32,
+                                            font_size,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        Ok(PageTextContent {
+                            page_index,
+                            chars,
+                            width_pt,
+                            height_pt,
+                        })
+                    })();
+                    let _ = reply.send(res);
+                }
                 Err(_) => break,
             }
         }
@@ -1704,6 +1766,27 @@ pub struct PdfPageSize {
     pub height_pt: f32,
 }
 
+// Text selection structures
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TextChar {
+    pub text: String,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub font_size: f32,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageTextContent {
+    pub page_index: u32,
+    pub chars: Vec<TextChar>,
+    pub width_pt: f32,
+    pub height_pt: f32,
+}
+
 #[tauri::command]
 pub fn pdf_open(path: String) -> Result<PdfOpenResult, MediaError> {
     let (rtx, rrx) = mpsc::channel();
@@ -1741,6 +1824,24 @@ pub fn pdf_page_size(doc_id: u64, page_index: u32) -> Result<PdfPageSize, MediaE
         .as_ref()
         .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
         .send(PdfRequest::Size {
+            doc_id,
+            page_index,
+            reply: rtx,
+        })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    rrx.recv()
+        .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+}
+
+#[tauri::command]
+pub fn pdf_get_page_text(doc_id: u64, page_index: u32) -> Result<PageTextContent, MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    WORKER_TX
+        .lock()
+        .unwrap()
+        .as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::GetPageText {
             doc_id,
             page_index,
             reply: rtx,

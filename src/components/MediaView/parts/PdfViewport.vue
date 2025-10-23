@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useExportSettings } from '@/modules/export/settings'
 import { useZoom } from '@/modules/media/useZoom'
+import PdfTextLayer from './PdfTextLayer.vue'
 
 console.log('[PdfViewport] Component script setup executed')
 import {
@@ -78,6 +79,7 @@ function drawRawInto(el: HTMLCanvasElement | null, idx: number) {
 }
 
 const totalPages = computed(() => media.descriptor?.pages ?? 0)
+const docId = computed(() => media.docId)
 
 function dprForMode() {
   return viewMode.value === 'fit' ? Math.min(window.devicePixelRatio || 1, settings.s.dprCap) : 1
@@ -963,6 +965,35 @@ function pageCardStyle(idx: number) {
   return baseStyle
 }
 
+// Get page dimensions and scale for text layer
+function getPageTextLayerProps(idx: number) {
+  const sizeInfo = media.pageSizesPt[idx]
+  if (!sizeInfo) return null
+
+  // Calculate display scale based on view mode
+  let displayScale = 1
+  if (viewMode.value === 'fit') {
+    // In fit mode, calculate scale from container width
+    // Need to account for px-6 padding (24px on each side = 48px total)
+    const baseCssWidth = media.baseCssWidthAt100(idx)
+    if (baseCssWidth && containerW.value) {
+      const effectiveWidth = containerW.value - 48 // Subtract px-6 padding (1.5rem * 2 = 48px)
+      displayScale = effectiveWidth / baseCssWidth
+    }
+  } else {
+    // In actual mode, scale is based on zoom target
+    // baseCssWidthAt100 already converts pt to CSS pixels at 96 DPI
+    // zoomTarget is percentage (100 = 100%)
+    displayScale = zoomTarget.value / 100
+  }
+
+  return {
+    pageWidthPt: sizeInfo.widthPt,
+    pageHeightPt: sizeInfo.heightPt,
+    displayScale,
+  }
+}
+
 defineExpose({
   viewMode,
   displayZoom,
@@ -1013,6 +1044,7 @@ defineExpose({
                   'disable-live-text',
                 ]"
                 :style="imgStyle(idx)"
+                style="pointer-events: none;"
                 decoding="async"
                 loading="lazy"
                 draggable="false"
@@ -1024,10 +1056,21 @@ defineExpose({
                   'disable-live-text',
                 ]"
                 :style="imgStyle(idx)"
+                style="pointer-events: none;"
                 :data-raw-page="idx"
                 :ref="(el: any) => drawRawInto(el as HTMLCanvasElement | null, idx)"
               />
               <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
+
+              <!-- Text selection layer -->
+              <PdfTextLayer
+                v-if="docId != null && getPageTextLayerProps(idx)"
+                :doc-id="docId"
+                :page-index="idx"
+                :page-width-pt="getPageTextLayerProps(idx)!.pageWidthPt"
+                :page-height-pt="getPageTextLayerProps(idx)!.pageHeightPt"
+                :display-scale="getPageTextLayerProps(idx)!.displayScale"
+              />
             </div>
             <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
           </div>

@@ -66,9 +66,9 @@
         -webkit-touch-callout: none;
         -webkit-tap-highlight-color: transparent;
     }
-    input, textarea, select, button, [contenteditable="true"], .selectable {
-        -webkit-user-select: text;
-        user-select: text;
+    input, textarea, select, button, [contenteditable="true"], .selectable, .pdf-text-layer, .pdf-text-layer * {
+        -webkit-user-select: text !important;
+        user-select: text !important;
     }
     img, svg {
         -webkit-user-drag: none;

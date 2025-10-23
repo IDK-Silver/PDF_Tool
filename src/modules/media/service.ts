@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { MediaDescriptor, PageRender, PageRenderBytesRaw, PdfOpenResult } from './types'
-import type { PdfPageSize } from './types'
+import type { PdfPageSize, PageTextContent } from './types'
 
 export async function analyzeMedia(path: string): Promise<MediaDescriptor> {
   const res = await invoke<MediaDescriptor>('analyze_media', { path })
@@ -83,6 +83,10 @@ export async function pdfClose(docId: number): Promise<void> {
 
 export async function pdfPageSize(docId: number, pageIndex: number): Promise<PdfPageSize> {
   return invoke<PdfPageSize>('pdf_page_size', { docId, pageIndex })
+}
+
+export async function pdfGetPageText(docId: number, pageIndex: number): Promise<PageTextContent> {
+  return invoke<PageTextContent>('pdf_get_page_text', { docId, pageIndex })
 }
 
 export async function pdfRenderCancel(docId: number, pageIndex: number, minGen: number): Promise<void> {

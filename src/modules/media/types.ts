@@ -46,3 +46,20 @@ export interface PdfPageSize {
   widthPt: number
   heightPt: number
 }
+
+// Text selection types
+export interface TextChar {
+  text: string
+  x: number
+  y: number
+  width: number
+  height: number
+  fontSize: number
+}
+
+export interface PageTextContent {
+  pageIndex: number
+  chars: TextChar[]
+  widthPt: number
+  heightPt: number
+}
