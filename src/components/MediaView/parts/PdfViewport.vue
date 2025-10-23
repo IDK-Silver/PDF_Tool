@@ -970,27 +970,28 @@ function getPageTextLayerProps(idx: number) {
   const sizeInfo = media.pageSizesPt[idx]
   if (!sizeInfo) return null
 
-  // Calculate display scale based on view mode
-  let displayScale = 1
+  const baseCssWidth = media.baseCssWidthAt100(idx) || sizeInfo.widthPt * (96 / 72)
+
+  let displayWidthPx = baseCssWidth
   if (viewMode.value === 'fit') {
-    // In fit mode, calculate scale from container width
-    // Need to account for px-6 padding (24px on each side = 48px total)
-    const baseCssWidth = media.baseCssWidthAt100(idx)
-    if (baseCssWidth && containerW.value) {
-      const effectiveWidth = containerW.value - 48 // Subtract px-6 padding (1.5rem * 2 = 48px)
-      displayScale = effectiveWidth / baseCssWidth
+    // Fit 模式：依據容器寬度換算實際顯示寬度（扣掉 px-6 padding）
+    const available = containerW.value ? Math.max(0, containerW.value - 48) : 0
+    if (available > 0) {
+      displayWidthPx = available
     }
   } else {
-    // In actual mode, scale is based on zoom target
-    // baseCssWidthAt100 already converts pt to CSS pixels at 96 DPI
-    // zoomTarget is percentage (100 = 100%)
-    displayScale = zoomTarget.value / 100
+    // Actual 模式：依據縮放百分比（基準已是 96 DPI）
+    const targetWidth = baseCssWidth * (zoomTarget.value / 100)
+    displayWidthPx = Math.max(50, Math.round(targetWidth))
   }
+
+  // point -> px 換算比例（保持與實際顯示寬度同步）
+  const pxPerPoint = displayWidthPx / Math.max(sizeInfo.widthPt, 0.001)
 
   return {
     pageWidthPt: sizeInfo.widthPt,
     pageHeightPt: sizeInfo.heightPt,
-    displayScale,
+    pxPerPoint,
   }
 }
 
@@ -1069,7 +1070,7 @@ defineExpose({
                 :page-index="idx"
                 :page-width-pt="getPageTextLayerProps(idx)!.pageWidthPt"
                 :page-height-pt="getPageTextLayerProps(idx)!.pageHeightPt"
-                :display-scale="getPageTextLayerProps(idx)!.displayScale"
+                :px-per-point="getPageTextLayerProps(idx)!.pxPerPoint"
               />
             </div>
             <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>

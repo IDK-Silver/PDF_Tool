@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { pdfGetPageText } from '@/modules/media/service'
 import type { PageTextContent, TextChar } from '@/modules/media/types'
 
@@ -8,12 +8,15 @@ const props = defineProps<{
   pageIndex: number
   pageWidthPt: number
   pageHeightPt: number
-  displayScale: number
+  pxPerPoint: number
 }>()
 
 const textContent = ref<PageTextContent | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+const layerWidthPx = computed(() => props.pageWidthPt * props.pxPerPoint)
+const layerHeightPx = computed(() => props.pageHeightPt * props.pxPerPoint)
 
 // Load text when docId or pageIndex changes
 watch(
@@ -40,16 +43,17 @@ watch(
 
 // Convert PDF coordinates to display coordinates
 function getCharStyle(char: TextChar) {
-  const scale = props.displayScale
+  const pxScale = props.pxPerPoint
 
   // PDF 座標是從左下角開始，需要轉換為從左上角開始
-  const left = char.x * scale
-  const top = (props.pageHeightPt - char.y - char.height) * scale
-  const width = char.width * scale
-  const height = char.height * scale
+  const left = char.x * pxScale
+  const width = char.width * pxScale
+  const height = char.height * pxScale
+  const top = (props.pageHeightPt - char.y - char.height) * pxScale
+  const fontSize = char.fontSize * pxScale
 
   // Return as string to allow !important
-  return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${char.fontSize * scale}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; cursor: text; pointer-events: auto !important;`
+  return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; cursor: text; pointer-events: auto !important;`
 }
 </script>
 
@@ -60,8 +64,8 @@ function getCharStyle(char: TextChar) {
       position: 'absolute',
       left: 0,
       top: 0,
-      width: `${pageWidthPt * displayScale}px`,
-      height: `${pageHeightPt * displayScale}px`,
+      width: `${layerWidthPx}px`,
+      height: `${layerHeightPx}px`,
       userSelect: 'text',
       WebkitUserSelect: 'text',
       overflow: 'hidden',
