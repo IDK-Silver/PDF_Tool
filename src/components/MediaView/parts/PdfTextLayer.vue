@@ -82,7 +82,7 @@ function getCharStyle(char: TextChar) {
   const fontSize = Math.max(0, char.fontSize * scaleY)
 
   // Return as string to allow !important
-  return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; cursor: text; pointer-events: auto !important;`
+  return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; -webkit-text-fill-color: transparent; background: transparent cursor: text; pointer-events: auto !important;`
 }
 
 const highlightMap = computed<Record<number, 'active' | 'match'>>(() => {
