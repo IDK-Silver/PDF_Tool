@@ -82,7 +82,7 @@ function getCharStyle(char: TextChar) {
   const fontSize = Math.max(0, char.fontSize * scaleY)
 
   // Return as string to allow !important
-  return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; -webkit-text-fill-color: transparent; background: transparent cursor: text; pointer-events: auto !important;`
+  return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; -webkit-text-fill-color: transparent; background: transparent; cursor: text; pointer-events: auto !important;`
 }
 
 const highlightMap = computed<Record<number, 'active' | 'match'>>(() => {
@@ -175,6 +175,17 @@ function getCharClass(idx: number) {
   -ms-user-select: text !important;
   cursor: text !important;
   pointer-events: auto !important;
+}
+
+.pdf-text-layer span::selection {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background: rgba(0, 120, 215, 0.3) !important;
+}
+
+.pdf-text-layer span::-moz-selection {
+  color: transparent !important;
+  background: rgba(0, 120, 215, 0.3) !important;
 }
 
 .match-highlight {
