@@ -75,11 +75,13 @@ function getCharStyle(char: TextChar) {
     : safeHeight.value / Math.max(props.pageHeightPt, 0.001)
 
   // PDF 座標是從左下角開始，需要轉換為從左上角開始
-  const left = char.x * scaleX
-  const width = Math.max(0, char.width * scaleX)
-  const height = Math.max(0, char.height * scaleY)
-  const top = (props.pageHeightPt - char.y - char.height) * scaleY
-  const fontSize = Math.max(0, char.fontSize * scaleY)
+  // 使用更高精度來減少累積誤差
+  // Note: char.x already includes global offset from backend
+  const left = Math.round(char.x * scaleX * 100) / 100
+  const width = Math.max(0, Math.round(char.width * scaleX * 100) / 100)
+  const height = Math.max(0, Math.round(char.height * scaleY * 100) / 100)
+  const top = Math.round((props.pageHeightPt - char.y - char.height) * scaleY * 100) / 100
+  const fontSize = Math.max(0, Math.round(char.fontSize * scaleY * 100) / 100)
 
   // Return as string to allow !important
   return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; -webkit-text-fill-color: transparent; background: transparent; cursor: text; pointer-events: auto !important;`

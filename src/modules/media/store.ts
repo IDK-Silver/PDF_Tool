@@ -475,8 +475,19 @@ export const useMediaStore = defineStore('media', () => {
     const cached = pageText.value[index]
     if (cached) return cached
     if (docId.value == null) return null
+
+    // Get text layer settings from settings store
+    const settingsStore = useSettingsStore()
+    const textLayerSettings = {
+      overlapThreshold: settingsStore.s.textLayerOverlapThreshold,
+      minSpacing: settingsStore.s.textLayerMinSpacing,
+      smallGapThreshold: settingsStore.s.textLayerSmallGapThreshold,
+      smallGapSpacing: settingsStore.s.textLayerSmallGapSpacing,
+      globalOffsetX: settingsStore.s.textLayerGlobalOffsetX,
+    }
+
     try {
-      const res = await pdfGetPageText(docId.value, index)
+      const res = await pdfGetPageText(docId.value, index, textLayerSettings)
       pageText.value = { ...pageText.value, [index]: res }
       return res
     } catch (_) {

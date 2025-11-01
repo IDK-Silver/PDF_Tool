@@ -38,6 +38,13 @@ export interface SettingsState {
 
   // === 開發工具 ===
   devPerfOverlay: boolean
+
+  // === 文字層調整 ===
+  textLayerOverlapThreshold: number      // 重疊檢測閾值（負值表示需要調整的重疊量）
+  textLayerMinSpacing: number            // 重疊時的最小間距（像素）
+  textLayerSmallGapThreshold: number     // 小間距檢測閾值
+  textLayerSmallGapSpacing: number       // 小間距時的調整值
+  textLayerGlobalOffsetX: number         // 全局水平偏移（像素，正值向右）
 }
 
 export const defaultSettings: SettingsState = {
@@ -78,6 +85,13 @@ export const defaultSettings: SettingsState = {
 
   // 開發工具
   devPerfOverlay: false,
+
+  // 文字層調整
+  textLayerOverlapThreshold: 0.0,     // 預設：完全重疊才調整
+  textLayerMinSpacing: 1.0,           // 預設：1 像素最小間距
+  textLayerSmallGapThreshold: 0.5,    // 預設：0.5 像素以下視為間距太小
+  textLayerSmallGapSpacing: 0.5,      // 預設：小間距調整為 0.5 像素
+  textLayerGlobalOffsetX: 0,          // 預設：無全局偏移
 }
 
 // 舊版參數映射（用於遷移）
@@ -109,7 +123,14 @@ export function migrateFromV1(old: any): SettingsState {
     
     jpegQuality: old.jpegQuality ?? defaultSettings.jpegQuality,
     pngCompression: old.pngFast ? 'fast' : 'balanced',
-    
+
     devPerfOverlay: old.devPerfOverlay ?? defaultSettings.devPerfOverlay,
+
+    // 文字層調整（新參數，使用預設值）
+    textLayerOverlapThreshold: old.textLayerOverlapThreshold ?? defaultSettings.textLayerOverlapThreshold,
+    textLayerMinSpacing: old.textLayerMinSpacing ?? defaultSettings.textLayerMinSpacing,
+    textLayerSmallGapThreshold: old.textLayerSmallGapThreshold ?? defaultSettings.textLayerSmallGapThreshold,
+    textLayerSmallGapSpacing: old.textLayerSmallGapSpacing ?? defaultSettings.textLayerSmallGapSpacing,
+    textLayerGlobalOffsetX: old.textLayerGlobalOffsetX ?? defaultSettings.textLayerGlobalOffsetX,
   }
 }

@@ -85,8 +85,16 @@ export async function pdfPageSize(docId: number, pageIndex: number): Promise<Pdf
   return invoke<PdfPageSize>('pdf_page_size', { docId, pageIndex })
 }
 
-export async function pdfGetPageText(docId: number, pageIndex: number): Promise<PageTextContent> {
-  return invoke<PageTextContent>('pdf_get_page_text', { docId, pageIndex })
+export interface TextLayerSettings {
+  overlapThreshold?: number
+  minSpacing?: number
+  smallGapThreshold?: number
+  smallGapSpacing?: number
+  globalOffsetX?: number
+}
+
+export async function pdfGetPageText(docId: number, pageIndex: number, settings?: TextLayerSettings): Promise<PageTextContent> {
+  return invoke<PageTextContent>('pdf_get_page_text', { docId, pageIndex, settings })
 }
 
 export async function pdfRenderCancel(docId: number, pageIndex: number, minGen: number): Promise<void> {

@@ -282,6 +282,77 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
+      <section id="text-layer" class="space-y-3">
+        <h2 class="font-medium text-base">文字層調整</h2>
+        <div class="rounded-md border p-4 space-y-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block mb-1">全局水平偏移（像素）</label>
+              <input
+                type="number"
+                step="0.1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.textLayerGlobalOffsetX"
+                @input="s.textLayerGlobalOffsetX = number($event, s.textLayerGlobalOffsetX)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">所有文字的水平偏移。正值向右，負值向左。預設 0。</p>
+            </div>
+            <div>
+              <label class="block mb-1">重疊檢測閾值</label>
+              <input
+                type="number"
+                step="0.1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.textLayerOverlapThreshold"
+                @input="s.textLayerOverlapThreshold = number($event, s.textLayerOverlapThreshold)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">重疊多少才調整（負值）。預設 0（完全重疊才調整）。</p>
+            </div>
+            <div>
+              <label class="block mb-1">最小字符間距（像素）</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.textLayerMinSpacing"
+                @input="s.textLayerMinSpacing = number($event, s.textLayerMinSpacing)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">重疊時的最小間距。預設 1.0。</p>
+            </div>
+            <div>
+              <label class="block mb-1">小間距檢測閾值（像素）</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.textLayerSmallGapThreshold"
+                @input="s.textLayerSmallGapThreshold = number($event, s.textLayerSmallGapThreshold)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">小於此值視為間距太小。預設 0.5。</p>
+            </div>
+            <div>
+              <label class="block mb-1">小間距調整值（像素）</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.textLayerSmallGapSpacing"
+                @input="s.textLayerSmallGapSpacing = number($event, s.textLayerSmallGapSpacing)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">小間距時調整到此值。預設 0.5。</p>
+            </div>
+          </div>
+          <div class="pt-2 border-t">
+            <p class="text-xs text-[hsl(var(--muted-foreground))]">
+              💡 提示：調整這些值可以修正文字選擇層的定位問題。如果文字偏左，增加全局偏移；如果某些字符重疊，調整間距參數。
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section id="export" class="space-y-3">
         <h2 class="font-medium text-base">匯出設定</h2>
         <div class="rounded-md border p-4 space-y-3">

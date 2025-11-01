@@ -1040,6 +1040,16 @@ fn get_pdfium() -> Result<pdfium_render::prelude::Pdfium, MediaError> {
 static WORKER_TX: Lazy<Mutex<Option<mpsc::Sender<PdfRequest>>>> = Lazy::new(|| Mutex::new(None));
 static NEXT_DOC_ID: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Deserialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TextLayerSettings {
+    pub overlap_threshold: Option<f32>,
+    pub min_spacing: Option<f32>,
+    pub small_gap_threshold: Option<f32>,
+    pub small_gap_spacing: Option<f32>,
+    pub global_offset_x: Option<f32>,
+}
+
 enum PdfRequest {
     Open {
         path: String,
@@ -1125,6 +1135,7 @@ enum PdfRequest {
     GetPageText {
         doc_id: u64,
         page_index: u32,
+        settings: TextLayerSettings,
         reply: mpsc::Sender<Result<PageTextContent, MediaError>>,
     },
 }
@@ -1664,6 +1675,7 @@ pub fn init_pdf_worker() {
                 Ok(PdfRequest::GetPageText {
                     doc_id,
                     page_index,
+                    settings,
                     reply,
                 }) => {
                     let res = (|| -> Result<PageTextContent, MediaError> {
@@ -1685,23 +1697,73 @@ pub fn init_pdf_worker() {
                             MediaError::new("parse_error", format!("無法提取文字: {e}"))
                         })?;
 
+                        // Get settings with defaults
+                        let overlap_threshold = settings.overlap_threshold.unwrap_or(0.0);
+                        let min_spacing = settings.min_spacing.unwrap_or(1.0);
+                        let small_gap_threshold = settings.small_gap_threshold.unwrap_or(0.5);
+                        let small_gap_spacing = settings.small_gap_spacing.unwrap_or(0.5);
+                        let global_offset_x = settings.global_offset_x.unwrap_or(0.0);
+
                         let mut chars = Vec::new();
                         let char_count = text_page.chars().len();
+                        let mut prev_x_end: Option<f32> = None;
+                        let mut prev_y: Option<f32> = None;
 
                         for i in 0..char_count {
                             if let Ok(text_char) = text_page.chars().get(i) {
                                 if let Some(text_ch) = text_char.unicode_char() {
-                                    // Get character bounds in PDF coordinates (points)
+                                    // Use loose_bounds for more reliable results
                                     if let Ok(bounds) = text_char.loose_bounds() {
                                         // Use character height as approximate font size
                                         let font_size = bounds.height().value as f32;
 
+                                        let mut x = bounds.left().value as f32 + global_offset_x;
+                                        let y = bounds.bottom().value as f32;
+                                        let width = bounds.width().value as f32;
+                                        let height = bounds.height().value as f32;
+
+                                        // Check if this character is on the same line as the previous one
+                                        if let (Some(prev_end), Some(prev_y_val)) = (prev_x_end, prev_y) {
+                                            // If on the same line (Y coordinates are close)
+                                            if (y - prev_y_val).abs() < height * 0.5 {
+                                                // Check for overlap or too-small gap
+                                                let gap = x - prev_end;
+
+                                                if gap < overlap_threshold {
+                                                    // Character overlaps with previous one
+                                                    // Adjust position to avoid overlap
+                                                    x = prev_end + min_spacing;
+
+                                                    if i < 20 {
+                                                        log::info!(
+                                                            "Overlap fixed: Char[{}] '{}' moved from {:.2} to {:.2} (gap was {:.2})",
+                                                            i, text_ch, bounds.left().value, x, gap
+                                                        );
+                                                    }
+                                                } else if gap < small_gap_threshold && text_ch != ' ' {
+                                                    // Very small gap for non-space characters
+                                                    x = prev_end + small_gap_spacing;
+
+                                                    if i < 20 {
+                                                        log::debug!(
+                                                            "Small gap fixed: Char[{}] '{}' adjusted (gap was {:.2})",
+                                                            i, text_ch, gap
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Update tracking variables
+                                        prev_x_end = Some(x + width);
+                                        prev_y = Some(y);
+
                                         chars.push(TextChar {
                                             text: text_ch.to_string(),
-                                            x: bounds.left().value as f32,
-                                            y: bounds.bottom().value as f32,
-                                            width: bounds.width().value as f32,
-                                            height: bounds.height().value as f32,
+                                            x,
+                                            y,
+                                            width,
+                                            height,
                                             font_size,
                                         });
                                     }
@@ -1834,7 +1896,12 @@ pub fn pdf_page_size(doc_id: u64, page_index: u32) -> Result<PdfPageSize, MediaE
 }
 
 #[tauri::command]
-pub fn pdf_get_page_text(doc_id: u64, page_index: u32) -> Result<PageTextContent, MediaError> {
+pub fn pdf_get_page_text(
+    doc_id: u64,
+    page_index: u32,
+    settings: Option<TextLayerSettings>
+) -> Result<PageTextContent, MediaError> {
+    let settings = settings.unwrap_or_default();
     let (rtx, rrx) = mpsc::channel();
     WORKER_TX
         .lock()
@@ -1844,6 +1911,7 @@ pub fn pdf_get_page_text(doc_id: u64, page_index: u32) -> Result<PageTextContent
         .send(PdfRequest::GetPageText {
             doc_id,
             page_index,
+            settings,
             reply: rtx,
         })
         .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;

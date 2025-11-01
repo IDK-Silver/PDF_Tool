@@ -50,6 +50,21 @@ export const useSettingsStore = defineStore('settings', () => {
     applyTheme(theme)
   })
 
+  // Clear text cache when text layer settings change
+  watch(() => ({
+    overlap: s.value.textLayerOverlapThreshold,
+    minSpacing: s.value.textLayerMinSpacing,
+    smallGap: s.value.textLayerSmallGapThreshold,
+    smallGapSpacing: s.value.textLayerSmallGapSpacing,
+    offsetX: s.value.textLayerGlobalOffsetX,
+  }), () => {
+    // Import media store dynamically to avoid circular dependency
+    import('@/modules/media/store').then(({ useMediaStore }) => {
+      const mediaStore = useMediaStore()
+      mediaStore.resetPageTextCache()
+    })
+  }, { deep: true })
+
   // 移除 prefetchRootMargin（已不需要，IntersectionObserver 內建處理）
 
   function set<K extends keyof SettingsState>(key: K, val: SettingsState[K]) {
