@@ -1679,6 +1679,37 @@ pub fn init_pdf_worker() {
                     reply,
                 }) => {
                     let res = (|| -> Result<PageTextContent, MediaError> {
+                        use pdfium_render::prelude::PdfPageTextChar;
+
+                        // Helper function: extract character geometry with fallback priority
+                        // Priority: tight_bounds() (strict GetCharBox) -> loose_bounds() (fallback GetLooseCharBox)
+                        fn char_geometry(
+                            ch: &PdfPageTextChar,
+                            global_offset_x: f32,
+                        ) -> Option<(f32, f32, f32, f32)> {
+                            // 1) Try tight bounds (FPDFText_GetCharBox) - more accurate for CJK punctuation
+                            //    This returns the actual glyph bounding box, not advance width
+                            if let Ok(b) = ch.tight_bounds() {
+                                let x = b.left().value as f32 + global_offset_x;
+                                let y = b.bottom().value as f32;
+                                let w = b.width().value as f32;
+                                let h = b.height().value as f32;
+                                return Some((x, y, w, h));
+                            }
+
+                            // 2) Fallback to loose bounds (FPDFText_GetLooseCharBox)
+                            //    Height = font size, width = advance (less accurate for rotated/CJK text)
+                            if let Ok(b) = ch.loose_bounds() {
+                                let x = b.left().value as f32 + global_offset_x;
+                                let y = b.bottom().value as f32;
+                                let w = b.width().value as f32;
+                                let h = b.height().value as f32;
+                                return Some((x, y, w, h));
+                            }
+
+                            None
+                        }
+
                         let doc = docs.get(&doc_id).ok_or_else(|| {
                             MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
                         })?;
@@ -1708,24 +1739,55 @@ pub fn init_pdf_worker() {
                         let char_count = text_page.chars().len();
                         let mut prev_x_end: Option<f32> = None;
                         let mut prev_y: Option<f32> = None;
+                        let mut prev_height: Option<f32> = None;
+
+                        // Collect heights for median calculation (sanity check baseline)
+                        let mut heights_for_median = Vec::new();
 
                         for i in 0..char_count {
                             if let Ok(text_char) = text_page.chars().get(i) {
                                 if let Some(text_ch) = text_char.unicode_char() {
-                                    // Use loose_bounds for more reliable results
-                                    if let Ok(bounds) = text_char.loose_bounds() {
-                                        // Use character height as approximate font size
-                                        let font_size = bounds.height().value as f32;
+                                    // Get geometry with improved fallback
+                                    if let Some((raw_x, y, mut width, mut height)) =
+                                        char_geometry(&text_char, global_offset_x)
+                                    {
+                                        let mut x = raw_x;
 
-                                        let mut x = bounds.left().value as f32 + global_offset_x;
-                                        let y = bounds.bottom().value as f32;
-                                        let width = bounds.width().value as f32;
-                                        let height = bounds.height().value as f32;
+                                        // Track height for median calculation (first pass approximation)
+                                        if height > 0.1 {
+                                            heights_for_median.push(height);
+                                        }
+
+                                        // Calculate median height as baseline (use when we have enough samples)
+                                        let em_baseline = if heights_for_median.len() > 10 {
+                                            let mut sorted = heights_for_median.clone();
+                                            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                                            sorted[sorted.len() / 2]
+                                        } else {
+                                            height.max(1.0) // fallback to current height
+                                        };
+
+                                        // Sanity check: reject extreme values (likely measurement errors)
+                                        if width < 0.2 * em_baseline || width > 3.0 * em_baseline {
+                                            width = em_baseline; // reset to baseline
+                                        }
+                                        if height < 0.2 * em_baseline || height > 3.0 * em_baseline {
+                                            height = em_baseline;
+                                        }
+
+                                        // Use character height as approximate font size
+                                        let font_size = height;
 
                                         // Check if this character is on the same line as the previous one
-                                        if let (Some(prev_end), Some(prev_y_val)) = (prev_x_end, prev_y) {
+                                        if let (Some(prev_end), Some(prev_y_val), Some(prev_h)) =
+                                            (prev_x_end, prev_y, prev_height)
+                                        {
+                                            // Use average height for line threshold
+                                            let avg_h = (height + prev_h) * 0.5;
+                                            let line_threshold = avg_h * 0.6; // More robust threshold
+
                                             // If on the same line (Y coordinates are close)
-                                            if (y - prev_y_val).abs() < height * 0.5 {
+                                            if (y - prev_y_val).abs() < line_threshold {
                                                 // Check for overlap or too-small gap
                                                 let gap = x - prev_end;
 
@@ -1737,7 +1799,7 @@ pub fn init_pdf_worker() {
                                                     if i < 20 {
                                                         log::info!(
                                                             "Overlap fixed: Char[{}] '{}' moved from {:.2} to {:.2} (gap was {:.2})",
-                                                            i, text_ch, bounds.left().value, x, gap
+                                                            i, text_ch, raw_x, x, gap
                                                         );
                                                     }
                                                 } else if gap < small_gap_threshold && text_ch != ' ' {
@@ -1757,6 +1819,7 @@ pub fn init_pdf_worker() {
                                         // Update tracking variables
                                         prev_x_end = Some(x + width);
                                         prev_y = Some(y);
+                                        prev_height = Some(height);
 
                                         chars.push(TextChar {
                                             text: text_ch.to_string(),
