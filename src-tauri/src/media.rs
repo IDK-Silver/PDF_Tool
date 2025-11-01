@@ -1790,26 +1790,36 @@ pub fn init_pdf_worker() {
                                             if (y - prev_y_val).abs() < line_threshold {
                                                 // Check for overlap or too-small gap
                                                 let gap = x - prev_end;
+                                                let original_x_end = x + width; // Store original end position
 
                                                 if gap < overlap_threshold {
                                                     // Character overlaps with previous one
                                                     // Adjust position to avoid overlap
-                                                    x = prev_end + min_spacing;
+                                                    let new_x = prev_end + min_spacing;
+                                                    
+                                                    // CRITICAL: Adjust width to maintain original character end position
+                                                    // This ensures text selection box aligns with actual rendered position
+                                                    width = (original_x_end - new_x).max(width * 0.5).max(1.0);
+                                                    x = new_x;
 
                                                     if i < 20 {
                                                         log::info!(
-                                                            "Overlap fixed: Char[{}] '{}' moved from {:.2} to {:.2} (gap was {:.2})",
-                                                            i, text_ch, raw_x, x, gap
+                                                            "Overlap fixed: Char[{}] '{}' moved from {:.2} to {:.2} (gap was {:.2}, width adjusted to {:.2})",
+                                                            i, text_ch, raw_x, x, gap, width
                                                         );
                                                     }
                                                 } else if gap < small_gap_threshold && text_ch != ' ' {
                                                     // Very small gap for non-space characters
-                                                    x = prev_end + small_gap_spacing;
+                                                    let new_x = prev_end + small_gap_spacing;
+                                                    
+                                                    // Adjust width to maintain character end position
+                                                    width = (original_x_end - new_x).max(width * 0.5).max(1.0);
+                                                    x = new_x;
 
                                                     if i < 20 {
                                                         log::debug!(
-                                                            "Small gap fixed: Char[{}] '{}' adjusted (gap was {:.2})",
-                                                            i, text_ch, gap
+                                                            "Small gap fixed: Char[{}] '{}' adjusted (gap was {:.2}, width adjusted to {:.2})",
+                                                            i, text_ch, gap, width
                                                         );
                                                     }
                                                 }
