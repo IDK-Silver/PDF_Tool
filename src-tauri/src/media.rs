@@ -1802,12 +1802,7 @@ pub fn init_pdf_worker() {
                                                     width = (original_x_end - new_x).max(width * 0.5).max(1.0);
                                                     x = new_x;
 
-                                                    if i < 20 {
-                                                        log::info!(
-                                                            "Overlap fixed: Char[{}] '{}' moved from {:.2} to {:.2} (gap was {:.2}, width adjusted to {:.2})",
-                                                            i, text_ch, raw_x, x, gap, width
-                                                        );
-                                                    }
+                                                    // log removed
                                                 } else if gap < small_gap_threshold && text_ch != ' ' {
                                                     // Very small gap for non-space characters
                                                     let new_x = prev_end + small_gap_spacing;
@@ -1816,12 +1811,7 @@ pub fn init_pdf_worker() {
                                                     width = (original_x_end - new_x).max(width * 0.5).max(1.0);
                                                     x = new_x;
 
-                                                    if i < 20 {
-                                                        log::debug!(
-                                                            "Small gap fixed: Char[{}] '{}' adjusted (gap was {:.2}, width adjusted to {:.2})",
-                                                            i, text_ch, gap, width
-                                                        );
-                                                    }
+                                                    // log removed
                                                 }
                                             }
                                         }
