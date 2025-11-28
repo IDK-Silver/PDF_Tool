@@ -43,8 +43,6 @@ const {
   displayZoom,
   canZoomIn,
   canZoomOut,
-  zoomIn,
-  zoomOut,
   resetZoom,
   setFitMode
 } = useZoom()
@@ -194,22 +192,16 @@ const searchPanelStyle = computed(() => {
   }
 })
 
-/** 包裝 composable 的 zoomIn，加入重新渲染邏輯 */
+/** 以視窗中心為錨點放大 */
 function handleZoomIn() {
-  zoomIn(scrollRootEl.value, centerIndex.value, () => {
-    // 延遲渲染，讓縮放動畫先完成
-    const ms = Math.max(0, Number(settings.s.zoomRerenderDelayMs) || 0)
-    triggerRerender(ms)
-  })
+  // 每次放大 25%
+  performZoomCentered(25)
 }
 
-/** 包裝 composable 的 zoomOut，加入重新渲染邏輯 */
+/** 以視窗中心為錨點縮小 */
 function handleZoomOut() {
-  zoomOut(scrollRootEl.value, centerIndex.value, () => {
-    // 延遲渲染，讓縮放動畫先完成
-    const ms = Math.max(0, Number(settings.s.zoomRerenderDelayMs) || 0)
-    triggerRerender(ms)
-  })
+  // 每次縮小 25%
+  performZoomCentered(-25)
 }
 
 /** 包裝 composable 的 resetZoom，加入重新渲染邏輯 */
@@ -1458,6 +1450,104 @@ function getAbsolutePosition(el: HTMLElement, root: HTMLElement) {
     top: elRect.top - rootRect.top + root.scrollTop,
     left: elRect.left - rootRect.left + root.scrollLeft
   }
+}
+
+// 以視窗中心為錨點的縮放邏輯 (給按鈕使用)
+async function performZoomCentered(delta: number) {
+  const root = scrollRootEl.value
+  if (!root) return
+
+  // 1. 取得「視窗中心點」座標
+  const rootRect = root.getBoundingClientRect()
+  const centerX = rootRect.left + rootRect.width / 2
+  const centerY = rootRect.top + rootRect.height / 2
+
+  // --- 關鍵修正：在切換模式「之前」先找出錨點 ---
+  // 這時候 DOM 還沒變形，抓到的中心點才是使用者眼睛看到的中心
+  const hitEl = document.elementFromPoint(centerX, centerY)
+  const anchorCardEl = hitEl?.closest('.bg-card') as HTMLElement | null
+  const pageWrapper = anchorCardEl?.closest('[data-pdf-page]') as HTMLElement | null
+
+  let anchorInfo: {
+    index: number,
+    ratioX: number,
+    ratioY: number
+  } | null = null
+
+  if (anchorCardEl && pageWrapper) {
+    const rect = anchorCardEl.getBoundingClientRect()
+    // 計算中心點在卡片內的相對比例
+    const ratioX = (centerX - rect.left) / rect.width
+    const ratioY = (centerY - rect.top) / rect.height
+
+    anchorInfo = {
+      index: Number(pageWrapper.dataset.pdfPage),
+      ratioX,
+      ratioY
+    }
+  }
+
+  // 2. 處理模式切換 (Fit -> Actual)
+  let startZoom = zoomTarget.value
+
+  if (viewMode.value !== 'actual') {
+    viewMode.value = 'actual'
+    // 從 Fit 模式切換時，以當前顯示比例為基準
+    startZoom = Math.round(displayFitPercent.value ?? 100)
+    // 這裡其實不需要 await nextTick，因為我們已經拿到 anchorInfo 了
+    // 直接讓它往下跑，一起在最後的 nextTick 處理捲動即可
+  }
+
+  // 3. 計算並套用新的縮放值
+  const newZoom = Math.max(10, Math.min(400, startZoom + delta))
+  if (Math.abs(newZoom - startZoom) < 1) return
+
+  zoomTarget.value = newZoom
+
+  // 4. 等待 DOM 更新完畢 (ViewMode 切換 + Zoom 變更) 後修正捲軸
+  await nextTick()
+
+  // 情況 A: 有抓到中心錨點
+  if (anchorInfo && anchorInfo.index >= 0) {
+    const newPageWrapper = root.querySelector(`[data-pdf-page="${anchorInfo.index}"]`)
+    const newCardEl = newPageWrapper?.querySelector('.bg-card') as HTMLElement
+
+    if (newCardEl) {
+      const { top: newCardTop, left: newCardLeft } = getAbsolutePosition(newCardEl, root)
+      const newWidth = newCardEl.offsetWidth
+      const newHeight = newCardEl.offsetHeight
+
+      // 垂直計算
+      const viewportCenterOffsetY = centerY - rootRect.top
+      const targetScrollTop = newCardTop + (newHeight * anchorInfo.ratioY) - viewportCenterOffsetY
+
+      // 水平計算
+      let targetScrollLeft = 0
+      if (root.scrollWidth > root.clientWidth) {
+        const viewportCenterOffsetX = centerX - rootRect.left
+        targetScrollLeft = newCardLeft + (newWidth * anchorInfo.ratioX) - viewportCenterOffsetX
+      }
+
+      root.scrollTop = targetScrollTop
+      root.scrollLeft = targetScrollLeft
+    }
+  }
+  // 情況 B: 沒抓到 (例如在頁面縫隙)，退回簡單計算
+  else {
+    const zoomRatio = newZoom / startZoom
+    const scrollTopCenter = root.scrollTop + root.clientHeight / 2
+    const scrollLeftCenter = root.scrollLeft + root.clientWidth / 2
+
+    root.scrollTop = scrollTopCenter * zoomRatio - root.clientHeight / 2
+
+    if (root.scrollWidth > root.clientWidth) {
+      root.scrollLeft = scrollLeftCenter * zoomRatio - root.clientWidth / 2
+    } else {
+      root.scrollLeft = 0
+    }
+  }
+
+  triggerRerender(300)
 }
 
 function handleWheelZoom(e: WheelEvent) {
