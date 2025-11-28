@@ -45,7 +45,6 @@ const {
   canZoomOut,
   zoomIn,
   zoomOut,
-  adjustZoomBy,
   resetZoom,
   setFitMode
 } = useZoom()
@@ -1446,36 +1445,148 @@ onBeforeUnmount(() => {
   }
 })
 
-// 觸控板縮放手勢處理
-function handleWheelZoom(e: WheelEvent) {
-  // 檢測 pinch-to-zoom 手勢：Ctrl/Cmd + 滾輪
-  if (!e.ctrlKey && !e.metaKey) return
-  
-  e.preventDefault()
-  
-  // 計算縮放步進：根據 deltaY 的絕對值動態調整
-  // 一般滑動約 ±3-10，快速滑動可達 ±50-100
-  const baseStep = 2 // 基礎步進改為 2%
-  const delta = Math.abs(e.deltaY)
-  let step = baseStep
-  
-  // 根據滑動強度調整步進
-  if (delta > 10) step = 3
-  if (delta > 30) step = 5
-  if (delta > 60) step = 8
-  
-  // deltaY > 0 表示向下滾動（縮小），< 0 表示向上滾動（放大）
-  if (e.deltaY < 0 && canZoomIn.value) {
-    // 放大
-    adjustZoomBy(step, scrollRootEl.value, centerIndex.value, () => {
-      triggerRerender(150)
-    })
-  } else if (e.deltaY > 0 && canZoomOut.value) {
-    // 縮小
-    adjustZoomBy(-step, scrollRootEl.value, centerIndex.value, () => {
-      triggerRerender(150)
-    })
+// 用來累積尚未處理的滾動量
+let wheelAccumulator = 0
+// 標記是否已經安排了動畫幀
+let wheelRaf: number | null = null
+
+// 輔助函式：取得元素相對於捲動容器內容頂部的絕對座標
+function getAbsolutePosition(el: HTMLElement, root: HTMLElement) {
+  const elRect = el.getBoundingClientRect()
+  const rootRect = root.getBoundingClientRect()
+  return {
+    top: elRect.top - rootRect.top + root.scrollTop,
+    left: elRect.left - rootRect.left + root.scrollLeft
   }
+}
+
+function handleWheelZoom(e: WheelEvent) {
+  if (!e.ctrlKey && !e.metaKey) return
+  e.preventDefault()
+
+  wheelAccumulator += e.deltaY
+
+  if (wheelRaf !== null) return
+
+  const root = scrollRootEl.value
+  if (!root) return
+
+  const mouseX = e.clientX
+  const mouseY = e.clientY
+  const rootRect = root.getBoundingClientRect()
+
+  // --- 步驟 A：精準找出「圖片卡片 (.bg-card)」作為錨點 ---
+  // 我們改抓 .bg-card，因為它才是真正隨著 zoom 變大變小的核心元素
+  // 這樣可以排除外層容器 padding/margin 不會縮放造成的誤差
+  const hitEl = document.elementFromPoint(mouseX, mouseY)
+  const anchorCardEl = hitEl?.closest('.bg-card') as HTMLElement | null
+  // 為了稍後能找回它，我們需要它的 page index
+  const pageWrapper = anchorCardEl?.closest('[data-pdf-page]') as HTMLElement | null
+
+  let anchorInfo: {
+    index: number,
+    ratioX: number,
+    ratioY: number
+  } | null = null
+
+  if (anchorCardEl && pageWrapper) {
+    const rect = anchorCardEl.getBoundingClientRect()
+    // 計算滑鼠在「卡片內部」的比例
+    const ratioX = (mouseX - rect.left) / rect.width
+    const ratioY = (mouseY - rect.top) / rect.height
+
+    anchorInfo = {
+      index: Number(pageWrapper.dataset.pdfPage),
+      ratioX,
+      ratioY
+    }
+  }
+
+  wheelRaf = requestAnimationFrame(() => {
+    wheelRaf = null
+    const currentDelta = wheelAccumulator
+    wheelAccumulator = 0
+
+    // 1. 決定「起始縮放值」
+    let startZoom = zoomTarget.value
+
+    // 如果目前不是 actual 模式，我們要先切換模式，並以「當前的 Fit 比例」作為起始值
+    if (viewMode.value !== 'actual') {
+      viewMode.value = 'actual'
+      // 獲取當前 Fit 模式下的換算比例 (例如 87%)
+      startZoom = Math.round(displayFitPercent.value ?? 100)
+      // 注意：這裡移除了 return，讓程式碼繼續往下跑
+    }
+
+    const delta = -currentDelta
+    const sensitivity = 1.0
+    let zoomChange = Math.max(-50, Math.min(50, delta * sensitivity))
+
+    // 2. 基於「起始縮放值」計算新的縮放值
+    const newZoom = Math.max(10, Math.min(400, startZoom + zoomChange))
+
+    // 如果變化太小則不執行 (避免微抖動)
+    if (Math.abs(newZoom - startZoom) < 0.1) return
+
+    // 3. 更新 Vue 狀態 -> DOM 寬度改變
+    zoomTarget.value = newZoom
+
+    // --- 步驟 B：DOM 更新後修正位置 ---
+    nextTick(() => {
+      // 情況 1：有找到卡片錨點 (精準還原)
+      if (anchorInfo && anchorInfo.index >= 0) {
+        // 重新抓取該頁面的「卡片元素」
+        const newPageWrapper = root.querySelector(`[data-pdf-page="${anchorInfo.index}"]`)
+        const newCardEl = newPageWrapper?.querySelector('.bg-card') as HTMLElement
+
+        if (newCardEl) {
+          // 1. 取得卡片現在的絕對位置 (Absolute Position)
+          // 這會包含所有 margin/padding 的結果，且不受 offsetParent 影響
+          const { top: newCardTop, left: newCardLeft } = getAbsolutePosition(newCardEl, root)
+
+          const newWidth = newCardEl.offsetWidth
+          const newHeight = newCardEl.offsetHeight
+
+          // 2. 計算垂直捲動 (Vertical)
+          // 公式：新卡片頂部 + (新高度 * 比例) - 滑鼠在視窗中的 Y 座標
+          const mouseViewportY = mouseY - rootRect.top
+          const targetScrollTop = newCardTop + (newHeight * anchorInfo.ratioY) - mouseViewportY
+
+          // 3. 計算水平捲動 (Horizontal)
+          let targetScrollLeft = root.scrollLeft
+
+          // 如果內容小於視窗寬度，強制歸零讓 CSS mx-auto 生效
+          if (root.scrollWidth <= root.clientWidth) {
+            targetScrollLeft = 0
+          } else {
+            const mouseViewportX = mouseX - rootRect.left
+            targetScrollLeft = newCardLeft + (newWidth * anchorInfo.ratioX) - mouseViewportX
+          }
+
+          root.scrollTop = targetScrollTop
+          root.scrollLeft = targetScrollLeft
+        }
+      }
+      // 情況 2：滑鼠指在縫隙 (Fallback 到全域算法)
+      else {
+        // 計算縮放倍率
+        // 注意：這裡的分母要用 startZoom (可能是 Fit 模式轉換來的數值)
+        const zoomRatio = newZoom / startZoom
+        const mouseViewportX = mouseX - rootRect.left
+        const mouseViewportY = mouseY - rootRect.top
+
+        root.scrollTop = (root.scrollTop + mouseViewportY) * zoomRatio - mouseViewportY
+
+        if (root.scrollWidth <= root.clientWidth) {
+          root.scrollLeft = 0
+        } else {
+          root.scrollLeft = (root.scrollLeft + mouseViewportX) * zoomRatio - mouseViewportX
+        }
+      }
+    })
+
+    triggerRerender(300)
+  })
 }
 
 const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
@@ -1500,11 +1611,21 @@ function imgStyle(idx: number) {
 }
 
 function pageCardStyle(idx: number) {
-  const baseStyle: Record<string, string> = {}
+  const baseStyle: Record<string, string> = {
+    // 限制瀏覽器的重排範圍，大幅減少 Reflow
+    contain: 'layout paint style',
+    // 使用 content-visibility 進一步優化（Tauri WebView 支援）
+    contentVisibility: 'auto',
+    containIntrinsicBlockSize: '1000px'
+  }
   if (viewMode.value === 'fit') return baseStyle
   const base = media.baseCssWidthAt100(idx)
   if (base) {
-    return { ...baseStyle, width: `${Math.max(50, Math.round(base * (zoomTarget.value / 100)))}px` }
+    return {
+      ...baseStyle,
+      width: `${Math.max(50, Math.round(base * (zoomTarget.value / 100)))}px`,
+      willChange: 'width'
+    }
   }
   return baseStyle
 }
