@@ -5,7 +5,7 @@ import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useExportSettings } from '@/modules/export/settings'
-import { useZoom } from '@/modules/media/useZoom'
+import { useZoom, type ZoomContext } from '@/modules/media/useZoom'
 import PdfTextLayer from './PdfTextLayer.vue'
 import type { PageTextContent } from '@/modules/media/types'
 
@@ -43,9 +43,32 @@ const {
   displayZoom,
   canZoomIn,
   canZoomOut,
+  setZoom,
   resetZoom,
-  setFitMode
+  setFitMode,
+  handleWheelZoom: zoomHandleWheel,
 } = useZoom()
+
+/**
+ * 建立縮放上下文（ZoomContext）
+ * 封裝所有 DOM 引用，供 useZoom 使用
+ */
+function createZoomContext(): ZoomContext | null {
+  const root = scrollRootEl.value
+  if (!root) return null
+
+  return {
+    scrollContainer: root,
+    getPageElement: (index: number) =>
+      root.querySelector(`[data-pdf-page="${index}"]`) as HTMLElement | null,
+    getPageCardElement: (index: number) => {
+      const wrapper = root.querySelector(`[data-pdf-page="${index}"]`)
+      return wrapper?.querySelector('.bg-card') as HTMLElement | null
+    },
+    getBaseCssWidth: (index: number) => media.baseCssWidthAt100(index),
+    centerPageIndex: centerIndex.value,
+  }
+}
 
 const searchVisible = ref(false)
 const searchTerm = ref('')
@@ -59,7 +82,7 @@ const searchInputEl = ref<HTMLInputElement | null>(null)
 let searchDebounceTimer: number | null = null
 let activeSearchToken = 0
 const pageNormalizedCache = new Map<number, { normalized: string; map: number[]; source: PageTextContent }>()
-let pendingScrollAnimation = 0 as number | 0
+let pendingScrollAnimation: number | null = null
 const searchAnchor = ref<{ top: number; left: number; width: number } | null>(null)
 const SEARCH_PANEL_MIN_WIDTH = 240
 const SEARCH_PANEL_MAX_WIDTH = 360
@@ -193,27 +216,38 @@ const searchPanelStyle = computed(() => {
 })
 
 /** 以視窗中心為錨點放大 */
-function handleZoomIn() {
-  // 每次放大 25%
-  performZoomCentered(25)
+async function handleZoomIn() {
+  const ctx = createZoomContext()
+  const currentZoom = viewMode.value === 'fit'
+    ? Math.round(displayFitPercent.value ?? 100)
+    : zoomTarget.value
+  await setZoom(currentZoom + 25, ctx, { type: 'viewport-center' })
+  triggerRerender(300)
 }
 
 /** 以視窗中心為錨點縮小 */
-function handleZoomOut() {
-  // 每次縮小 25%
-  performZoomCentered(-25)
+async function handleZoomOut() {
+  const ctx = createZoomContext()
+  const currentZoom = viewMode.value === 'fit'
+    ? Math.round(displayFitPercent.value ?? 100)
+    : zoomTarget.value
+  await setZoom(currentZoom - 25, ctx, { type: 'viewport-center' })
+  triggerRerender(300)
 }
 
-/** 包裝 composable 的 resetZoom，加入重新渲染邏輯 */
-function handleResetZoom() {
-  resetZoom(scrollRootEl.value)
-  triggerRerender()
+/** 包裝 composable 的 resetZoom，加入維持視覺中心與重新渲染邏輯 */
+async function handleResetZoom() {
+  const ctx = createZoomContext()
+  await resetZoom(ctx, { type: 'viewport-center' })
+  triggerRerender(300)
 }
 
-/** 包裝 composable 的 setFitMode，加入重新渲染邏輯 */
-function handleSetFitMode() {
-  setFitMode()
-  triggerRerender()
+/** 包裝 composable 的 setFitMode，加入維持視覺中心與重新渲染邏輯 */
+async function handleSetFitMode() {
+  if (viewMode.value === 'fit') return
+  const ctx = createZoomContext()
+  await setFitMode(ctx, { type: 'viewport-center' })
+  triggerRerender(300)
 }
 
 /** 統一的重新渲染觸發函式 */
@@ -479,12 +513,12 @@ function ensurePageElement(match: SearchMatch) {
 async function scrollToMatch(match: SearchMatch) {
   await gotoPage(match.pageIndex + 1)
   await nextTick()
-  if (pendingScrollAnimation) {
+  if (pendingScrollAnimation !== null) {
     cancelAnimationFrame(pendingScrollAnimation)
-    pendingScrollAnimation = 0 as any
+    pendingScrollAnimation = null
   }
   pendingScrollAnimation = requestAnimationFrame(() => {
-    pendingScrollAnimation = 0 as any
+    pendingScrollAnimation = null
     const { root, pageEl, charEl } = ensurePageElement(match)
     if (!root || !pageEl) return
     if (!charEl) {
@@ -959,10 +993,10 @@ async function insertFileAt(pageIndex: number, before: boolean) {
 
       // 實際複製頁面
       for (let i = 0; i < src.pages; i++) {
-        const res = await pdfCopyPage({ srcDocId: src.docId as any, srcIndex: i, destDocId: id, destIndex: insertIndex + i })
+        const res = await pdfCopyPage({ srcDocId: src.docId, srcIndex: i, destDocId: id, destIndex: insertIndex + i })
         finalPages = res.pages
       }
-      try { await pdfClose((src as any).docId) } catch {}
+      try { await pdfClose(src.docId) } catch {}
     } else {
       // 圖片：先「樂觀更新」插入 1 頁占位
       inserted = 1
@@ -988,9 +1022,9 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       const tempPath = await join(dir, `insert-${Date.now()}.pdf`)
       await imageToPdf({ srcPath: path, destPath: tempPath })
       const src = await pdfOpen(tempPath)
-      const res = await pdfCopyPage({ srcDocId: src.docId as any, srcIndex: 0, destDocId: id, destIndex: insertIndex })
+      const res = await pdfCopyPage({ srcDocId: src.docId, srcIndex: 0, destDocId: id, destIndex: insertIndex })
       finalPages = res.pages
-      try { await pdfClose((src as any).docId) } catch {}
+      try { await pdfClose(src.docId) } catch {}
     }
 
     // 複製完成後，更新頁數並觸發重新渲染（確保尺寸同步）
@@ -1023,7 +1057,7 @@ async function rotatePlus90(pageIndex: number) {
     try {
       media.cancelInflight(pageIndex)
     } catch {}
-    media.pdfPages[pageIndex] = null as any
+    media.pdfPages[pageIndex] = null
     pendingIdx.add(pageIndex)
     scheduleHiResRerender(0)
   } catch (e: any) {
@@ -1115,7 +1149,7 @@ function registerPageCard(idx: number, el: HTMLElement | null) {
 
 const visibleStart = ref(0)
 const visibleEnd = ref(0)
-let scrollRaf = 0 as number | 0
+let scrollRaf: number | null = null
 let scrollEndTimer: number | null = null
 
 function updateVisibleByScroll() {
@@ -1167,10 +1201,10 @@ function updateVisibleByScroll() {
 }
 
 function onScroll() {
-  if (scrollRaf) return
+  if (scrollRaf !== null) return
   if (scrollEndTimer) clearTimeout(scrollEndTimer)
   scrollRaf = requestAnimationFrame(() => {
-    scrollRaf = 0 as any
+    scrollRaf = null
     updateVisibleByScroll()
     if (scrollEndTimer) clearTimeout(scrollEndTimer)
     const endMs = Math.max(0, Number(settings.s.scrollEndDebounceMs) || 0)
@@ -1273,70 +1307,94 @@ onMounted(async () => {
   updateVisibleByScroll()
   if (scrollRootEl.value && 'ResizeObserver' in window) {
     let lastResizeWidth = 0
+    let resizeDebounceTimer: number | null = null
+
+    // Scrollbar 寬度通常在 15-17px 之間
+    const SCROLLBAR_WIDTH_MIN = 14
+    const SCROLLBAR_WIDTH_MAX = 18
+
     resizeObs = new ResizeObserver(() => {
       const w = scrollRootEl.value?.clientWidth || 0
-      if (w > 0) {
-        const oldW = containerW.value
-        if (oldW > 0 && w !== oldW) {
-          const root = scrollRootEl.value
-          const currentPageEl = root?.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement
-          
-          // 在實際大小模式下，保存水平和垂直滾動位置
-          const isActualMode = viewMode.value === 'actual'
-          const savedScrollLeft = root?.scrollLeft || 0
-          const savedScrollTop = root?.scrollTop || 0
-          
-          containerW.value = w
-          scheduleUpdateFitPercent()
-          if (searchVisible.value) setSearchAnchor(true)
-          
-          nextTick(() => {
-            requestAnimationFrame(() => {
-              if (currentPageEl && root) {
-                if (isActualMode) {
-                  // 實際大小模式：完全保持滾動位置不變（不使用 scrollIntoView）
-                  // 只在垂直方向微調，確保當前頁面仍在可見範圍內
-                  const elementTop = currentPageEl.offsetTop
-                  const elementHeight = currentPageEl.offsetHeight
-                  const containerHeight = root.clientHeight
-                  const currentScrollTop = root.scrollTop
-                  
-                  // 檢查當前頁面是否仍在視野中
-                  const isVisible = 
-                    elementTop < currentScrollTop + containerHeight &&
-                    elementTop + elementHeight > currentScrollTop
-                  
-                  if (isVisible) {
-                    // 頁面仍在視野中，完全保持滾動位置
-                    root.scrollTop = savedScrollTop
-                    root.scrollLeft = savedScrollLeft
-                  } else {
-                    // 頁面不在視野中，調整垂直位置但保持水平不變
-                    root.scrollTop = elementTop - containerHeight / 2 + elementHeight / 2
-                    root.scrollLeft = savedScrollLeft
-                  }
-                } else {
-                  // 符合寬度模式：手動置中，避免影響外層 body
-                  const offsetTop = currentPageEl.offsetTop
-                  const scrollTarget = offsetTop - (root.clientHeight / 2) + (currentPageEl.clientHeight / 2)
-                  root.scrollTop = scrollTarget
-                }
-              }
-            })
-          })
-          
-          const sizeDiff = Math.abs(w - oldW)
-          const shouldRerender = oldW > 0 ? sizeDiff / oldW > 0.1 : false
-          if (shouldRerender && w !== lastResizeWidth) {
-            lastResizeWidth = w
-            if (hiResTimer) clearTimeout(hiResTimer)
-            scheduleHiResRerender(500)
+      if (w <= 0) return
+
+      const oldW = containerW.value
+      const sizeDiff = Math.abs(w - oldW)
+
+      // 過濾 Scrollbar 變動：如果寬度變化在 Scrollbar 寬度範圍內，忽略此次更新
+      // 這可以防止 Scrollbar 出現/消失導致的無限迴圈
+      if (oldW > 0 && sizeDiff >= SCROLLBAR_WIDTH_MIN && sizeDiff <= SCROLLBAR_WIDTH_MAX) {
+        // 可能是 Scrollbar 變動，使用 debounce 延遲處理
+        if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer)
+        resizeDebounceTimer = window.setTimeout(() => {
+          resizeDebounceTimer = null
+          // 再次檢查寬度是否穩定
+          const currentW = scrollRootEl.value?.clientWidth || 0
+          if (currentW !== containerW.value && currentW > 0) {
+            containerW.value = currentW
+            scheduleUpdateFitPercent()
           }
-        } else {
-          containerW.value = w
-          scheduleUpdateFitPercent()
-          if (searchVisible.value) setSearchAnchor(true)
+        }, 100)
+        return
+      }
+
+      if (oldW > 0 && w !== oldW) {
+        const root = scrollRootEl.value
+        const currentPageEl = root?.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement
+
+        // 在實際大小模式下，保存水平和垂直滾動位置
+        const isActualMode = viewMode.value === 'actual'
+        const savedScrollLeft = root?.scrollLeft || 0
+        const savedScrollTop = root?.scrollTop || 0
+
+        containerW.value = w
+        scheduleUpdateFitPercent()
+        if (searchVisible.value) setSearchAnchor(true)
+
+        nextTick(() => {
+          requestAnimationFrame(() => {
+            if (currentPageEl && root) {
+              if (isActualMode) {
+                // 實際大小模式：完全保持滾動位置不變（不使用 scrollIntoView）
+                // 只在垂直方向微調，確保當前頁面仍在可見範圍內
+                const elementTop = currentPageEl.offsetTop
+                const elementHeight = currentPageEl.offsetHeight
+                const containerHeight = root.clientHeight
+                const currentScrollTop = root.scrollTop
+
+                // 檢查當前頁面是否仍在視野中
+                const isVisible =
+                  elementTop < currentScrollTop + containerHeight &&
+                  elementTop + elementHeight > currentScrollTop
+
+                if (isVisible) {
+                  // 頁面仍在視野中，完全保持滾動位置
+                  root.scrollTop = savedScrollTop
+                  root.scrollLeft = savedScrollLeft
+                } else {
+                  // 頁面不在視野中，調整垂直位置但保持水平不變
+                  root.scrollTop = elementTop - containerHeight / 2 + elementHeight / 2
+                  root.scrollLeft = savedScrollLeft
+                }
+              } else {
+                // 符合寬度模式：手動置中，避免影響外層 body
+                const offsetTop = currentPageEl.offsetTop
+                const scrollTarget = offsetTop - (root.clientHeight / 2) + (currentPageEl.clientHeight / 2)
+                root.scrollTop = scrollTarget
+              }
+            }
+          })
+        })
+
+        const shouldRerender = oldW > 0 ? sizeDiff / oldW > 0.1 : false
+        if (shouldRerender && w !== lastResizeWidth) {
+          lastResizeWidth = w
+          if (hiResTimer) clearTimeout(hiResTimer)
+          scheduleHiResRerender(500)
         }
+      } else {
+        containerW.value = w
+        scheduleUpdateFitPercent()
+        if (searchVisible.value) setSearchAnchor(true)
       }
     })
     resizeObs.observe(scrollRootEl.value)
@@ -1352,9 +1410,9 @@ onBeforeUnmount(() => {
     clearTimeout(searchDebounceTimer)
     searchDebounceTimer = null
   }
-  if (pendingScrollAnimation) {
+  if (pendingScrollAnimation !== null) {
     cancelAnimationFrame(pendingScrollAnimation)
-    pendingScrollAnimation = 0 as any
+    pendingScrollAnimation = null
   }
   window.removeEventListener('keydown', onGlobalKeyDown, { capture: true })
   window.removeEventListener('resize', handleWindowResize)
@@ -1437,246 +1495,16 @@ onBeforeUnmount(() => {
   }
 })
 
-// 用來累積尚未處理的滾動量
-let wheelAccumulator = 0
-// 標記是否已經安排了動畫幀
-let wheelRaf: number | null = null
-
-// 輔助函式：取得元素相對於捲動容器內容頂部的絕對座標
-function getAbsolutePosition(el: HTMLElement, root: HTMLElement) {
-  const elRect = el.getBoundingClientRect()
-  const rootRect = root.getBoundingClientRect()
-  return {
-    top: elRect.top - rootRect.top + root.scrollTop,
-    left: elRect.left - rootRect.left + root.scrollLeft
-  }
-}
-
-// 以視窗中心為錨點的縮放邏輯 (給按鈕使用)
-async function performZoomCentered(delta: number) {
-  const root = scrollRootEl.value
-  if (!root) return
-
-  // 1. 取得「視窗中心點」座標
-  const rootRect = root.getBoundingClientRect()
-  const centerX = rootRect.left + rootRect.width / 2
-  const centerY = rootRect.top + rootRect.height / 2
-
-  // --- 關鍵修正：在切換模式「之前」先找出錨點 ---
-  // 這時候 DOM 還沒變形，抓到的中心點才是使用者眼睛看到的中心
-  const hitEl = document.elementFromPoint(centerX, centerY)
-  const anchorCardEl = hitEl?.closest('.bg-card') as HTMLElement | null
-  const pageWrapper = anchorCardEl?.closest('[data-pdf-page]') as HTMLElement | null
-
-  let anchorInfo: {
-    index: number,
-    ratioX: number,
-    ratioY: number
-  } | null = null
-
-  if (anchorCardEl && pageWrapper) {
-    const rect = anchorCardEl.getBoundingClientRect()
-    // 計算中心點在卡片內的相對比例
-    const ratioX = (centerX - rect.left) / rect.width
-    const ratioY = (centerY - rect.top) / rect.height
-
-    anchorInfo = {
-      index: Number(pageWrapper.dataset.pdfPage),
-      ratioX,
-      ratioY
-    }
-  }
-
-  // 2. 處理模式切換 (Fit -> Actual)
-  let startZoom = zoomTarget.value
-
-  if (viewMode.value !== 'actual') {
-    viewMode.value = 'actual'
-    // 從 Fit 模式切換時，以當前顯示比例為基準
-    startZoom = Math.round(displayFitPercent.value ?? 100)
-    // 這裡其實不需要 await nextTick，因為我們已經拿到 anchorInfo 了
-    // 直接讓它往下跑，一起在最後的 nextTick 處理捲動即可
-  }
-
-  // 3. 計算並套用新的縮放值
-  const newZoom = Math.max(10, Math.min(400, startZoom + delta))
-  if (Math.abs(newZoom - startZoom) < 1) return
-
-  zoomTarget.value = newZoom
-
-  // 4. 等待 DOM 更新完畢 (ViewMode 切換 + Zoom 變更) 後修正捲軸
-  await nextTick()
-
-  // 情況 A: 有抓到中心錨點
-  if (anchorInfo && anchorInfo.index >= 0) {
-    const newPageWrapper = root.querySelector(`[data-pdf-page="${anchorInfo.index}"]`)
-    const newCardEl = newPageWrapper?.querySelector('.bg-card') as HTMLElement
-
-    if (newCardEl) {
-      const { top: newCardTop, left: newCardLeft } = getAbsolutePosition(newCardEl, root)
-      const newWidth = newCardEl.offsetWidth
-      const newHeight = newCardEl.offsetHeight
-
-      // 垂直計算
-      const viewportCenterOffsetY = centerY - rootRect.top
-      const targetScrollTop = newCardTop + (newHeight * anchorInfo.ratioY) - viewportCenterOffsetY
-
-      // 水平計算
-      let targetScrollLeft = 0
-      if (root.scrollWidth > root.clientWidth) {
-        const viewportCenterOffsetX = centerX - rootRect.left
-        targetScrollLeft = newCardLeft + (newWidth * anchorInfo.ratioX) - viewportCenterOffsetX
-      }
-
-      root.scrollTop = targetScrollTop
-      root.scrollLeft = targetScrollLeft
-    }
-  }
-  // 情況 B: 沒抓到 (例如在頁面縫隙)，退回簡單計算
-  else {
-    const zoomRatio = newZoom / startZoom
-    const scrollTopCenter = root.scrollTop + root.clientHeight / 2
-    const scrollLeftCenter = root.scrollLeft + root.clientWidth / 2
-
-    root.scrollTop = scrollTopCenter * zoomRatio - root.clientHeight / 2
-
-    if (root.scrollWidth > root.clientWidth) {
-      root.scrollLeft = scrollLeftCenter * zoomRatio - root.clientWidth / 2
-    } else {
-      root.scrollLeft = 0
-    }
-  }
-
-  triggerRerender(300)
-}
-
+/**
+ * 滾輪縮放處理
+ * 使用 useZoom 的 handleWheelZoom，區分游標位置：
+ * - 在頁面卡片上：精準還原游標指向的點
+ * - 在縫隙中：使用數學計算（類似 Google Maps）
+ */
 function handleWheelZoom(e: WheelEvent) {
-  if (!e.ctrlKey && !e.metaKey) return
-  e.preventDefault()
-
-  wheelAccumulator += e.deltaY
-
-  if (wheelRaf !== null) return
-
-  const root = scrollRootEl.value
-  if (!root) return
-
-  const mouseX = e.clientX
-  const mouseY = e.clientY
-  const rootRect = root.getBoundingClientRect()
-
-  // --- 步驟 A：精準找出「圖片卡片 (.bg-card)」作為錨點 ---
-  // 我們改抓 .bg-card，因為它才是真正隨著 zoom 變大變小的核心元素
-  // 這樣可以排除外層容器 padding/margin 不會縮放造成的誤差
-  const hitEl = document.elementFromPoint(mouseX, mouseY)
-  const anchorCardEl = hitEl?.closest('.bg-card') as HTMLElement | null
-  // 為了稍後能找回它，我們需要它的 page index
-  const pageWrapper = anchorCardEl?.closest('[data-pdf-page]') as HTMLElement | null
-
-  let anchorInfo: {
-    index: number,
-    ratioX: number,
-    ratioY: number
-  } | null = null
-
-  if (anchorCardEl && pageWrapper) {
-    const rect = anchorCardEl.getBoundingClientRect()
-    // 計算滑鼠在「卡片內部」的比例
-    const ratioX = (mouseX - rect.left) / rect.width
-    const ratioY = (mouseY - rect.top) / rect.height
-
-    anchorInfo = {
-      index: Number(pageWrapper.dataset.pdfPage),
-      ratioX,
-      ratioY
-    }
-  }
-
-  wheelRaf = requestAnimationFrame(() => {
-    wheelRaf = null
-    const currentDelta = wheelAccumulator
-    wheelAccumulator = 0
-
-    // 1. 決定「起始縮放值」
-    let startZoom = zoomTarget.value
-
-    // 如果目前不是 actual 模式，我們要先切換模式，並以「當前的 Fit 比例」作為起始值
-    if (viewMode.value !== 'actual') {
-      viewMode.value = 'actual'
-      // 獲取當前 Fit 模式下的換算比例 (例如 87%)
-      startZoom = Math.round(displayFitPercent.value ?? 100)
-      // 注意：這裡移除了 return，讓程式碼繼續往下跑
-    }
-
-    const delta = -currentDelta
-    const sensitivity = 1.0
-    let zoomChange = Math.max(-50, Math.min(50, delta * sensitivity))
-
-    // 2. 基於「起始縮放值」計算新的縮放值
-    const newZoom = Math.max(10, Math.min(400, startZoom + zoomChange))
-
-    // 如果變化太小則不執行 (避免微抖動)
-    if (Math.abs(newZoom - startZoom) < 0.1) return
-
-    // 3. 更新 Vue 狀態 -> DOM 寬度改變
-    zoomTarget.value = newZoom
-
-    // --- 步驟 B：DOM 更新後修正位置 ---
-    nextTick(() => {
-      // 情況 1：有找到卡片錨點 (精準還原)
-      if (anchorInfo && anchorInfo.index >= 0) {
-        // 重新抓取該頁面的「卡片元素」
-        const newPageWrapper = root.querySelector(`[data-pdf-page="${anchorInfo.index}"]`)
-        const newCardEl = newPageWrapper?.querySelector('.bg-card') as HTMLElement
-
-        if (newCardEl) {
-          // 1. 取得卡片現在的絕對位置 (Absolute Position)
-          // 這會包含所有 margin/padding 的結果，且不受 offsetParent 影響
-          const { top: newCardTop, left: newCardLeft } = getAbsolutePosition(newCardEl, root)
-
-          const newWidth = newCardEl.offsetWidth
-          const newHeight = newCardEl.offsetHeight
-
-          // 2. 計算垂直捲動 (Vertical)
-          // 公式：新卡片頂部 + (新高度 * 比例) - 滑鼠在視窗中的 Y 座標
-          const mouseViewportY = mouseY - rootRect.top
-          const targetScrollTop = newCardTop + (newHeight * anchorInfo.ratioY) - mouseViewportY
-
-          // 3. 計算水平捲動 (Horizontal)
-          let targetScrollLeft = root.scrollLeft
-
-          // 如果內容小於視窗寬度，強制歸零讓 CSS mx-auto 生效
-          if (root.scrollWidth <= root.clientWidth) {
-            targetScrollLeft = 0
-          } else {
-            const mouseViewportX = mouseX - rootRect.left
-            targetScrollLeft = newCardLeft + (newWidth * anchorInfo.ratioX) - mouseViewportX
-          }
-
-          root.scrollTop = targetScrollTop
-          root.scrollLeft = targetScrollLeft
-        }
-      }
-      // 情況 2：滑鼠指在縫隙 (Fallback 到全域算法)
-      else {
-        // 計算縮放倍率
-        // 注意：這裡的分母要用 startZoom (可能是 Fit 模式轉換來的數值)
-        const zoomRatio = newZoom / startZoom
-        const mouseViewportX = mouseX - rootRect.left
-        const mouseViewportY = mouseY - rootRect.top
-
-        root.scrollTop = (root.scrollTop + mouseViewportY) * zoomRatio - mouseViewportY
-
-        if (root.scrollWidth <= root.clientWidth) {
-          root.scrollLeft = 0
-        } else {
-          root.scrollLeft = (root.scrollLeft + mouseViewportX) * zoomRatio - mouseViewportX
-        }
-      }
-    })
-
-    triggerRerender(300)
-  })
+  const ctx = createZoomContext()
+  if (!ctx) return
+  zoomHandleWheel(e, ctx, () => triggerRerender(300))
 }
 
 const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
@@ -1706,17 +1534,41 @@ function pageCardStyle(idx: number) {
     contain: 'layout paint style',
     // 使用 content-visibility 進一步優化（Tauri WebView 支援）
     contentVisibility: 'auto',
-    containIntrinsicBlockSize: '1000px'
+    containIntrinsicBlockSize: '1000px',
+    // 確保內部的絕對定位元素以我為基準
+    position: 'relative',
   }
-  if (viewMode.value === 'fit') return baseStyle
+
+  // 取得該頁面的原始尺寸資訊
+  const size = media.pageSizesPt[idx]
+
+  if (viewMode.value === 'fit') {
+    // Fit 模式下，我們通常依賴 CSS 的寬度 (w-full)，但為了防止高度塌陷，
+    // 我們可以用 aspect-ratio (現代瀏覽器支援度很好)
+    if (size) {
+      // 計算長寬比
+      baseStyle.aspectRatio = `${size.widthPt} / ${size.heightPt}`
+    }
+    return baseStyle
+  }
+
+  // Actual 模式
   const base = media.baseCssWidthAt100(idx)
-  if (base) {
+  if (base && size) {
+    const scale = zoomTarget.value / 100
+    const w = Math.max(50, Math.round(base * scale))
+    // 關鍵修正：根據寬度和原始比例，算出精確的像素高度
+    const ratio = size.heightPt / size.widthPt
+    const h = Math.round(w * ratio)
+
     return {
       ...baseStyle,
-      width: `${Math.max(50, Math.round(base * (zoomTarget.value / 100)))}px`,
-      willChange: 'width'
+      width: `${w}px`,
+      height: `${h}px`, // 強制鎖定高度
+      willChange: 'width, height'
     }
   }
+
   return baseStyle
 }
 
@@ -1846,15 +1698,20 @@ defineExpose({
               <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
 
               <!-- Text selection layer -->
-              <template v-if="docId != null">
+              <div
+                v-if="docId != null"
+                class="absolute inset-0 pointer-events-none"
+                style="z-index: 1;"
+              >
                 <PdfTextLayer
                   v-for="layerProps in getPageTextLayerPropsList(idx)"
                   :key="`text-layer-${idx}`"
                   :doc-id="docId"
                   :page-index="idx"
                   v-bind="layerProps"
+                  style="pointer-events: auto;"
                 />
-              </template>
+              </div>
             </div>
             <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
           </div>
