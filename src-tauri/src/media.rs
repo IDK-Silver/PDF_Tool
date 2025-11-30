@@ -1735,14 +1735,15 @@ pub fn init_pdf_worker() {
                         let small_gap_spacing = settings.small_gap_spacing.unwrap_or(0.5);
                         let global_offset_x = settings.global_offset_x.unwrap_or(0.0);
 
-                        let mut chars = Vec::new();
                         let char_count = text_page.chars().len();
+                        let mut chars = Vec::with_capacity(char_count);
                         let mut prev_x_end: Option<f32> = None;
                         let mut prev_y: Option<f32> = None;
                         let mut prev_height: Option<f32> = None;
 
-                        // Collect heights for median calculation (sanity check baseline)
-                        let mut heights_for_median = Vec::new();
+                        // Running average for height baseline (O(1) per char, replaces O(N) median sort)
+                        let mut running_height_sum: f32 = 0.0;
+                        let mut running_height_count: usize = 0;
 
                         for i in 0..char_count {
                             if let Ok(text_char) = text_page.chars().get(i) {
@@ -1753,16 +1754,15 @@ pub fn init_pdf_worker() {
                                     {
                                         let mut x = raw_x;
 
-                                        // Track height for median calculation (first pass approximation)
-                                        if height > 0.1 {
-                                            heights_for_median.push(height);
+                                        // Track height for running average (O(1) instead of median's O(N log N))
+                                        if height > 0.1 && height < 1000.0 {
+                                            running_height_sum += height;
+                                            running_height_count += 1;
                                         }
 
-                                        // Calculate median height as baseline (use when we have enough samples)
-                                        let em_baseline = if heights_for_median.len() > 10 {
-                                            let mut sorted = heights_for_median.clone();
-                                            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                                            sorted[sorted.len() / 2]
+                                        // Use running average as baseline (stable after ~10 samples)
+                                        let em_baseline = if running_height_count > 10 {
+                                            running_height_sum / running_height_count as f32
                                         } else {
                                             height.max(1.0) // fallback to current height
                                         };
