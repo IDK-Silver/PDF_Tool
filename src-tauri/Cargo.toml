@@ -36,3 +36,5 @@ log = "0.4"
 urlencoding = "2"
 lopdf = "0.32"
 flate2 = "1.0"
+rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"

@@ -137,8 +137,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
-        .setup(|_app| {
-            crate::media::init_pdf_worker();
+        .setup(|app| {
+            let cache_dir = app
+                .path()
+                .app_cache_dir()
+                .unwrap_or_else(|_| std::env::temp_dir().join("kano_pdf_tool_cache"));
+            crate::media::init_pdf_worker(cache_dir);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

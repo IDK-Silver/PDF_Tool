@@ -1,18 +1,24 @@
-use flate2::read::ZlibDecoder;
+use flate2::read::{GzDecoder, ZlibDecoder};
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use image::GenericImageView;
 use image::ImageEncoder;
 use log::warn;
 use once_cell::sync::Lazy;
+use pdfium_render::prelude::PdfDocument;
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::io::{Cursor, Read};
+use std::fs::{self, File};
+use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     Mutex,
     atomic::{AtomicU64, Ordering},
     mpsc,
 };
+use std::time::{SystemTime, UNIX_EPOCH};
+use sha2::{Digest, Sha256};
 // no timestamp usage currently
 
 #[derive(Serialize)]
@@ -1050,6 +1056,232 @@ pub struct TextLayerSettings {
     pub global_offset_x: Option<f32>,
 }
 
+const TEXT_CACHE_DIR_NAME: &str = "db";
+const TEXT_CACHE_DB_FILE: &str = "page_text_cache.db";
+const TEXT_EXTRACTOR_VERSION: i64 = 1;
+const TEXT_CACHE_SOFT_LIMIT_BYTES: i64 = 50 * 1024 * 1024;
+
+struct PdfDocRecord<'a> {
+    doc: PdfDocument<'a>,
+    path: String,
+    file_size: Option<u64>,
+    file_hash: Option<String>,
+    dirty: bool,
+}
+
+#[derive(Clone)]
+struct CacheKey {
+    file_hash: String,
+    file_size: u64,
+    page_index: u32,
+    rotation_deg: u16,
+    extractor_version: i64,
+}
+
+struct GlyphCache {
+    conn: Connection,
+}
+
+fn unix_ts_secs() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+}
+
+fn u64_to_i64(v: u64) -> i64 {
+    i64::try_from(v).unwrap_or(i64::MAX)
+}
+
+fn u32_to_i64(v: u32) -> i64 {
+    i64::try_from(v).unwrap_or(i64::MAX)
+}
+
+fn rotation_to_degrees(rot: pdfium_render::prelude::PdfPageRenderRotation) -> u16 {
+    match rot {
+        pdfium_render::prelude::PdfPageRenderRotation::None => 0,
+        pdfium_render::prelude::PdfPageRenderRotation::Degrees90 => 90,
+        pdfium_render::prelude::PdfPageRenderRotation::Degrees180 => 180,
+        pdfium_render::prelude::PdfPageRenderRotation::Degrees270 => 270,
+    }
+}
+
+fn compute_file_hash(path: &str) -> Option<String> {
+    let mut file = File::open(path).ok()?;
+    let mut hasher = Sha256::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        let read = file.read(&mut buf).ok()?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buf[..read]);
+    }
+    Some(format!("{:x}", hasher.finalize()))
+}
+
+impl GlyphCache {
+    fn new(base_dir: &Path) -> Result<Self, MediaError> {
+        fs::create_dir_all(base_dir)
+            .map_err(|e| MediaError::new("cache_error", format!("建立文字快取目錄失敗: {e}")))?;
+
+        let db_path = base_dir.join(TEXT_CACHE_DB_FILE);
+        let conn = Connection::open(db_path)
+            .map_err(|e| MediaError::new("cache_error", format!("開啟文字快取資料庫失敗: {e}")))?;
+
+        let _ = conn.pragma_update(None, "journal_mode", "WAL");
+        let _ = conn.pragma_update(None, "synchronous", "NORMAL");
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS page_boxes (
+                file_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                page_index INTEGER NOT NULL,
+                rotation INTEGER NOT NULL,
+                extractor_version INTEGER NOT NULL,
+                payload BLOB NOT NULL,
+                payload_size INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                PRIMARY KEY (file_hash, file_size, page_index, rotation, extractor_version)
+            )",
+            [],
+        )
+        .map_err(|e| MediaError::new("cache_error", format!("初始化文字快取表失敗: {e}")))?;
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_page_boxes_updated_at ON page_boxes(updated_at)",
+            [],
+        )
+        .ok();
+
+        Ok(Self { conn })
+    }
+
+    fn get(&self, key: &CacheKey) -> Option<PageTextContent> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(
+                "SELECT payload FROM page_boxes
+                 WHERE file_hash = ?1 AND file_size = ?2 AND page_index = ?3
+                 AND rotation = ?4 AND extractor_version = ?5",
+            )
+            .ok()?;
+
+        let payload: Option<Vec<u8>> = stmt
+            .query_row(
+                params![
+                    key.file_hash.as_str(),
+                    u64_to_i64(key.file_size),
+                    u32_to_i64(key.page_index),
+                    i64::from(key.rotation_deg),
+                    key.extractor_version
+                ],
+                |row| row.get(0),
+            )
+            .optional()
+            .ok()?;
+
+        let payload = payload?;
+
+        // Touch updated_at to keep LRU ordering on hits
+        let _ = self.conn.execute(
+            "UPDATE page_boxes SET updated_at = ?1
+             WHERE file_hash = ?2 AND file_size = ?3 AND page_index = ?4
+             AND rotation = ?5 AND extractor_version = ?6",
+            params![
+                unix_ts_secs(),
+                key.file_hash.as_str(),
+                u64_to_i64(key.file_size),
+                u32_to_i64(key.page_index),
+                i64::from(key.rotation_deg),
+                key.extractor_version
+            ],
+        );
+
+        let mut decoder = GzDecoder::new(payload.as_slice());
+        let mut buf: Vec<u8> = Vec::new();
+        if decoder.read_to_end(&mut buf).is_err() {
+            return None;
+        }
+        serde_json::from_slice(&buf).ok()
+    }
+
+    fn put(&self, key: &CacheKey, content: &PageTextContent) -> Result<(), MediaError> {
+        let json = serde_json::to_vec(content)
+            .map_err(|e| MediaError::new("cache_error", format!("序列化文字快取失敗: {e}")))?;
+
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder
+            .write_all(&json)
+            .map_err(|e| MediaError::new("cache_error", format!("壓縮文字快取失敗: {e}")))?;
+        let payload = encoder
+            .finish()
+            .map_err(|e| MediaError::new("cache_error", format!("完成壓縮失敗: {e}")))?;
+
+        let payload_size = u64_to_i64(payload.len() as u64);
+        let ts = unix_ts_secs();
+
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO page_boxes
+                 (file_hash, file_size, page_index, rotation, extractor_version, payload, payload_size, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    key.file_hash.as_str(),
+                    u64_to_i64(key.file_size),
+                    u32_to_i64(key.page_index),
+                    i64::from(key.rotation_deg),
+                    key.extractor_version,
+                    payload,
+                    payload_size,
+                    ts
+                ],
+            )
+            .map_err(|e| MediaError::new("cache_error", format!("寫入文字快取失敗: {e}")))?;
+
+        let _ = self.prune(TEXT_CACHE_SOFT_LIMIT_BYTES);
+        Ok(())
+    }
+
+    fn prune(&self, budget_bytes: i64) -> rusqlite::Result<()> {
+        let total: i64 = self
+            .conn
+            .query_row("SELECT IFNULL(SUM(payload_size), 0) FROM page_boxes", [], |row| {
+                row.get(0)
+            })?;
+
+        if total <= budget_bytes {
+            return Ok(());
+        }
+
+        let mut to_remove = total - budget_bytes;
+        let mut stmt = self.conn.prepare(
+            "SELECT rowid, payload_size FROM page_boxes ORDER BY updated_at ASC",
+        )?;
+        let mut rows = stmt.query([])?;
+        let mut victims: Vec<i64> = Vec::new();
+
+        while to_remove > 0 {
+            if let Some(row) = rows.next()? {
+                let rowid: i64 = row.get(0)?;
+                let size: i64 = row.get(1)?;
+                victims.push(rowid);
+                if size >= to_remove {
+                    break;
+                }
+                to_remove = to_remove.saturating_sub(size);
+            } else {
+                break;
+            }
+        }
+
+        for rowid in victims {
+            let _ = self.conn.execute("DELETE FROM page_boxes WHERE rowid = ?1", params![rowid]);
+        }
+        Ok(())
+    }
+}
+
 enum PdfRequest {
     Open {
         path: String,
@@ -1140,7 +1372,7 @@ enum PdfRequest {
     },
 }
 
-pub fn init_pdf_worker() {
+pub fn init_pdf_worker(cache_dir: PathBuf) {
     let (tx, rx) = mpsc::channel::<PdfRequest>();
     *WORKER_TX.lock().unwrap() = Some(tx);
     std::thread::spawn(move || {
@@ -1153,10 +1385,14 @@ pub fn init_pdf_worker() {
                 return;
             }
         };
-        let mut docs: HashMap<u64, PdfDocument> = HashMap::new();
-        let mut paths: HashMap<u64, String> = HashMap::new();
+        let mut docs: HashMap<u64, PdfDocRecord<'_>> = HashMap::new();
         // 最小允許世代：小於此值的渲染將被立刻忽略（最佳努力取消）
         let mut min_gen: HashMap<(u64, u32), u64> = HashMap::new();
+        let cache_root = cache_dir.join(TEXT_CACHE_DIR_NAME);
+        let mut glyph_cache = GlyphCache::new(&cache_root).ok();
+        if glyph_cache.is_none() {
+            warn!("文字框快取初始化失敗，將以非快取模式運行");
+        }
         loop {
             match rx.recv() {
                 Ok(PdfRequest::Open { path, reply }) => {
@@ -1166,15 +1402,21 @@ pub fn init_pdf_worker() {
                         })?;
                         let pages = document.pages().len() as usize;
                         let id = NEXT_DOC_ID.fetch_add(1, Ordering::SeqCst);
-                        docs.insert(id, document);
-                        paths.insert(id, path);
+                        let file_meta = fs::metadata(&path).ok();
+                        let record = PdfDocRecord {
+                            doc: document,
+                            path: path.clone(),
+                            file_size: file_meta.as_ref().map(|m| m.len()),
+                            file_hash: None,
+                            dirty: false,
+                        };
+                        docs.insert(id, record);
                         Ok(PdfOpenResult { doc_id: id, pages })
                     })();
                     let _ = reply.send(res);
                 }
                 Ok(PdfRequest::Close { doc_id, reply }) => {
                     let _ = docs.remove(&doc_id);
-                    let _ = paths.remove(&doc_id);
                     let _ = reply.send(Ok(()));
                 }
                 Ok(PdfRequest::Render { args, reply }) => {
@@ -1190,7 +1432,7 @@ pub fn init_pdf_worker() {
                                 return Err(MediaError::new("canceled", "render canceled"));
                             }
                         }
-                        render_page_for_document(doc, &args)
+                        render_page_for_document(&doc.doc, &args)
                     })();
                     let _ = reply.send(res);
                 }
@@ -1206,7 +1448,7 @@ pub fn init_pdf_worker() {
                         let idx_u16: u16 = page_index.try_into().map_err(|_| {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", page_index))
                         })?;
-                        let page = doc.pages().get(idx_u16).map_err(|_| {
+                        let page = doc.doc.pages().get(idx_u16).map_err(|_| {
                             MediaError::new("not_found", format!("頁索引不存在: {}", page_index))
                         })?;
                         Ok(PdfPageSize {
@@ -1257,7 +1499,7 @@ pub fn init_pdf_worker() {
                             quality,
                             r#gen: None,
                         };
-                        let page = render_page_for_document(doc, &args)?;
+                        let page = render_page_for_document(&doc.doc, &args)?;
                         std::fs::write(&dest_path, &page.image_bytes).map_err(|e| {
                             MediaError::new("io_error", format!("寫入影像失敗: {e}"))
                         })?;
@@ -1284,7 +1526,7 @@ pub fn init_pdf_worker() {
                         })?;
                         new_doc
                             .pages_mut()
-                            .copy_page_from_document(doc, idx_u16, 0)
+                            .copy_page_from_document(&doc.doc, idx_u16, 0)
                             .map_err(|e| {
                                 MediaError::new("io_error", format!("複製頁面失敗: {e}"))
                             })?;
@@ -1313,12 +1555,18 @@ pub fn init_pdf_worker() {
                         let idx_u16: u16 = index.try_into().map_err(|_| {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", index))
                         })?;
-                        doc.pages_mut()
-                            .create_page_at_index(size, idx_u16)
-                            .map_err(|e| {
-                                MediaError::new("io_error", format!("插入空白頁失敗: {e}"))
-                            })?;
-                        Ok(doc.pages().len() as usize)
+                        {
+                            let mut pages = doc.doc.pages_mut();
+                            pages
+                                .create_page_at_index(size, idx_u16)
+                                .map_err(|e| {
+                                    MediaError::new("io_error", format!("插入空白頁失敗: {e}"))
+                                })?;
+                        }
+                        doc.dirty = true;
+                        doc.file_hash = None;
+                        doc.file_size = None;
+                        Ok(doc.doc.pages().len() as usize)
                     })();
                     let _ = reply.send(res);
                 }
@@ -1329,10 +1577,10 @@ pub fn init_pdf_worker() {
                 }) => {
                     let res = (|| -> Result<usize, MediaError> {
                         // 取出文件所有權以避免與 HashMap 的借用衝突
-                        let old = docs.remove(&doc_id).ok_or_else(|| {
+                        let mut record = docs.remove(&doc_id).ok_or_else(|| {
                             MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
                         })?;
-                        let page_count = old.pages().len();
+                        let page_count = record.doc.pages().len();
                         if page_count == 0 {
                             return Err(MediaError::new("invalid_input", "文件沒有任何頁面"));
                         }
@@ -1387,13 +1635,17 @@ pub fn init_pdf_worker() {
                         })?;
                         new_doc
                             .pages_mut()
-                            .copy_pages_from_document(&old, &spec, 0)
+                            .copy_pages_from_document(&record.doc, &spec, 0)
                             .map_err(|e| {
                                 MediaError::new("io_error", format!("複製頁面失敗: {e}"))
                             })?;
                         let pages_after = new_doc.pages().len() as usize;
+                        record.doc = new_doc;
+                        record.dirty = true;
+                        record.file_hash = None;
+                        record.file_size = None;
                         // 替換文件
-                        docs.insert(doc_id, new_doc);
+                        docs.insert(doc_id, record);
                         Ok(pages_after)
                     })();
                     let _ = reply.send(res);
@@ -1424,10 +1676,15 @@ pub fn init_pdf_worker() {
                         let idx_u16: u16 = index.try_into().map_err(|_| {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", index))
                         })?;
-                        let mut page = doc.pages_mut().get(idx_u16).map_err(|_| {
-                            MediaError::new("not_found", format!("頁索引不存在: {}", index))
-                        })?;
-                        page.set_rotation(rot);
+                        {
+                            let mut page = doc.doc.pages_mut().get(idx_u16).map_err(|_| {
+                                MediaError::new("not_found", format!("頁索引不存在: {}", index))
+                            })?;
+                            page.set_rotation(rot);
+                        }
+                        doc.dirty = true;
+                        doc.file_hash = None;
+                        doc.file_size = None;
                         Ok(())
                     })();
                     let _ = reply.send(res);
@@ -1446,7 +1703,7 @@ pub fn init_pdf_worker() {
                         let idx_u16: u16 = index.try_into().map_err(|_| {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", index))
                         })?;
-                        let mut page = doc.pages_mut().get(idx_u16).map_err(|_| {
+                        let mut page = doc.doc.pages_mut().get(idx_u16).map_err(|_| {
                             MediaError::new("not_found", format!("頁索引不存在: {}", index))
                         })?;
                         let cur = page.rotation().map_err(|e| {
@@ -1469,6 +1726,9 @@ pub fn init_pdf_worker() {
                             _ => PdfPageRenderRotation::None,
                         };
                         page.set_rotation(set_to);
+                        doc.dirty = true;
+                        doc.file_hash = None;
+                        doc.file_size = None;
                         Ok(match set_to {
                             PdfPageRenderRotation::None => 0,
                             PdfPageRenderRotation::Degrees90 => 90,
@@ -1488,7 +1748,7 @@ pub fn init_pdf_worker() {
                     let res = (|| -> Result<usize, MediaError> {
                         if src_doc_id == dest_doc_id {
                             // 同文件複製：先取出文件所有權，避免 HashMap 借用衝突
-                            let mut doc = docs.remove(&src_doc_id).ok_or_else(|| {
+                            let mut record = docs.remove(&src_doc_id).ok_or_else(|| {
                                 MediaError::new(
                                     "not_found",
                                     format!("未知的 docId: {}", src_doc_id),
@@ -1505,7 +1765,7 @@ pub fn init_pdf_worker() {
                                 )
                             })?;
                             {
-                                let src_ref = &doc;
+                                let src_ref = &record.doc;
                                 tmp.pages_mut()
                                     .copy_page_from_document(src_ref, idx_src_u16, 0)
                                     .map_err(|e| {
@@ -1518,13 +1778,18 @@ pub fn init_pdf_worker() {
                                     format!("頁索引過大: {}", dest_index),
                                 )
                             })?;
-                            doc.pages_mut()
+                            record
+                                .doc
+                                .pages_mut()
                                 .copy_pages_from_document(&tmp, "1", idx_dest_u16)
                                 .map_err(|e| {
                                     MediaError::new("io_error", format!("插入頁面失敗: {e}"))
                                 })?;
-                            let pages_after = doc.pages().len() as usize;
-                            docs.insert(src_doc_id, doc);
+                            let pages_after = record.doc.pages().len() as usize;
+                            record.dirty = true;
+                            record.file_hash = None;
+                            record.file_size = None;
+                            docs.insert(src_doc_id, record);
                             Ok(pages_after)
                         } else {
                             // 跨文件：先取出目標文件以避免與來源借用衝突
@@ -1552,12 +1817,16 @@ pub fn init_pdf_worker() {
                                     format!("頁索引過大: {}", dest_index),
                                 )
                             })?;
-                            dest.pages_mut()
-                                .copy_page_from_document(src, idx_src_u16, idx_dest_u16)
+                            dest.doc
+                                .pages_mut()
+                                .copy_page_from_document(&src.doc, idx_src_u16, idx_dest_u16)
                                 .map_err(|e| {
                                     MediaError::new("io_error", format!("複製頁面失敗: {e}"))
                                 })?;
-                            let pages_after = dest.pages().len() as usize;
+                            let pages_after = dest.doc.pages().len() as usize;
+                            dest.dirty = true;
+                            dest.file_hash = None;
+                            dest.file_size = None;
                             docs.insert(dest_doc_id, dest);
                             Ok(pages_after)
                         }
@@ -1571,6 +1840,9 @@ pub fn init_pdf_worker() {
                     reply,
                 }) => {
                     let res = (|| -> Result<(String, usize), MediaError> {
+                        let doc = docs.get_mut(&doc_id).ok_or_else(|| {
+                            MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
+                        })?;
                         let dest = match (dest_path, overwrite.unwrap_or(false)) {
                             (Some(p), ow) => {
                                 if !ow && Path::new(&p).exists() {
@@ -1581,12 +1853,7 @@ pub fn init_pdf_worker() {
                                 }
                                 p
                             }
-                            (None, true) => paths.get(&doc_id).cloned().ok_or_else(|| {
-                                MediaError::new(
-                                    "invalid_input",
-                                    "未提供 destPath，且無可覆蓋之原始路徑",
-                                )
-                            })?,
+                            (None, true) => doc.path.clone(),
                             _ => {
                                 return Err(MediaError::new(
                                     "invalid_input",
@@ -1594,14 +1861,15 @@ pub fn init_pdf_worker() {
                                 ));
                             }
                         };
-                        let doc = docs.get(&doc_id).ok_or_else(|| {
-                            MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
-                        })?;
-                        doc.save_to_file(&dest).map_err(|e| {
+                        doc.doc.save_to_file(&dest).map_err(|e| {
                             MediaError::new("io_error", format!("寫入檔案失敗: {e}"))
                         })?;
-                        paths.insert(doc_id, dest.clone());
-                        let pages = doc.pages().len() as usize;
+                        doc.path = dest.clone();
+                        let meta = fs::metadata(&dest).ok();
+                        doc.file_size = meta.as_ref().map(|m| m.len());
+                        doc.file_hash = None;
+                        doc.dirty = false;
+                        let pages = doc.doc.pages().len() as usize;
                         Ok((dest, pages))
                     })();
                     let _ = reply.send(res);
@@ -1710,15 +1978,57 @@ pub fn init_pdf_worker() {
                             None
                         }
 
-                        let doc = docs.get(&doc_id).ok_or_else(|| {
+                        let doc = docs.get_mut(&doc_id).ok_or_else(|| {
                             MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
                         })?;
+
+                        if doc.file_size.is_none() {
+                            doc.file_size = fs::metadata(&doc.path).ok().map(|m| m.len());
+                        }
+                        let cache_allowed = !doc.dirty;
+                        let file_size_for_cache = doc.file_size;
+                        let file_hash_for_cache = if cache_allowed {
+                            if doc.file_hash.is_none() {
+                                doc.file_hash = compute_file_hash(&doc.path);
+                            }
+                            doc.file_hash.clone()
+                        } else {
+                            None
+                        };
+
                         let idx_u16: u16 = page_index.try_into().map_err(|_| {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", page_index))
                         })?;
-                        let page = doc.pages().get(idx_u16).map_err(|_| {
+                        let page = doc.doc.pages().get(idx_u16).map_err(|_| {
                             MediaError::new("not_found", format!("頁索引不存在: {}", page_index))
                         })?;
+
+                        let rotation = page.rotation().map_err(|e| {
+                            MediaError::new("io_error", format!("取得頁面旋轉失敗: {e}"))
+                        })?;
+                        let rotation_deg = rotation_to_degrees(rotation);
+
+                        let cache_key = if cache_allowed {
+                            if let (Some(hash), Some(size)) = (file_hash_for_cache, file_size_for_cache) {
+                                Some(CacheKey {
+                                    file_hash: hash,
+                                    file_size: size,
+                                    page_index,
+                                    rotation_deg,
+                                    extractor_version: TEXT_EXTRACTOR_VERSION,
+                                })
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+
+                        if let (Some(cache), Some(key)) = (glyph_cache.as_ref(), cache_key.as_ref()) {
+                            if let Some(hit) = cache.get(key) {
+                                return Ok(hit);
+                            }
+                        }
 
                         let width_pt = page.width().value as f32;
                         let height_pt = page.height().value as f32;
@@ -1834,12 +2144,18 @@ pub fn init_pdf_worker() {
                             }
                         }
 
-                        Ok(PageTextContent {
+                        let content = PageTextContent {
                             page_index,
                             chars,
                             width_pt,
                             height_pt,
-                        })
+                        };
+
+                        if let (Some(cache), Some(key)) = (glyph_cache.as_ref(), cache_key.as_ref()) {
+                            let _ = cache.put(key, &content);
+                        }
+
+                        Ok(content)
                     })();
                     let _ = reply.send(res);
                 }
@@ -1892,7 +2208,7 @@ pub struct PdfPageSize {
 }
 
 // Text selection structures
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TextChar {
     pub text: String,
@@ -1903,7 +2219,7 @@ pub struct TextChar {
     pub font_size: f32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PageTextContent {
     pub page_index: u32,

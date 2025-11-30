@@ -163,6 +163,15 @@ MediaView 組件支援兩種檢視模式：
 
 PDF 頁面僅維持高解析度快取（RAW 預設），按需載入並以 LRU 策略淘汰，確保視覺品質與互動流暢。低清預覽已移除。
 
+### 文字框快取（PDF Text）
+
+- 目的：加速 `GetPageText`／文字框抽取，避免重複跑 `FPDFText_GetCharBox`。
+- 儲存：桌面端放於 app cache 目錄下的 `db/page_text_cache.db`（SQLite），內容為 JSON + gzip 壓縮的 `PageTextContent`。
+- Key：`{file_hash (SHA-256), file_size, page_index, rotation_deg, extractor_version}`。異動格式時提升 `extractor_version`，避免讀舊資料。
+- 失效：若檔案雜湊或大小不同則重新計算；文件被編輯標記為 dirty 時不讀寫快取；儲存成功後重算雜湊並清除 dirty。
+- 容量：軟上限（預設 50MB），以 `updated_at` 先進先出刪除，避免 DB 無限增長。
+- 約束：SQLite 檔僅由文字框快取模組建立與管理，其他功能若需共用同一 DB，必須透過共用介面呼叫，不得自行開新連線或新檔。
+
 ## 設定系統
 
 使用 Pinia store 管理全域設定，支援：
