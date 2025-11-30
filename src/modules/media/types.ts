@@ -47,7 +47,7 @@ export interface PdfPageSize {
   heightPt: number
 }
 
-// Text selection types
+// Text selection types (legacy - kept for reference)
 export interface TextChar {
   text: string
   x: number
@@ -57,9 +57,19 @@ export interface TextChar {
   fontSize: number
 }
 
+/** 詞彙級合併的文字片段（減少 DOM 數量 80%+） */
+export interface TextSpan {
+  text: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface PageTextContent {
   pageIndex: number
-  chars: TextChar[]
+  /** 已合併的文字片段（優化版本） */
+  spans: TextSpan[]
   widthPt: number
   heightPt: number
 }

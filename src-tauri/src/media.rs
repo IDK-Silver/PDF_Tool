@@ -1054,6 +1054,7 @@ pub struct TextLayerSettings {
     pub small_gap_threshold: Option<f32>,
     pub small_gap_spacing: Option<f32>,
     pub global_offset_x: Option<f32>,
+    pub global_offset_y: Option<f32>,
 }
 
 const TEXT_CACHE_DIR_NAME: &str = "db";
@@ -1954,12 +1955,15 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         fn char_geometry(
                             ch: &PdfPageTextChar,
                             global_offset_x: f32,
+                            global_offset_y: f32,
                         ) -> Option<(f32, f32, f32, f32)> {
                             // 1) Try tight bounds (FPDFText_GetCharBox) - more accurate for CJK punctuation
                             //    This returns the actual glyph bounding box, not advance width
                             if let Ok(b) = ch.tight_bounds() {
                                 let x = b.left().value as f32 + global_offset_x;
-                                let y = b.bottom().value as f32;
+                                // PDF 座標系 Y 軸向上，正值 offset_y 表示視覺上向下移動
+                                // 因此需要減去 offset_y（在 PDF 座標系中向下移動）
+                                let y = b.bottom().value as f32 - global_offset_y;
                                 let w = b.width().value as f32;
                                 let h = b.height().value as f32;
                                 return Some((x, y, w, h));
@@ -1969,7 +1973,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             //    Height = font size, width = advance (less accurate for rotated/CJK text)
                             if let Ok(b) = ch.loose_bounds() {
                                 let x = b.left().value as f32 + global_offset_x;
-                                let y = b.bottom().value as f32;
+                                let y = b.bottom().value as f32 - global_offset_y;
                                 let w = b.width().value as f32;
                                 let h = b.height().value as f32;
                                 return Some((x, y, w, h));
@@ -2044,9 +2048,11 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let small_gap_threshold = settings.small_gap_threshold.unwrap_or(0.5);
                         let small_gap_spacing = settings.small_gap_spacing.unwrap_or(0.5);
                         let global_offset_x = settings.global_offset_x.unwrap_or(0.0);
+                        let global_offset_y = settings.global_offset_y.unwrap_or(0.0);
 
                         let char_count = text_page.chars().len();
-                        let mut chars = Vec::with_capacity(char_count);
+                        let mut spans: Vec<TextSpan> = Vec::with_capacity(char_count / 5); // 預估每個 span 約 5 字
+                        let mut current_span: Option<TextSpan> = None;
                         let mut prev_x_end: Option<f32> = None;
                         let mut prev_y: Option<f32> = None;
                         let mut prev_height: Option<f32> = None;
@@ -2055,12 +2061,15 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let mut running_height_sum: f32 = 0.0;
                         let mut running_height_count: usize = 0;
 
+                        // 智慧合併閾值：間距超過此值則切斷 span
+                        let span_break_factor = 0.3_f32; // 間距 > 0.3 * font_size 視為空格/新詞
+
                         for i in 0..char_count {
                             if let Ok(text_char) = text_page.chars().get(i) {
                                 if let Some(text_ch) = text_char.unicode_char() {
                                     // Get geometry with improved fallback
                                     if let Some((raw_x, y, mut width, mut height)) =
-                                        char_geometry(&text_char, global_offset_x)
+                                        char_geometry(&text_char, global_offset_x, global_offset_y)
                                     {
                                         let mut x = raw_x;
 
@@ -2085,9 +2094,6 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                             height = em_baseline;
                                         }
 
-                                        // Use character height as approximate font size
-                                        let font_size = height;
-
                                         // Check if this character is on the same line as the previous one
                                         if let (Some(prev_end), Some(prev_y_val), Some(prev_h)) =
                                             (prev_x_end, prev_y, prev_height)
@@ -2106,22 +2112,18 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                                     // Character overlaps with previous one
                                                     // Adjust position to avoid overlap
                                                     let new_x = prev_end + min_spacing;
-                                                    
+
                                                     // CRITICAL: Adjust width to maintain original character end position
                                                     // This ensures text selection box aligns with actual rendered position
                                                     width = (original_x_end - new_x).max(width * 0.5).max(1.0);
                                                     x = new_x;
-
-                                                    // log removed
                                                 } else if gap < small_gap_threshold && text_ch != ' ' {
                                                     // Very small gap for non-space characters
                                                     let new_x = prev_end + small_gap_spacing;
-                                                    
+
                                                     // Adjust width to maintain character end position
                                                     width = (original_x_end - new_x).max(width * 0.5).max(1.0);
                                                     x = new_x;
-
-                                                    // log removed
                                                 }
                                             }
                                         }
@@ -2131,22 +2133,65 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                         prev_y = Some(y);
                                         prev_height = Some(height);
 
-                                        chars.push(TextChar {
-                                            text: text_ch.to_string(),
-                                            x,
-                                            y,
-                                            width,
-                                            height,
-                                            font_size,
-                                        });
+                                        // ========= 智慧合併邏輯 =========
+                                        // 決定是否需要切斷當前 span
+                                        let mut should_break = true;
+
+                                        if let Some(ref mut curr) = current_span {
+                                            // 1. 檢查是否同一行 (Y 軸接近)
+                                            let same_line = (y - curr.y).abs() < (curr.height * 0.5);
+
+                                            if same_line {
+                                                // 2. 計算預期的下一個 X 位置
+                                                let expected_x = curr.x + curr.width;
+                                                let gap = x - expected_x;
+
+                                                // 3. 檢查間距是否正常
+                                                // gap < 0.3 * height 視為正常字距，合併
+                                                // gap 過大（空格）或過小（負值過多）則切斷
+                                                let gap_threshold = curr.height * span_break_factor;
+
+                                                if gap < gap_threshold && gap > -(curr.height * 0.15) {
+                                                    should_break = false;
+
+                                                    // 執行合併
+                                                    curr.text.push(text_ch);
+                                                    // 更新寬度：新字元的結束位置 - 原本的起始位置
+                                                    curr.width = (x + width) - curr.x;
+                                                    // 高度取較大者
+                                                    curr.height = curr.height.max(height);
+                                                }
+                                            }
+                                        }
+
+                                        if should_break {
+                                            // 如果有舊的 span，先存起來
+                                            if let Some(finished_span) = current_span.take() {
+                                                spans.push(finished_span);
+                                            }
+
+                                            // 開始新的 span
+                                            current_span = Some(TextSpan {
+                                                text: text_ch.to_string(),
+                                                x,
+                                                y,
+                                                width,
+                                                height,
+                                            });
+                                        }
                                     }
                                 }
                             }
                         }
 
+                        // 迴圈結束，把最後一個 span push 進去
+                        if let Some(last_span) = current_span {
+                            spans.push(last_span);
+                        }
+
                         let content = PageTextContent {
                             page_index,
-                            chars,
+                            spans,
                             width_pt,
                             height_pt,
                         };
@@ -2219,11 +2264,23 @@ pub struct TextChar {
     pub font_size: f32,
 }
 
+/// 詞彙級合併的文字片段（減少 DOM 數量 80%+）
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TextSpan {
+    pub text: String,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PageTextContent {
     pub page_index: u32,
-    pub chars: Vec<TextChar>,
+    /// 已合併的文字片段（優化版本）
+    pub spans: Vec<TextSpan>,
     pub width_pt: f32,
     pub height_pt: f32,
 }

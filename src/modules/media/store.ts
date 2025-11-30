@@ -484,6 +484,7 @@ export const useMediaStore = defineStore('media', () => {
       smallGapThreshold: settingsStore.s.textLayerSmallGapThreshold,
       smallGapSpacing: settingsStore.s.textLayerSmallGapSpacing,
       globalOffsetX: settingsStore.s.textLayerGlobalOffsetX,
+      globalOffsetY: settingsStore.s.textLayerGlobalOffsetY,
     }
 
     try {

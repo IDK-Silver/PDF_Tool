@@ -283,9 +283,45 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
       </section>
 
       <section id="text-layer" class="space-y-3">
-        <h2 class="font-medium text-base">文字層調整</h2>
+        <h2 class="font-medium text-base">文字層</h2>
         <div class="rounded-md border p-4 space-y-3">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="flex items-start gap-2">
+            <input type="checkbox" id="enableTextExtraction" v-model="s.enableTextExtraction" class="mt-1 w-4 h-4" />
+            <label for="enableTextExtraction" class="flex-1">
+              <span class="font-medium">啟用文字讀取</span>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                讀取 PDF 內的文字資訊，支援文字選取、複製與搜尋。關閉可略微提升渲染效能。
+              </p>
+            </label>
+          </div>
+
+          <div class="flex items-start gap-2" :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
+            <input type="checkbox" id="hideTextLayerWhileInteracting" v-model="s.hideTextLayerWhileInteracting" class="mt-1 w-4 h-4" />
+            <label for="hideTextLayerWhileInteracting" class="flex-1">
+              <span class="font-medium">縮放/移動時隱藏文字層</span>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                啟用後在縮放或移動 PDF 時會暫時隱藏文字層，減少視覺干擾。建議保持關閉（性能已優化）。
+              </p>
+            </label>
+          </div>
+
+          <div :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction || !s.hideTextLayerWhileInteracting }">
+            <label class="block mb-1">文字層渲染延遲（毫秒）</label>
+            <input
+              type="number"
+              step="50"
+              min="0"
+              max="1000"
+              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+              :value="s.textLayerRerenderDelayMs"
+              @input="s.textLayerRerenderDelayMs = number($event, s.textLayerRerenderDelayMs)"
+            />
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              互動結束後延遲顯示文字層的時間（僅在啟用隱藏時生效）。預設 0ms。
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3" :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
             <div>
               <label class="block mb-1">全局水平偏移（像素）</label>
               <input
@@ -295,8 +331,22 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.textLayerGlobalOffsetX"
                 @input="s.textLayerGlobalOffsetX = number($event, s.textLayerGlobalOffsetX)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">所有文字的水平偏移。正值向右，負值向左。預設 0。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">水平微調。若選取框偏右，請設為負值。預設 0。</p>
             </div>
+            <div>
+              <label class="block mb-1">全局垂直偏移（像素）</label>
+              <input
+                type="number"
+                step="0.1"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.textLayerGlobalOffsetY"
+                @input="s.textLayerGlobalOffsetY = number($event, s.textLayerGlobalOffsetY)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">垂直微調。若選取框偏下，請設為正值。預設 0。</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3" :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
             <div>
               <label class="block mb-1">重疊檢測閾值</label>
               <input

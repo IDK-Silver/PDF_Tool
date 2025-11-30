@@ -39,12 +39,16 @@ export interface SettingsState {
   // === 開發工具 ===
   devPerfOverlay: boolean
 
-  // === 文字層調整 ===
+  // === 文字層 ===
+  enableTextExtraction: boolean          // 是否啟用文字讀取（關閉可提升效能）
+  hideTextLayerWhileInteracting: boolean // 互動時隱藏文字層（false=保持顯示，推薦）
+  textLayerRerenderDelayMs: number       // 互動結束後延遲顯示文字層（ms，僅在隱藏模式生效）
   textLayerOverlapThreshold: number      // 重疊檢測閾值（負值表示需要調整的重疊量）
   textLayerMinSpacing: number            // 重疊時的最小間距（像素）
   textLayerSmallGapThreshold: number     // 小間距檢測閾值
   textLayerSmallGapSpacing: number       // 小間距時的調整值
   textLayerGlobalOffsetX: number         // 全局水平偏移（像素，正值向右）
+  textLayerGlobalOffsetY: number         // 全局垂直偏移（像素，正值向下）
 }
 
 export const defaultSettings: SettingsState = {
@@ -86,12 +90,16 @@ export const defaultSettings: SettingsState = {
   // 開發工具
   devPerfOverlay: false,
 
-  // 文字層調整
+  // 文字層
+  enableTextExtraction: true,         // 預設：啟用文字讀取
+  hideTextLayerWhileInteracting: false, // 預設：false（互動時保持顯示，性能已優化）
+  textLayerRerenderDelayMs: 0,        // 預設：0ms（立即顯示）
   textLayerOverlapThreshold: 0.0,     // 預設：完全重疊才調整
   textLayerMinSpacing: 1.0,           // 預設：1 像素最小間距
   textLayerSmallGapThreshold: 0.5,    // 預設：0.5 像素以下視為間距太小
   textLayerSmallGapSpacing: 0.5,      // 預設：小間距調整為 0.5 像素
-  textLayerGlobalOffsetX: 0,          // 預設：無全局偏移
+  textLayerGlobalOffsetX: 0,          // 預設：無全局水平偏移
+  textLayerGlobalOffsetY: 0,          // 預設：無全局垂直偏移
 }
 
 // 舊版參數映射（用於遷移）
@@ -126,11 +134,15 @@ export function migrateFromV1(old: any): SettingsState {
 
     devPerfOverlay: old.devPerfOverlay ?? defaultSettings.devPerfOverlay,
 
-    // 文字層調整（新參數，使用預設值）
+    // 文字層（新參數，使用預設值）
+    enableTextExtraction: old.enableTextExtraction ?? defaultSettings.enableTextExtraction,
+    hideTextLayerWhileInteracting: old.hideTextLayerWhileInteracting ?? defaultSettings.hideTextLayerWhileInteracting,
+    textLayerRerenderDelayMs: old.textLayerRerenderDelayMs ?? defaultSettings.textLayerRerenderDelayMs,
     textLayerOverlapThreshold: old.textLayerOverlapThreshold ?? defaultSettings.textLayerOverlapThreshold,
     textLayerMinSpacing: old.textLayerMinSpacing ?? defaultSettings.textLayerMinSpacing,
     textLayerSmallGapThreshold: old.textLayerSmallGapThreshold ?? defaultSettings.textLayerSmallGapThreshold,
     textLayerSmallGapSpacing: old.textLayerSmallGapSpacing ?? defaultSettings.textLayerSmallGapSpacing,
     textLayerGlobalOffsetX: old.textLayerGlobalOffsetX ?? defaultSettings.textLayerGlobalOffsetX,
+    textLayerGlobalOffsetY: old.textLayerGlobalOffsetY ?? defaultSettings.textLayerGlobalOffsetY,
   }
 }

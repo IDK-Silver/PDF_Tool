@@ -87,6 +87,8 @@ const searchAnchor = ref<{ top: number; left: number; width: number } | null>(nu
 const SEARCH_PANEL_MIN_WIDTH = 240
 const SEARCH_PANEL_MAX_WIDTH = 360
 const SEARCH_PANEL_MARGIN = 12
+const isInteracting = ref(false)
+let interactionTimer: number | null = null
 
 function getRenderFormat() {
   return settings.s.renderFormat
@@ -144,15 +146,18 @@ function buildNormalizedPageData(pageIndex: number, content: PageTextContent | n
   if (cached && cached.source === content) return cached
   const normalizedParts: string[] = []
   const indexMap: number[] = []
-  for (let i = 0; i < content.chars.length; i++) {
-    const ch = content.chars[i]
-    if (!ch) continue
-    const raw = ch.text || ''
+  // 遍歷所有 spans，每個 span 包含多個字元
+  let charIndex = 0
+  for (const span of content.spans) {
+    if (!span) continue
+    const raw = span.text || ''
     if (!raw) continue
     for (const unit of Array.from(raw)) {
-      if (/\s/.test(unit)) continue
-      normalizedParts.push(unit.toLowerCase())
-      indexMap.push(i)
+      if (!/\s/.test(unit)) {
+        normalizedParts.push(unit.toLowerCase())
+        indexMap.push(charIndex)
+      }
+      charIndex++
     }
   }
   const data = { normalized: normalizedParts.join(''), map: indexMap, source: content }
@@ -604,6 +609,17 @@ function onGlobalKeyDown(e: KeyboardEvent) {
 function handleWindowResize() {
   if (!searchVisible.value) return
   setSearchAnchor(true)
+}
+
+function triggerInteraction() {
+  isInteracting.value = true
+  if (interactionTimer) clearTimeout(interactionTimer)
+  // 使用設定中的延遲時間，0 表示立即顯示
+  const delay = settings.s.textLayerRerenderDelayMs
+  interactionTimer = window.setTimeout(() => {
+    isInteracting.value = false
+    interactionTimer = null
+  }, delay)
 }
 
 const pageHighlightMap = computed(() => {
@@ -1070,6 +1086,24 @@ const renderIndices = computed(() => {
   return Array.from({ length: tp }, (_, i) => i)
 })
 
+// DOM 虛擬化：只渲染視野附近的頁面內容，其他頁面只保留占位框
+// 這會大幅減少 DOM 節點數量，提升記憶體與渲染效能
+const mountedPages = computed(() => {
+  const buffer = 2 // 前後各保留 2 頁的內容
+  const s = visibleStart.value - buffer
+  const e = visibleEnd.value + buffer
+  const set = new Set<number>()
+  const tp = totalPages.value || 0
+  for (let i = s; i <= e; i++) {
+    if (i >= 0 && i < tp) set.add(i)
+  }
+  return set
+})
+
+function shouldRenderPageContent(idx: number) {
+  return mountedPages.value.has(idx)
+}
+
 let resizeObs: ResizeObserver | null = null
 const scrollRootEl = ref<HTMLElement | null>(null)
 let rafScheduled = false
@@ -1201,6 +1235,7 @@ function updateVisibleByScroll() {
 }
 
 function onScroll() {
+  triggerInteraction()
   if (scrollRaf !== null) return
   if (scrollEndTimer) clearTimeout(scrollEndTimer)
   scrollRaf = requestAnimationFrame(() => {
@@ -1493,6 +1528,10 @@ onBeforeUnmount(() => {
   if (container) {
     container.removeEventListener('wheel', handleWheelZoom)
   }
+  if (interactionTimer) {
+    clearTimeout(interactionTimer)
+    interactionTimer = null
+  }
 })
 
 /**
@@ -1502,6 +1541,7 @@ onBeforeUnmount(() => {
  * - 在縫隙中：使用數學計算（類似 Google Maps）
  */
 function handleWheelZoom(e: WheelEvent) {
+  triggerInteraction()
   const ctx = createZoomContext()
   if (!ctx) return
   zoomHandleWheel(e, ctx, () => triggerRerender(300))
@@ -1578,28 +1618,37 @@ function getPageTextLayerProps(idx: number) {
   if (!sizeInfo) return null
 
   const baseCssWidth = media.baseCssWidthAt100(idx) || sizeInfo.widthPt * (96 / 72)
-  const measured = pageCardSizes.value[idx]
 
-  let displayWidthPx = measured?.width
-  let displayHeightPx = measured?.height
+  let displayWidthPx: number | undefined
+  let displayHeightPx: number | undefined
 
-  if (displayWidthPx == null || displayWidthPx <= 0) {
-    if (viewMode.value === 'fit') {
+  if (viewMode.value === 'actual') {
+    // 修正：在 actual 模式下直接計算目標尺寸，不等待 RO 測量
+    // 解決縮放時文字層延遲更新的問題
+    const targetWidth = baseCssWidth * (zoomTarget.value / 100)
+    const w = Math.max(50, Math.round(targetWidth))
+    displayWidthPx = w
+
+    // 計算高度以保持與 pageCardStyle 一致的比例
+    const aspect = sizeInfo.heightPt / Math.max(sizeInfo.widthPt, 0.001)
+    displayHeightPx = Math.round(w * aspect)
+  } else {
+    // Fit 模式優先使用測量值
+    const measured = pageCardSizes.value[idx]
+    if (measured?.width && measured.width > 0) {
+      displayWidthPx = measured.width
+      displayHeightPx = measured.height
+    } else {
+      // Fallback：使用容器寬度
       const available = containerW.value ? Math.max(0, containerW.value - 48) : 0
       if (available > 0) {
         displayWidthPx = available
       } else {
         displayWidthPx = baseCssWidth
       }
-    } else {
-      const targetWidth = baseCssWidth * (zoomTarget.value / 100)
-      displayWidthPx = Math.max(50, Math.round(targetWidth))
+      const aspect = sizeInfo.heightPt / Math.max(sizeInfo.widthPt, 0.001)
+      displayHeightPx = displayWidthPx * aspect
     }
-  }
-
-  if (displayHeightPx == null || displayHeightPx <= 0) {
-    const aspect = sizeInfo.heightPt / Math.max(sizeInfo.widthPt, 0.001)
-    displayHeightPx = displayWidthPx * aspect
   }
 
   const pxPerPointX = displayWidthPx / Math.max(sizeInfo.widthPt, 0.001)
@@ -1622,6 +1671,20 @@ function getPageTextLayerPropsList(idx: number) {
     ...props,
     highlightRanges: getPageHighlightRanges(idx),
   }]
+}
+
+/**
+ * 效能優化：只為中心附近的頁面渲染文字層
+ * 減少 DOM 節點數量，大幅提升滾動效能
+ */
+const TEXT_LAYER_RANGE = 1 // 中心頁面 ±1 頁
+function shouldRenderTextLayer(idx: number): boolean {
+  if (!settings.s.enableTextExtraction) return false
+  // 搜尋時需要高亮，擴大範圍
+  if (searchVisible.value && searchMatches.value.some(m => m.pageIndex === idx)) {
+    return true
+  }
+  return Math.abs(idx - centerIndex.value) <= TEXT_LAYER_RANGE
 }
 
 defineExpose({
@@ -1670,48 +1733,57 @@ defineExpose({
               :style="pageCardStyle(idx)"
               :ref="(el) => registerPageCard(idx, el as HTMLElement | null)"
             >
-              <img
-                v-if="getPageDisplayUrl(idx)"
-                :src="getPageDisplayUrl(idx)"
-                :alt="`page-${idx}`"
-                :class="[
-                  viewMode === 'fit' ? 'w-full block' : 'block',
-                  'disable-live-text',
-                ]"
-                :style="imgStyle(idx)"
-                style="pointer-events: none;"
-                decoding="async"
-                loading="lazy"
-                draggable="false"
-              />
-              <canvas
-                v-else-if="isRawPage(idx)"
-                :class="[
-                  viewMode === 'fit' ? 'w-full block' : 'block',
-                  'disable-live-text',
-                ]"
-                :style="imgStyle(idx)"
-                style="pointer-events: none;"
-                :data-raw-page="idx"
-                :ref="(el: any) => drawRawInto(el as HTMLCanvasElement | null, idx)"
-              />
-              <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
-
-              <!-- Text selection layer -->
-              <div
-                v-if="docId != null"
-                class="absolute inset-0 pointer-events-none"
-                style="z-index: 1;"
-              >
-                <PdfTextLayer
-                  v-for="layerProps in getPageTextLayerPropsList(idx)"
-                  :key="`text-layer-${idx}`"
-                  :doc-id="docId"
-                  :page-index="idx"
-                  v-bind="layerProps"
-                  style="pointer-events: auto;"
+              <!-- DOM 虛擬化：只渲染視野附近頁面的實際內容 -->
+              <template v-if="shouldRenderPageContent(idx)">
+                <img
+                  v-if="getPageDisplayUrl(idx)"
+                  :src="getPageDisplayUrl(idx)"
+                  :alt="`page-${idx}`"
+                  :class="[
+                    viewMode === 'fit' ? 'w-full block' : 'block',
+                    'disable-live-text',
+                  ]"
+                  :style="imgStyle(idx)"
+                  style="pointer-events: none;"
+                  decoding="async"
+                  loading="lazy"
+                  draggable="false"
                 />
-              </div>
+                <canvas
+                  v-else-if="isRawPage(idx)"
+                  :class="[
+                    viewMode === 'fit' ? 'w-full block' : 'block',
+                    'disable-live-text',
+                  ]"
+                  :style="imgStyle(idx)"
+                  style="pointer-events: none;"
+                  :data-raw-page="idx"
+                  :ref="(el: any) => drawRawInto(el as HTMLCanvasElement | null, idx)"
+                />
+                <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
+
+                <!-- Text selection layer (只渲染中心附近頁面以優化效能) -->
+                <div
+                  v-if="docId != null && shouldRenderTextLayer(idx)"
+                  class="absolute inset-0 pointer-events-none"
+                  :style="{
+                    zIndex: 1,
+                    opacity: (settings.s.hideTextLayerWhileInteracting && isInteracting) ? 0 : 1,
+                    transition: 'opacity 0.12s ease-out',
+                  }"
+                >
+                  <PdfTextLayer
+                    v-for="layerProps in getPageTextLayerPropsList(idx)"
+                    :key="`text-layer-${idx}`"
+                    :doc-id="docId"
+                    :page-index="idx"
+                    v-bind="layerProps"
+                    style="pointer-events: auto;"
+                  />
+                </div>
+              </template>
+              <!-- 未掛載的頁面：空白占位，保持高度 -->
+              <div v-else class="w-full aspect-[1/1.414] bg-muted/30"></div>
             </div>
             <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
           </div>

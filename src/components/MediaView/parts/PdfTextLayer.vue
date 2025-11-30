@@ -1,8 +1,23 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { storeToRefs } from 'pinia'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useMediaStore } from '@/modules/media/store'
-import type { PageTextContent, TextChar } from '@/modules/media/types'
+import type { PageTextContent, TextSpan } from '@/modules/media/types'
+
+// Canvas 測量工具（模組層級，避免 Vue 響應式代理）
+// 用於計算瀏覽器實際渲染文字的寬度，解決字型渲染差異
+const measureCanvas = document.createElement('canvas')
+const measureCtx = measureCanvas.getContext('2d')!
+const widthCache = new Map<string, number>()
+
+function getMeasuredWidth(text: string, fontSize: number): number {
+  const key = `${fontSize}:${text}`
+  if (widthCache.has(key)) return widthCache.get(key)!
+
+  measureCtx.font = `${fontSize}px sans-serif`
+  const w = measureCtx.measureText(text).width
+  widthCache.set(key, w)
+  return w
+}
 
 const props = defineProps<{
   docId: number
@@ -17,25 +32,27 @@ const props = defineProps<{
 }>()
 
 const media = useMediaStore()
-const { pageText } = storeToRefs(media)
-const textContent = computed<PageTextContent | null>(() => {
-  const info = pageText.value[props.pageIndex]
-  return info ?? null
-})
+
+// 使用 shallowRef + freeze：避免為大量 spans 建立 Proxy
+const textContent = shallowRef<PageTextContent | null>(null)
+// 直接顯示所有 spans（因為已經在 Rust 端合併，數量大幅減少）
+const displayedSpans = shallowRef<TextSpan[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 let fetchToken = 0
 
-const safeWidth = computed(() => {
-  const w = props.layerWidthPx
-  return Number.isFinite(w) && w > 0 ? w : props.pageWidthPt * Math.max(props.pxPerPointX, 0.001)
-})
-const safeHeight = computed(() => {
-  const h = props.layerHeightPx
-  return Number.isFinite(h) && h > 0 ? h : props.pageHeightPt * Math.max(props.pxPerPointY, 0.001)
+// 計算 CSS Transform 的縮放比例
+// 文字永遠以 PDF 原始座標（pt）渲染，縮放交給 GPU 處理
+const layerTransform = computed(() => {
+  const sx = Number.isFinite(props.pxPerPointX) && props.pxPerPointX > 0
+    ? props.pxPerPointX
+    : 1
+  const sy = Number.isFinite(props.pxPerPointY) && props.pxPerPointY > 0
+    ? props.pxPerPointY
+    : 1
+  return `scale(${sx}, ${sy})`
 })
 
-// Load text when docId or pageIndex changes
 watch(
   () => [props.docId, props.pageIndex],
   async () => {
@@ -45,16 +62,22 @@ watch(
     error.value = null
     const token = ++fetchToken
 
+    // 切換頁面時先清空，避免殘影
+    textContent.value = null
+    displayedSpans.value = []
+    widthCache.clear() // 清空測量緩存
+
     try {
       const result = await media.getPageTextContent(props.pageIndex)
       if (token !== fetchToken) return
       if (result) {
-        console.log(`[PdfTextLayer] Loaded ${result.chars.length} chars for page ${props.pageIndex}`)
+        textContent.value = Object.freeze(result)
+        // 直接使用 spans（已在 Rust 端合併，數量少很多）
+        displayedSpans.value = result.spans
       } else {
         error.value = '無法取得頁面文字'
       }
     } catch (err) {
-      console.error('[PdfTextLayer] Failed to load text:', err)
       error.value = err instanceof Error ? err.message : String(err)
     } finally {
       if (token === fetchToken) {
@@ -65,54 +88,115 @@ watch(
   { immediate: true }
 )
 
-// Convert PDF coordinates to display coordinates
-function getCharStyle(char: TextChar) {
-  const scaleX = Number.isFinite(props.pxPerPointX) && props.pxPerPointX > 0
-    ? props.pxPerPointX
-    : safeWidth.value / Math.max(props.pageWidthPt, 0.001)
-  const scaleY = Number.isFinite(props.pxPerPointY) && props.pxPerPointY > 0
-    ? props.pxPerPointY
-    : safeHeight.value / Math.max(props.pageHeightPt, 0.001)
-
-  // PDF 座標是從左下角開始，需要轉換為從左上角開始
-  // 使用更高精度來減少累積誤差
-  // Note: char.x already includes global offset from backend
-  const left = Math.round(char.x * scaleX * 100) / 100
-  const width = Math.max(0, Math.round(char.width * scaleX * 100) / 100)
-  const height = Math.max(0, Math.round(char.height * scaleY * 100) / 100)
-  const top = Math.round((props.pageHeightPt - char.y - char.height) * scaleY * 100) / 100
-  const fontSize = Math.max(0, Math.round(char.fontSize * scaleY * 100) / 100)
-
-  // Return as string to allow !important
-  return `position: absolute; left: ${left}px; top: ${top}px; width: ${width}px; height: ${height}px; font-size: ${fontSize}px; line-height: ${height}px; white-space: pre; user-select: text !important; -webkit-user-select: text !important; color: transparent; -webkit-text-fill-color: transparent; background: transparent; cursor: text; pointer-events: auto !important;`
-}
-
-const highlightMap = computed<Record<number, 'active' | 'match'>>(() => {
-  const ranges = props.highlightRanges ?? []
-  const map: Record<number, 'active' | 'match'> = {}
-  const total = textContent.value?.chars.length ?? 0
-  if (!ranges.length || total <= 0) return map
-  const maxIndex = total - 1
-  for (const range of ranges) {
-    if (!range) continue
-    let start = Number.isFinite(range.start) ? Math.floor(range.start) : 0
-    let end = Number.isFinite(range.end) ? Math.floor(range.end) : start
-    if (start > end) [start, end] = [end, start]
-    start = Math.max(0, Math.min(start, maxIndex))
-    end = Math.max(0, Math.min(end, maxIndex))
-    const role: 'active' | 'match' = range.active ? 'active' : 'match'
-    for (let i = start; i <= end; i++) {
-      if (map[i] === 'active') continue
-      map[i] = role
-    }
-  }
-  return map
+onBeforeUnmount(() => {
+  // 清理
+  textContent.value = null
+  displayedSpans.value = []
+  widthCache.clear()
 })
 
-function getCharClass(idx: number) {
-  const role = highlightMap.value[idx]
-  if (role === 'active') return 'match-active'
-  if (role === 'match') return 'match-highlight'
+// 使用原始 PDF 座標（pt），並用 scaleX 強制對齊文字寬度
+// 這是解決字型渲染差異的根本方案（PDF.js 標準技術）
+function getSpanStyle(span: TextSpan, pageH: number) {
+  const left = span.x
+  const width = Math.max(0, span.width)
+  const height = Math.max(0, span.height) // 這就是 fontSize
+  // PDF 座標系原點在左下，HTML 在左上
+  const top = pageH - span.y - span.height
+
+  // 測量瀏覽器認為這串字應該多寬
+  const measuredW = getMeasuredWidth(span.text, height)
+
+  // 計算縮放比例：PDF 要的寬度 / 瀏覽器算出的寬度
+  // 如果 measuredW 為 0（例如空字串），則 scaleX 為 1 避免錯誤
+  let scaleX = 1
+  if (measuredW > 0 && width > 0) {
+    scaleX = width / measuredW
+  }
+
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+    height: `${height}px`,
+    fontSize: `${height}px`,
+    lineHeight: '1',
+    // 使用 scaleX 強制拉伸/壓縮文字以符合 PDF 寬度
+    transform: `scaleX(${scaleX})`,
+    // 變形原點設為左側，保證左對齊正確，向右拉伸
+    transformOrigin: '0 0',
+  }
+}
+
+// 搜尋高亮：計算每個 span 的高亮狀態
+// 注意：highlightRanges 現在是字元索引，需要轉換為 span 索引
+// 暫時先用簡化版本：如果 span 包含任何高亮字元，整個 span 高亮
+const highlightedSpanIndices = computed<Set<number>>(() => {
+  const set = new Set<number>()
+  const ranges = props.highlightRanges ?? []
+  if (!ranges.length) return set
+
+  const content = textContent.value
+  if (!content) return set
+
+  // 建立字元索引到 span 索引的映射
+  let charOffset = 0
+  for (let spanIdx = 0; spanIdx < content.spans.length; spanIdx++) {
+    const span = content.spans[spanIdx]
+    const spanStart = charOffset
+    const spanEnd = charOffset + span.text.length - 1
+
+    // 檢查是否與任何 range 重疊
+    for (const range of ranges) {
+      if (!range) continue
+      const start = Math.min(range.start, range.end)
+      const end = Math.max(range.start, range.end)
+      // 判斷是否重疊
+      if (spanStart <= end && spanEnd >= start) {
+        set.add(spanIdx)
+        break
+      }
+    }
+
+    charOffset += span.text.length
+  }
+
+  return set
+})
+
+const activeSpanIndices = computed<Set<number>>(() => {
+  const set = new Set<number>()
+  const ranges = props.highlightRanges ?? []
+  const activeRanges = ranges.filter(r => r?.active)
+  if (!activeRanges.length) return set
+
+  const content = textContent.value
+  if (!content) return set
+
+  let charOffset = 0
+  for (let spanIdx = 0; spanIdx < content.spans.length; spanIdx++) {
+    const span = content.spans[spanIdx]
+    const spanStart = charOffset
+    const spanEnd = charOffset + span.text.length - 1
+
+    for (const range of activeRanges) {
+      if (!range) continue
+      const start = Math.min(range.start, range.end)
+      const end = Math.max(range.start, range.end)
+      if (spanStart <= end && spanEnd >= start) {
+        set.add(spanIdx)
+        break
+      }
+    }
+
+    charOffset += span.text.length
+  }
+
+  return set
+})
+
+function getSpanClass(idx: number) {
+  if (activeSpanIndices.value.has(idx)) return 'match-active'
+  if (highlightedSpanIndices.value.has(idx)) return 'match-highlight'
   return ''
 }
 </script>
@@ -121,72 +205,63 @@ function getCharClass(idx: number) {
   <div
     class="pdf-text-layer"
     :style="{
-      position: 'absolute',
-      left: 0,
-      top: 0,
-      width: `${safeWidth}px`,
-      height: `${safeHeight}px`,
-      userSelect: 'text',
-      WebkitUserSelect: 'text',
-      overflow: 'hidden',
-      zIndex: 10,
+      width: `${props.pageWidthPt}px`,
+      height: `${props.pageHeightPt}px`,
+      transform: layerTransform,
+      transformOrigin: 'top left',
     }"
   >
-    <div
-      v-if="loading"
-      style="position: absolute; top: 10px; left: 10px; background: rgba(255,255,0,0.5); padding: 4px; font-size: 10px;"
-    >
-      載入文字中...
-    </div>
-    <div
-      v-if="error"
-      style="position: absolute; top: 10px; left: 10px; background: rgba(255,0,0,0.5); padding: 4px; font-size: 10px; color: white;"
-    >
-      錯誤: {{ error }}
-    </div>
-    <div
-      v-if="textContent"
-      style="position: relative; width: 100%; height: 100%;"
-    >
-      <span
-        v-for="(char, idx) in textContent.chars"
-        :key="idx"
-        :style="getCharStyle(char)"
-        :class="['text-char', getCharClass(idx)]"
-        :data-char-index="idx"
-      >{{ char.text }}</span>
-    </div>
+    <div v-if="loading" class="layer-status">載入文字中…</div>
+    <div v-if="error" class="layer-status error">錯誤: {{ error }}</div>
+
+    <span
+      v-for="(span, idx) in displayedSpans"
+      :key="idx"
+      class="text-span"
+      :class="getSpanClass(idx)"
+      :style="getSpanStyle(span, props.pageHeightPt)"
+      :data-span-index="idx"
+    >{{ span.text }}</span>
   </div>
 </template>
 
 <style scoped>
 .pdf-text-layer {
-  /* Allow text selection in this layer - use !important to override global styles */
+  position: absolute;
+  left: 0;
+  top: 0;
   user-select: text !important;
   -webkit-user-select: text !important;
-  -moz-user-select: text !important;
-  -ms-user-select: text !important;
-  pointer-events: auto !important;
+  overflow: hidden;
+  z-index: 10;
+  contain: layout style;
+  /* 啟用 GPU 加速，縮放時不觸發 Layout */
+  will-change: transform;
 }
 
-.pdf-text-layer span {
-  /* Each character is selectable */
+.text-span {
+  position: absolute;
+  /* 使用 pre 確保空格被保留且具有寬度 */
+  white-space: pre;
+
+  /* 讓文字透明，但保留選取能力 */
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: transparent;
+
+  cursor: text;
+  pointer-events: auto !important;
   user-select: text !important;
   -webkit-user-select: text !important;
-  -moz-user-select: text !important;
-  -ms-user-select: text !important;
-  cursor: text !important;
-  pointer-events: auto !important;
+  box-sizing: border-box;
+
+  /* 設定通用無襯線字體，跟 Canvas 測量一致 */
+  font-family: sans-serif;
 }
 
-.pdf-text-layer span::selection {
+.text-span::selection {
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
-  background: rgba(0, 120, 215, 0.3) !important;
-}
-
-.pdf-text-layer span::-moz-selection {
-  color: transparent !important;
   background: rgba(0, 120, 215, 0.3) !important;
 }
 
@@ -196,5 +271,20 @@ function getCharClass(idx: number) {
 
 .match-active {
   background: rgba(255, 184, 0, 0.55) !important;
+}
+
+.layer-status {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 0, 0.5);
+  padding: 4px;
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.layer-status.error {
+  background: rgba(255, 0, 0, 0.5);
+  color: white;
 }
 </style>
