@@ -1567,7 +1567,8 @@ function imgStyle(idx: number) {
   if (viewMode.value === 'actual') {
     const base = media.baseCssWidthAt100(idx)
     if (base) {
-      styles.width = `${Math.max(50, Math.round(base * (zoomTarget.value / 100)))}px`
+      // 使用 CSS 變數優化效能，避免 JS 重複計算
+      styles.width = `calc(${base}px * var(--zoom-factor))`
     }
   }
   
@@ -1601,16 +1602,16 @@ function pageCardStyle(idx: number) {
   // Actual 模式
   const base = media.baseCssWidthAt100(idx)
   if (base && size) {
-    const scale = zoomTarget.value / 100
-    const w = Math.max(50, Math.round(base * scale))
-    // 關鍵修正：根據寬度和原始比例，算出精確的像素高度
+    // 效能優化：不再依賴 zoomTarget 進行 JS 計算，改用 CSS 變數
+    // 這能避免縮放時觸發數百個頁面的響應式更新
     const ratio = size.heightPt / size.widthPt
-    const h = Math.round(w * ratio)
 
     return {
       ...baseStyle,
-      width: `${w}px`,
-      height: `${h}px`, // 強制鎖定高度
+      '--page-base-width': `${base}px`,
+      '--page-ratio': `${ratio}`,
+      width: `calc(var(--page-base-width) * var(--zoom-factor))`,
+      height: `calc(var(--page-base-width) * var(--zoom-factor) * var(--page-ratio))`,
       willChange: 'width, height'
     }
   }
@@ -1717,7 +1718,12 @@ defineExpose({
   <div
     ref="scrollRootEl"
     class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain bg-muted min-h-0"
-    style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: none;"
+    :style="{
+      'scrollbar-gutter': 'stable',
+      'will-change': 'scroll-position',
+      'overflow-anchor': 'none',
+      '--zoom-factor': zoomTarget / 100
+    }"
   >
     <div v-if="!totalPages" class="p-4">尚未載入頁面</div>
     <div
@@ -1729,7 +1735,7 @@ defineExpose({
           v-for="idx in renderIndices"
           :key="idx"
           :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'mb-10 flex justify-center'"
-          :style="viewMode === 'actual' ? { marginBottom: Math.round(40 * (zoomTarget / 100)) + 'px' } : undefined"
+          :style="viewMode === 'actual' ? { marginBottom: 'calc(40px * var(--zoom-factor))' } : undefined"
           :data-pdf-page="idx"
           @contextmenu.prevent="onPageContextMenu(idx, $event)"
         >
