@@ -18,6 +18,7 @@ const number = (e: Event, fallback: number) => {
   const v = Number((e.target as HTMLInputElement).value)
   return Number.isFinite(v) ? v : fallback
 }
+const clampZoomMax = (v: number) => Math.min(800, Math.max(50, Math.round(v)))
 
 function resetToDefaults() {
   if (confirm('確定要回復預設設定？此動作會覆蓋目前所有設定。')) {
@@ -246,6 +247,21 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
       <section id="zoom-interaction" class="space-y-3">
         <h2 class="font-medium text-base">縮放互動</h2>
         <div class="rounded-md border p-4 space-y-3">
+          <div>
+            <label class="block mb-1">最大縮放（%）</label>
+            <input
+              type="number"
+              step="10"
+              min="50"
+              max="800"
+              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+              :value="s.zoomMaxPercent"
+              @input="s.zoomMaxPercent = clampZoomMax(number($event, s.zoomMaxPercent))"
+            />
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              套用於 PDF 與圖片的實際大小模式。預設 400%，可調範圍 50–800%。
+            </p>
+          </div>
           <div>
             <label class="block mb-1">滾輪縮放敏感度</label>
             <input

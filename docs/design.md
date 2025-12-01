@@ -128,6 +128,7 @@ MediaView 組件支援兩種檢視模式：
 - **核心狀態**: `viewMode` (fit/actual)、`zoomTarget` (縮放百分比)、`displayZoom` (當前顯示值)
 - **核心操作**: `zoomIn/zoomOut`、`resetZoom`、`setFitMode`
 - **視覺焦點維持**: 使用滾動內容的比例位置 (ratio) 來維持縮放前後的視覺中心點
+- **縮放上限**: 由設定 `settings.zoomMaxPercent` 控制（預設 400%，可調 50–800），PDF 與圖片共用
 
 ### MediaView 組件結構
 

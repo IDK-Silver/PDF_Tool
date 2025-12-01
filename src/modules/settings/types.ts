@@ -55,6 +55,7 @@ export interface SettingsState {
   structureOverscan: number              // 頁面結構渲染範圍（視野外 ± N 頁仍保留 DOM 結構）
 
   // === 縮放互動 ===
+  zoomMaxPercent: number                // PDF/圖片共用的最大縮放百分比
   zoomSensitivity: number                // 滾輪縮放敏感度（0.001-0.003，預設 0.0015）
 }
 
@@ -113,5 +114,6 @@ export const defaultSettings: SettingsState = {
   structureOverscan: 10,              // 預設：視野外 ± 10 頁保留 DOM 結構
 
   // 縮放互動
+  zoomMaxPercent: 400,                // 預設最大縮放 400%，適用於 PDF 與圖片
   zoomSensitivity: 0.0035,            // 預設：0.0015（適中的縮放速度）
 }

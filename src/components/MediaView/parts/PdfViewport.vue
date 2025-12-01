@@ -46,8 +46,16 @@ const {
   setZoom,
   resetZoom,
   setFitMode,
+  setEffectiveMax,
   handleWheelZoom: zoomHandleWheel,
-} = useZoom()
+} = useZoom({ max: 800 })
+
+const clampZoomMax = (v: number | null | undefined) => {
+  const val = Number.isFinite(v) ? Number(v) : 400
+  return Math.min(800, Math.max(50, Math.round(val)))
+}
+const zoomMax = computed(() => clampZoomMax(settings.s.zoomMaxPercent))
+watch(zoomMax, (v) => setEffectiveMax(v), { immediate: true })
 
 /**
  * 建立縮放上下文（ZoomContext）

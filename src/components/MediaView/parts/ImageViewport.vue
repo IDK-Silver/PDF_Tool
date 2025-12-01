@@ -1,33 +1,77 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
-// removed: openInFileManager (no longer used in context menu)
 import { imageToPdf } from '@/modules/media/service'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useFileListStore } from '@/modules/filelist/store'
+import { useZoom, type ZoomContext } from '@/modules/media/useZoom' // 引入統一的縮放邏輯
 
 const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
-
-const viewMode = ref<'fit' | 'actual'>('fit')
-const zoomTarget = ref(100)
-const displayFitPercent = ref<number | null>(null)
-const displayZoom = computed(() => {
-  const value = viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value
-  return Math.round(value)
-})
-const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
 
 const scrollRootEl = ref<HTMLElement | null>(null)
 const imageEl = ref<HTMLImageElement | null>(null)
 const imageNaturalWidth = ref<number | null>(null)
 const menu = ref<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
 
-let zoomDebounceTimer: number | null = null
-let fitTimer: number | null = null
-let resizeObs: ResizeObserver | null = null
+// --- 1. 建立 ZoomContext ---
+// 這是讓 useZoom 能夠操作此組件的關鍵介面
+function createZoomContext(): ZoomContext | null {
+  const root = scrollRootEl.value
+  const img = imageEl.value
+  if (!root || !img) return null
+
+  return {
+    scrollContainer: root,
+    // 圖片模式只有一頁 (index 0)，直接回傳包裹圖片的容器
+    getPageElement: (_idx) => root.querySelector('[data-image-container]'),
+    getPageCardElement: (_idx) => root.querySelector('[data-image-card]'),
+    // 圖片的基準寬度就是它的原始寬度
+    getBaseCssWidth: (_idx) => imageNaturalWidth.value,
+    centerPageIndex: 0, // 永遠是第 0 頁
+  }
+}
+
+// --- 2. 引入 useZoom ---
+const {
+  viewMode,
+  zoomTarget,
+  displayFitPercent,
+  displayZoom,
+  canZoomIn,
+  canZoomOut, // 這些狀態現在由 useZoom 管理
+  setFitMode,
+  resetZoom,
+  zoomIn: doZoomIn,
+  zoomOut: doZoomOut,
+  setEffectiveMax,
+  handleWheelZoom, // 統一的滾輪處理
+} = useZoom({
+  min: 5,
+  max: 800 // 圖片通常容許更大的縮放倍率
+})
+
+const clampZoomMax = (v: number | null | undefined) => {
+  const val = Number.isFinite(v) ? Number(v) : 400
+  return Math.min(800, Math.max(50, Math.round(val)))
+}
+const zoomMax = computed(() => clampZoomMax(settings.s.zoomMaxPercent))
+watch(zoomMax, (v) => setEffectiveMax(v), { immediate: true })
+
+const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
+
+// 計算圖片卡片樣式 - 直接使用 zoomTarget 確保響應式更新
+const imageCardStyle = computed(() => {
+  if (viewMode.value !== 'actual' || imageNaturalWidth.value == null) {
+    return undefined
+  }
+  const width = imageNaturalWidth.value * (zoomTarget.value / 100)
+  return { width: `${width}px` }
+})
+
+// --- 事件處理 ---
 
 function onImageContextMenu(e: MouseEvent) {
   e.preventDefault()
@@ -53,7 +97,6 @@ function onEsc(e: KeyboardEvent) {
   }
 }
 
-
 async function convertImageToPdfFromMenu() {
   closeMenu()
   const d = media.descriptor
@@ -78,242 +121,49 @@ function imgTransformStyle() {
   return Object.keys(styles).length > 0 ? styles : undefined
 }
 
-function fitPercentBaseline(): number {
-  const p = Math.round(displayFitPercent.value ?? 100)
-  return Math.max(10, Math.min(400, p))
+// --- 縮放封裝函數 (對接 activeControls) ---
+
+function handleZoomIn() {
+  const ctx = createZoomContext()
+  doZoomIn(ctx, { type: 'viewport-center' })
 }
 
-function zoomIn() {
-  const root = scrollRootEl.value
-  const img = imageEl.value
-  if (viewMode.value !== 'actual' && root && img) {
-    // 從 fit 切換到 actual，同時以視窗中心為錨點放大
-    viewMode.value = 'actual'
-    const oldZoom = fitPercentBaseline()
-    const newZoom = Math.min(400, oldZoom + 10)
-    const zoomRatio = newZoom / oldZoom
-
-    // 記錄當前滾動位置和視窗中心點
-    const oldScrollLeft = root.scrollLeft
-    const oldScrollTop = root.scrollTop
-    const viewportCenterX = root.clientWidth / 2
-    const viewportCenterY = root.clientHeight / 2
-
-    // 視窗中心點在內容中的位置（以舊縮放為基準）
-    const contentCenterX = oldScrollLeft + viewportCenterX
-    const contentCenterY = oldScrollTop + viewportCenterY
-
-    zoomTarget.value = newZoom
-
-    nextTick(() => {
-      requestAnimationFrame(() => {
-        // 縮放後的內容中心點位置
-        const newContentCenterX = contentCenterX * zoomRatio
-        const newContentCenterY = contentCenterY * zoomRatio
-
-        // 使中心點保持視窗中心
-        root.scrollLeft = newContentCenterX - viewportCenterX
-        root.scrollTop = newContentCenterY - viewportCenterY
-      })
-    })
-    return
-  } else if (root && img) {
-    // 記錄縮放前的狀態
-    const oldZoom = zoomTarget.value
-    const newZoom = Math.min(400, oldZoom + 10)
-    const zoomRatio = newZoom / oldZoom
-    
-    // 記錄當前滾動位置和視窗中心點
-    const oldScrollLeft = root.scrollLeft
-    const oldScrollTop = root.scrollTop
-    const viewportCenterX = root.clientWidth / 2
-    const viewportCenterY = root.clientHeight / 2
-    
-    // 視窗中心點在內容中的位置
-    const contentCenterX = oldScrollLeft + viewportCenterX
-    const contentCenterY = oldScrollTop + viewportCenterY
-    
-    zoomTarget.value = newZoom
-    
-    nextTick(() => {
-      requestAnimationFrame(() => {
-        // 計算縮放後的內容中心點位置
-        const newContentCenterX = contentCenterX * zoomRatio
-        const newContentCenterY = contentCenterY * zoomRatio
-        
-        // 計算新的滾動位置，使中心點保持不變
-        root.scrollLeft = newContentCenterX - viewportCenterX
-        root.scrollTop = newContentCenterY - viewportCenterY
-      })
-    })
-    return
-  }
-  // 後備：當 root/img 尚未就緒時仍調整數值
-  zoomTarget.value = Math.min(400, zoomTarget.value + 10)
+function handleZoomOut() {
+  const ctx = createZoomContext()
+  doZoomOut(ctx, { type: 'viewport-center' })
 }
 
-function zoomOut() {
-  const root = scrollRootEl.value
-  const img = imageEl.value
-  if (viewMode.value !== 'actual' && root && img) {
-    // 從 fit 切換到 actual，同時以視窗中心為錨點縮小
-    viewMode.value = 'actual'
-    const oldZoom = fitPercentBaseline()
-    const newZoom = Math.max(10, oldZoom - 10)
-    const zoomRatio = newZoom / oldZoom
-
-    // 記錄當前滾動位置和視窗中心點
-    const oldScrollLeft = root.scrollLeft
-    const oldScrollTop = root.scrollTop
-    const viewportCenterX = root.clientWidth / 2
-    const viewportCenterY = root.clientHeight / 2
-
-    // 視窗中心點在內容中的位置（以舊縮放為基準）
-    const contentCenterX = oldScrollLeft + viewportCenterX
-    const contentCenterY = oldScrollTop + viewportCenterY
-
-    zoomTarget.value = newZoom
-
-    nextTick(() => {
-      requestAnimationFrame(() => {
-        // 縮放後的內容中心點位置
-        const newContentCenterX = contentCenterX * zoomRatio
-        const newContentCenterY = contentCenterY * zoomRatio
-
-        // 使中心點保持視窗中心
-        root.scrollLeft = newContentCenterX - viewportCenterX
-        root.scrollTop = newContentCenterY - viewportCenterY
-      })
-    })
-    return
-  } else if (root && img) {
-    // 記錄縮放前的狀態
-    const oldZoom = zoomTarget.value
-    const newZoom = Math.max(10, oldZoom - 10)
-    const zoomRatio = newZoom / oldZoom
-    
-    // 記錄當前滾動位置和視窗中心點
-    const oldScrollLeft = root.scrollLeft
-    const oldScrollTop = root.scrollTop
-    const viewportCenterX = root.clientWidth / 2
-    const viewportCenterY = root.clientHeight / 2
-    
-    // 視窗中心點在內容中的位置
-    const contentCenterX = oldScrollLeft + viewportCenterX
-    const contentCenterY = oldScrollTop + viewportCenterY
-    
-    zoomTarget.value = newZoom
-    
-    nextTick(() => {
-      requestAnimationFrame(() => {
-        // 計算縮放後的內容中心點位置
-        const newContentCenterX = contentCenterX * zoomRatio
-        const newContentCenterY = contentCenterY * zoomRatio
-        
-        // 計算新的滾動位置，使中心點保持不變
-        root.scrollLeft = newContentCenterX - viewportCenterX
-        root.scrollTop = newContentCenterY - viewportCenterY
-      })
-    })
-    return
-  }
-  // 後備：當 root/img 尚未就緒時仍調整數值
-  zoomTarget.value = Math.max(10, zoomTarget.value - 10)
+function handleResetZoom() {
+  const ctx = createZoomContext()
+  resetZoom(ctx, { type: 'viewport-center' })
 }
 
-function resetZoom() {
-  viewMode.value = 'actual'
-  zoomTarget.value = 100
-  const root = scrollRootEl.value
-  if (root) {
-    nextTick(() => {
-      root.scrollTop = 0
-      root.scrollLeft = 0
-    })
-  }
-}
-
-function setFitMode() {
-  if (viewMode.value !== 'fit') {
-    viewMode.value = 'fit'
-    const baseline = fitPercentBaseline()
-    zoomTarget.value = baseline
-  }
-  scheduleUpdateFitPercent()
+function handleSetFitMode() {
+  const ctx = createZoomContext()
+  setFitMode(ctx, { type: 'viewport-center' })
 }
 
 function handleWheel(e: WheelEvent) {
-  // 檢測觸控板縮放手勢（Ctrl + wheel 或 pinch）
-  if (!e.ctrlKey && !e.metaKey) return
-
-  e.preventDefault()
-
-  const root = scrollRootEl.value
-  const img = imageEl.value
-  if (!root || !img) return
-
-  // 確保在 actual 模式
-  if (viewMode.value !== 'actual') {
-    viewMode.value = 'actual'
-    zoomTarget.value = fitPercentBaseline()
+  // 讓 useZoom 接管滾輪
+  const ctx = createZoomContext()
+  if (ctx) {
+    handleWheelZoom(e, ctx)
   }
-
-  // 使用指數縮放（與 PDF 一致）
-  // 從設定讀取敏感度
-  const sensitivity = settings.s.zoomSensitivity
-  // 使用 Math.exp 來實現平滑的乘法縮放
-  const scaleFactor = Math.exp(-e.deltaY * sensitivity)
-
-  const oldZoom = zoomTarget.value
-  const newZoom = Math.max(10, Math.min(400, oldZoom * scaleFactor))
-
-  // 如果沒有實際變化，直接返回
-  if (Math.abs(newZoom - oldZoom) < 0.01) return
-
-  const zoomRatio = newZoom / oldZoom
-
-  // 記錄當前滾動位置
-  const oldScrollLeft = root.scrollLeft
-  const oldScrollTop = root.scrollTop
-
-  // 滑鼠在視窗中的位置（相對於 scrollRoot）
-  const rootRect = root.getBoundingClientRect()
-  const mouseViewportX = e.clientX - rootRect.left
-  const mouseViewportY = e.clientY - rootRect.top
-
-  // 滑鼠在內容中的位置
-  const mouseContentX = oldScrollLeft + mouseViewportX
-  const mouseContentY = oldScrollTop + mouseViewportY
-
-  zoomTarget.value = newZoom
-
-  nextTick(() => {
-    requestAnimationFrame(() => {
-      // 計算縮放後，滑鼠下的點在內容中的新位置
-      const newMouseContentX = mouseContentX * zoomRatio
-      const newMouseContentY = mouseContentY * zoomRatio
-
-      // 計算新的滾動位置，使滑鼠下的點保持不變
-      root.scrollLeft = newMouseContentX - mouseViewportX
-      root.scrollTop = newMouseContentY - mouseViewportY
-    })
-  })
 }
 
-function onImageLoad(e: Event) {
-  const el = e.target as HTMLImageElement
-  imageNaturalWidth.value = el?.naturalWidth || null
-  scheduleUpdateFitPercent()
-}
+// --- 監聽與生命週期 ---
+
+let fitTimer: number | null = null
 
 function updateFitPercent() {
   if (viewMode.value !== 'fit') return
   const root = scrollRootEl.value
-  if (!root) return
-  const width = root.clientWidth
   const natural = imageNaturalWidth.value
-  if (!width || !natural) return
-  displayFitPercent.value = Math.max(5, Math.min(400, Math.round((width / natural) * 100)))
+  if (!root || !natural) return
+  
+  const width = root.clientWidth
+  // 回寫給 useZoom 狀態，讓 displayZoom 正確顯示
+  displayFitPercent.value = Math.max(5, Math.min(800, Math.round((width / natural) * 100)))
 }
 
 function scheduleUpdateFitPercent() {
@@ -327,12 +177,41 @@ function scheduleUpdateFitPercent() {
   }, 150)
 }
 
-watch(viewMode, () => {
-  if (viewMode.value === 'fit') {
-    scheduleUpdateFitPercent()
+function onImageLoad(e: Event) {
+  const el = e.target as HTMLImageElement
+  imageNaturalWidth.value = el?.naturalWidth || null
+  // 圖片載入完成後，更新 Fit 比例
+  scheduleUpdateFitPercent()
+}
+
+// 當視窗大小改變 (ResizeObserver)
+let resizeObs: ResizeObserver | null = null
+onMounted(() => {
+  const root = scrollRootEl.value
+  if (root) {
+    // 【關鍵修正 1】：解決觸控板變成下滑的問題
+    // 設定 passive: false，讓 preventDefault() 生效
+    root.addEventListener('wheel', handleWheel, { passive: false })
+
+    if ('ResizeObserver' in window) {
+      resizeObs = new ResizeObserver(() => scheduleUpdateFitPercent())
+      resizeObs.observe(root)
+    }
   }
+  window.addEventListener('click', onGlobalClick, { capture: true })
+  window.addEventListener('keydown', onEsc)
+  scheduleUpdateFitPercent()
 })
 
+onBeforeUnmount(() => {
+  if (fitTimer) clearTimeout(fitTimer)
+  try { resizeObs?.disconnect() } catch {}
+  window.removeEventListener('click', onGlobalClick, { capture: true })
+  window.removeEventListener('keydown', onEsc)
+  scrollRootEl.value?.removeEventListener('wheel', handleWheel)
+})
+
+// 當圖片路徑改變時，重置為 Fit 模式
 watch(() => media.imageUrl, () => {
   imageNaturalWidth.value = null
   viewMode.value = 'fit'
@@ -341,45 +220,20 @@ watch(() => media.imageUrl, () => {
   scheduleUpdateFitPercent()
 })
 
-onMounted(() => {
-  const root = scrollRootEl.value
-  if (root && 'ResizeObserver' in window) {
-    resizeObs = new ResizeObserver(() => {
-      scheduleUpdateFitPercent()
-    })
-    resizeObs.observe(root)
-  }
-  window.addEventListener('click', onGlobalClick, { capture: true })
-  window.addEventListener('keydown', onEsc)
-  scheduleUpdateFitPercent()
-})
-
-onBeforeUnmount(() => {
-  if (zoomDebounceTimer) clearTimeout(zoomDebounceTimer)
-  if (fitTimer) clearTimeout(fitTimer)
-  try {
-    resizeObs?.disconnect()
-  } catch {
-    /* noop */
-  }
-  window.removeEventListener('click', onGlobalClick, { capture: true })
-  window.removeEventListener('keydown', onEsc)
-})
-
-const currentPage = computed(() => media.imageUrl ? 1 : 0)
-const totalPages = computed(() => media.imageUrl ? 1 : 0)
-
 watch(() => media.descriptor?.path, () => closeMenu())
 
+// 曝露給父層使用
 defineExpose({
   viewMode,
   displayZoom,
-  currentPage,
-  totalPages,
-  setFitMode,
-  resetZoom,
-  zoomIn,
-  zoomOut,
+  currentPage: computed(() => media.imageUrl ? 1 : 0),
+  totalPages: computed(() => media.imageUrl ? 1 : 0),
+  canZoomIn,
+  canZoomOut,
+  setFitMode: handleSetFitMode,
+  resetZoom: handleResetZoom,
+  zoomIn: handleZoomIn,
+  zoomOut: handleZoomOut,
 })
 </script>
 
@@ -387,22 +241,35 @@ defineExpose({
   <div
     ref="scrollRootEl"
     class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain bg-muted min-h-0"
-    style="scrollbar-gutter: stable; will-change: scroll-position; overflow-anchor: none;"
+    :style="{
+      'scrollbar-gutter': 'stable',
+      'will-change': 'scroll-position',
+      'overflow-anchor': 'none',
+      '--zoom-factor': zoomTarget / 100 
+    }"
     data-image-view
-    @wheel="handleWheel"
     @contextmenu.prevent="onImageContextMenu"
   >
-    <div :class="viewMode === 'fit' ? 'w-full px-6 py-10' : 'px-6 py-10'">
+    <div 
+      :class="viewMode === 'fit' ? 'w-full px-6 py-10 flex justify-center' : 'px-6 py-10 inline-flex min-w-full justify-center flex-shrink-0'"
+      :style="viewMode === 'actual' ? { marginBottom: 'calc(40px * var(--zoom-factor))' } : undefined"
+      data-image-container
+      data-pdf-page="0"
+    >
       <div
-        class="bg-card rounded-md shadow border border-border overflow-hidden mx-auto"
+        class="bg-card rounded-md shadow border border-border overflow-hidden flex-shrink-0"
         :class="viewMode === 'fit' ? 'max-w-none w-full' : undefined"
-        :style="viewMode === 'actual' && imageNaturalWidth != null ? { width: Math.max(50, Math.round(imageNaturalWidth * (zoomTarget / 100))) + 'px' } : undefined"
+        :style="imageCardStyle"
+        data-image-card
       >
         <img
           :src="media.imageUrl || undefined"
           alt="image"
           :class="viewMode === 'fit' ? 'w-full block' : 'block'"
-          :style="imgTransformStyle()"
+          :style="[
+             imgTransformStyle(), 
+             viewMode === 'actual' ? { width: '100%' } : {} 
+          ]"
           ref="imageEl"
           @load="onImageLoad"
           @error="media.fallbackLoadImageBlob()"
@@ -411,6 +278,7 @@ defineExpose({
       </div>
     </div>
   </div>
+  
   <teleport to="body">
     <div
       v-if="menu.open"
@@ -418,7 +286,6 @@ defineExpose({
       class="fixed z-[2000] bg-card border border-border rounded shadow text-sm w-max"
       :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
     >
-      
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap" @click="convertImageToPdfFromMenu">
         轉成 PDF…
       </button>

@@ -61,13 +61,44 @@ const activeControls = computed<ViewportExpose | null>(() => {
   return null
 })
 
-const viewMode = ref<'fit' | 'actual'>('fit')
-const displayZoom = ref(100)
-const currentPage = ref(0)
-const totalPages = ref(0)
-const canZoomIn = ref(true)
-const canZoomOut = ref(true)
 const searchActive = ref(false)
+
+// 使用 computed 直接從子組件讀取狀態，確保響應式追蹤正確工作
+const viewMode = computed(() => {
+  const controls = activeControls.value
+  if (!controls) return 'fit' as const
+  return unref(controls.viewMode)
+})
+
+const displayZoom = computed(() => {
+  const controls = activeControls.value
+  if (!controls) return 100
+  return unref(controls.displayZoom)
+})
+
+const currentPage = computed(() => {
+  const controls = activeControls.value
+  if (!controls) return 0
+  return unref(controls.currentPage)
+})
+
+const totalPages = computed(() => {
+  const controls = activeControls.value
+  if (!controls) return 0
+  return unref(controls.totalPages)
+})
+
+const canZoomIn = computed(() => {
+  const controls = activeControls.value
+  if (!controls) return true
+  return unref(controls.canZoomIn)
+})
+
+const canZoomOut = computed(() => {
+  const controls = activeControls.value
+  if (!controls) return true
+  return unref(controls.canZoomOut)
+})
 
 // 當 filelist 已選擇且後端回報檔案不存在時，顯示預設佔位圖
 const isFileMissing = computed(() => {
@@ -78,24 +109,7 @@ const isFileMissing = computed(() => {
 
 const canReveal = computed(() => !!media.selected?.path && !isFileMissing.value)
 
-watchEffect(() => {
-  const controls = activeControls.value
-  if (!controls) {
-    viewMode.value = 'fit'
-    displayZoom.value = 100
-    currentPage.value = 0
-    totalPages.value = 0
-    canZoomIn.value = true
-    canZoomOut.value = true
-    return
-  }
-  viewMode.value = unref(controls.viewMode)
-  displayZoom.value = unref(controls.displayZoom)
-  currentPage.value = unref(controls.currentPage)
-  totalPages.value = unref(controls.totalPages)
-  canZoomIn.value = unref(controls.canZoomIn)
-  canZoomOut.value = unref(controls.canZoomOut)
-})
+// 注意：狀態已改用 computed，所以不再需要 watchEffect 同步
 
 watchEffect(() => {
   const vp = pdfViewportRef.value
