@@ -1059,7 +1059,7 @@ pub struct TextLayerSettings {
 
 const TEXT_CACHE_DIR_NAME: &str = "db";
 const TEXT_CACHE_DB_FILE: &str = "page_text_cache.db";
-const TEXT_EXTRACTOR_VERSION: i64 = 1;
+const TEXT_EXTRACTOR_VERSION: i64 = 2;
 const TEXT_CACHE_SOFT_LIMIT_BYTES: i64 = 50 * 1024 * 1024;
 
 struct PdfDocRecord<'a> {
@@ -2056,6 +2056,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let mut prev_x_end: Option<f32> = None;
                         let mut prev_y: Option<f32> = None;
                         let mut prev_height: Option<f32> = None;
+                        let mut prev_char: Option<char> = None;
 
                         // Running average for height baseline (O(1) per char, replaces O(N) median sort)
                         let mut running_height_sum: f32 = 0.0;
@@ -2136,6 +2137,9 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                         // ========= 智慧合併邏輯 =========
                                         // 決定是否需要切斷當前 span
                                         let mut should_break = true;
+                                        let prev_char_val = prev_char;
+                                        let is_current_whitespace = text_ch.is_whitespace();
+                                        let prev_is_whitespace = prev_char_val.map(|c| c.is_whitespace()).unwrap_or(true);
 
                                         if let Some(ref mut curr) = current_span {
                                             // 1. 檢查是否同一行 (Y 軸接近)
@@ -2150,8 +2154,18 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                                 // gap < 0.3 * height 視為正常字距，合併
                                                 // gap 過大（空格）或過小（負值過多）則切斷
                                                 let gap_threshold = curr.height * span_break_factor;
+                                                let within_normal_gap =
+                                                    gap < gap_threshold && gap > -(curr.height * 0.15);
+                                                let is_word_continuation =
+                                                    !is_current_whitespace && !prev_is_whitespace;
+                                                // 容忍稍大的字距，避免單字被拆開（針對 Kerning 不穩的 PDF）
+                                                let relaxed_gap_limit = curr.height * 0.65;
 
-                                                if gap < gap_threshold && gap > -(curr.height * 0.15) {
+                                                if within_normal_gap
+                                                    || (is_word_continuation
+                                                        && gap >= gap_threshold
+                                                        && gap <= relaxed_gap_limit)
+                                                {
                                                     should_break = false;
 
                                                     // 執行合併
@@ -2179,6 +2193,8 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                                 height,
                                             });
                                         }
+
+                                        prev_char = Some(text_ch);
                                     }
                                 }
                             }

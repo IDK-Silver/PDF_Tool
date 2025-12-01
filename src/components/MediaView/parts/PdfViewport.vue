@@ -685,6 +685,11 @@ watch(searchVisible, (visible) => {
   }
 })
 
+watch(docId, async () => {
+  await nextTick()
+  updateVisibleByScroll()
+})
+
 watch(
   () => media.descriptor?.path,
   () => {
@@ -1339,6 +1344,7 @@ onMounted(async () => {
   }
   
   scrollRootEl.value?.addEventListener('scroll', onScroll, { passive: true })
+  await nextTick()
   updateVisibleByScroll()
   if (scrollRootEl.value && 'ResizeObserver' in window) {
     let lastResizeWidth = 0
