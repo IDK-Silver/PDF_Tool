@@ -265,9 +265,10 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
   let wheelAccumulator = 0
   let wheelRaf: number | null = null
 
-  const displayZoom = computed(() =>
-    viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value
-  )
+  const displayZoom = computed(() => {
+    const value = viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value
+    return Math.round(value)
+  })
 
   const canZoomIn = computed(() => {
     if (viewMode.value === 'fit') return true

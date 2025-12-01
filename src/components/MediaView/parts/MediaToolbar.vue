@@ -163,7 +163,7 @@ function handlePageMouseDown(e: MouseEvent) {
             :title="props.canZoomOut ? '縮小' : '已達最小縮放'">
             −
           </button>
-          <div class="min-w-[48px] text-center text-xs tabular-nums px-1">{{ props.displayZoom }}%</div>
+          <div class="w-[52px] text-center text-xs tabular-nums px-1">{{ props.displayZoom }}%</div>
           <button @click="emit('zoom-in')" :disabled="!props.canZoomIn"
             class="w-7 h-7 text-sm rounded transition-colors flex items-center justify-center"
             :class="props.canZoomIn ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
