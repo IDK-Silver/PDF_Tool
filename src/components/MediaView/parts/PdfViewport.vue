@@ -1642,13 +1642,14 @@ function getPageTextLayerProps(idx: number) {
   if (viewMode.value === 'actual') {
     // 修正：在 actual 模式下直接計算目標尺寸，不等待 RO 測量
     // 解決縮放時文字層延遲更新的問題
+    // 重要：不使用 Math.round，保持精確的小數值以匹配 CSS calc 的結果
     const targetWidth = baseCssWidth * (zoomTarget.value / 100)
-    const w = Math.max(50, Math.round(targetWidth))
+    const w = Math.max(50, targetWidth)
     displayWidthPx = w
 
     // 計算高度以保持與 pageCardStyle 一致的比例
     const aspect = sizeInfo.heightPt / Math.max(sizeInfo.widthPt, 0.001)
-    displayHeightPx = Math.round(w * aspect)
+    displayHeightPx = w * aspect
   } else {
     // Fit 模式優先使用測量值
     const measured = pageCardSizes.value[idx]

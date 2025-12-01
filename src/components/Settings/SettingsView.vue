@@ -243,6 +243,32 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
+      <section id="zoom-interaction" class="space-y-3">
+        <h2 class="font-medium text-base">縮放互動</h2>
+        <div class="rounded-md border p-4 space-y-3">
+          <div>
+            <label class="block mb-1">滾輪縮放敏感度</label>
+            <input
+              type="number"
+              step="0.0001"
+              min="0.0005"
+              max="0.005"
+              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+              :value="s.zoomSensitivity"
+              @input="s.zoomSensitivity = number($event, s.zoomSensitivity)"
+            />
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              控制滾輪縮放的速度。較小值（0.001）= 較慢，較大值（0.0025）= 較快。預設 0.0015。
+            </p>
+          </div>
+          <div class="pt-2 border-t">
+            <p class="text-xs text-[hsl(var(--muted-foreground))]">
+              💡 提示：此設定使用指數縮放，無論當前縮放級別為何，縮放的視覺感受都會保持一致。如果覺得縮放太快，減小此值；太慢則增大此值。
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section id="fileops" class="space-y-3">
         <h2 class="font-medium text-base">檔案操作</h2>
         <div class="rounded-md border p-4 space-y-3">

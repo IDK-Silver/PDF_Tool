@@ -53,6 +53,9 @@ export interface SettingsState {
 
   // === DOM 虛擬化 ===
   structureOverscan: number              // 頁面結構渲染範圍（視野外 ± N 頁仍保留 DOM 結構）
+
+  // === 縮放互動 ===
+  zoomSensitivity: number                // 滾輪縮放敏感度（0.001-0.003，預設 0.0015）
 }
 
 export const defaultSettings: SettingsState = {
@@ -108,4 +111,7 @@ export const defaultSettings: SettingsState = {
 
   // DOM 虛擬化
   structureOverscan: 10,              // 預設：視野外 ± 10 頁保留 DOM 結構
+
+  // 縮放互動
+  zoomSensitivity: 0.0035,            // 預設：0.0015（適中的縮放速度）
 }

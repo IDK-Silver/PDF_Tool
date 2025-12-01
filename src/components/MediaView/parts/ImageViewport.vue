@@ -14,7 +14,10 @@ const filelist = useFileListStore()
 const viewMode = ref<'fit' | 'actual'>('fit')
 const zoomTarget = ref(100)
 const displayFitPercent = ref<number | null>(null)
-const displayZoom = computed(() => (viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value))
+const displayZoom = computed(() => {
+  const value = viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value
+  return Math.round(value)
+})
 const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
 
 const scrollRootEl = ref<HTMLElement | null>(null)
@@ -242,56 +245,54 @@ function setFitMode() {
 function handleWheel(e: WheelEvent) {
   // 檢測觸控板縮放手勢（Ctrl + wheel 或 pinch）
   if (!e.ctrlKey && !e.metaKey) return
-  
+
   e.preventDefault()
-  
+
   const root = scrollRootEl.value
   const img = imageEl.value
   if (!root || !img) return
-  
+
   // 確保在 actual 模式
   if (viewMode.value !== 'actual') {
     viewMode.value = 'actual'
     zoomTarget.value = fitPercentBaseline()
   }
-  
-  // 計算縮放變化量（觸控板的 deltaY 通常較小，需要調整靈敏度）
-  const delta = -e.deltaY
-  const sensitivity = 0.5  // 調整靈敏度
-  let zoomChange = delta * sensitivity
-  
-  // 限制每次變化量
-  zoomChange = Math.max(-20, Math.min(20, zoomChange))
-  
+
+  // 使用指數縮放（與 PDF 一致）
+  // 從設定讀取敏感度
+  const sensitivity = settings.s.zoomSensitivity
+  // 使用 Math.exp 來實現平滑的乘法縮放
+  const scaleFactor = Math.exp(-e.deltaY * sensitivity)
+
   const oldZoom = zoomTarget.value
-  const newZoom = Math.max(10, Math.min(400, oldZoom + zoomChange))
-  
+  const newZoom = Math.max(10, Math.min(400, oldZoom * scaleFactor))
+
   // 如果沒有實際變化，直接返回
-  if (Math.abs(newZoom - oldZoom) < 0.1) return
-  
+  if (Math.abs(newZoom - oldZoom) < 0.01) return
+
   const zoomRatio = newZoom / oldZoom
-  
+
   // 記錄當前滾動位置
   const oldScrollLeft = root.scrollLeft
   const oldScrollTop = root.scrollTop
-  
+
   // 滑鼠在視窗中的位置（相對於 scrollRoot）
   const rootRect = root.getBoundingClientRect()
   const mouseViewportX = e.clientX - rootRect.left
   const mouseViewportY = e.clientY - rootRect.top
-  
+
   // 滑鼠在內容中的位置
   const mouseContentX = oldScrollLeft + mouseViewportX
   const mouseContentY = oldScrollTop + mouseViewportY
-  
+
   zoomTarget.value = newZoom
-  
+
   nextTick(() => {
     requestAnimationFrame(() => {
       // 計算縮放後，滑鼠下的點在內容中的新位置
       const newMouseContentX = mouseContentX * zoomRatio
       const newMouseContentY = mouseContentY * zoomRatio
-      
+
       // 計算新的滾動位置，使滑鼠下的點保持不變
       root.scrollLeft = newMouseContentX - mouseViewportX
       root.scrollTop = newMouseContentY - mouseViewportY

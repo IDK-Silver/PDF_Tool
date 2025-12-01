@@ -6,8 +6,10 @@
  * 1. 單一真相來源 (Single Source of Truth)
  * 2. 同步計算錨點位置以避免 Layout Thrashing
  * 3. 支援多種錨點類型（視窗中心、滑鼠位置、頁面元素）
+ * 4. 指數縮放（Exponential Zoom）：確保不同縮放級別下視覺感受一致
  */
 import { ref, computed, nextTick, type Ref } from 'vue'
+import { useSettingsStore } from '@/modules/settings/store'
 
 export interface ZoomOptions {
   /** 縮放步進值（百分比） */
@@ -265,6 +267,9 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
   let wheelAccumulator = 0
   let wheelRaf: number | null = null
 
+  // 獲取設定 store
+  const settings = useSettingsStore()
+
   const displayZoom = computed(() => {
     const value = viewMode.value === 'fit' ? (displayFitPercent.value ?? 100) : zoomTarget.value
     return Math.round(value)
@@ -439,9 +444,10 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
 
   /**
    * 滾輪縮放專用處理
-   * 修正重點：
-   * 1. 解決固定 Margin/Padding 導致的「向下偏移」問題：改用「頁面相對錨點」取代「全域數學公式」
-   * 2. 只有當游標指在縫隙(Gap)時，才回退到純數學計算
+   * 優化重點：
+   * 1. 改用指數縮放 (Multiplicative/Exponential Scaling)，解決視覺比例不一致的問題
+   * 2. 使用數學推算新尺寸，而非依賴 DOM 測量，消除 nextTick 造成的微小抖動
+   * 3. 從設定讀取可配置的敏感度參數
    */
   function handleWheelZoom(
     e: WheelEvent,
@@ -460,7 +466,8 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
     const mouseY = e.clientY
     const rootRect = root.getBoundingClientRect()
 
-    // --- [修正 1] 在縮放前，精確捕捉滑鼠相對於「特定頁面」的錨點 ---
+    // --- 1. 捕捉錨點 ---
+    // 這一部分保持不變，精確捕捉滑鼠在「哪一頁」的「哪個比例位置」
     const hitEl = document.elementFromPoint(mouseX, mouseY)
     const cardEl = hitEl?.closest('.bg-card') as HTMLElement | null
     const pageWrapper = cardEl?.closest('[data-pdf-page]') as HTMLElement | null
@@ -468,7 +475,6 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
 
     let anchorData: { pageIndex: number; ratioX: number; ratioY: number } | null = null
 
-    // 如果滑鼠指在頁面上，計算相對比例 (0.0 ~ 1.0)
     if (pageIndex >= 0 && cardEl) {
       const rect = cardEl.getBoundingClientRect()
       anchorData = {
@@ -477,14 +483,13 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
         ratioY: (mouseY - rect.top) / rect.height,
       }
     }
-    // -----------------------------------------------------------
 
     wheelRaf = requestAnimationFrame(() => {
       wheelRaf = null
       const currentDelta = wheelAccumulator
       wheelAccumulator = 0
 
-      // 1. 決定起始縮放值
+      // 1. 決定起始縮放值 (Start Zoom)
       let startZoom = zoomTarget.value
       const wasInFitMode = viewMode.value !== 'actual'
 
@@ -502,61 +507,81 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
         }
       }
 
-      // 2. 計算新縮放值
-      const sensitivity = 1.0
-      const zoomChange = Math.max(-50, Math.min(50, -currentDelta * sensitivity))
-      const newZoom = clampZoom(startZoom + zoomChange)
+      // 2. 計算新縮放值 (改用指數縮放)
+      // 從設定讀取敏感度
+      const sensitivity = settings.s.zoomSensitivity
+      // 使用 Math.exp 來實現平滑的乘法縮放
+      // -currentDelta 是因為滾輪向下通常是正值(zoom out)，向上是負值(zoom in)
+      const scaleFactor = Math.exp(-currentDelta * sensitivity)
 
-      if (Math.abs(newZoom - startZoom) < 0.1) return
+      let newZoom = startZoom * scaleFactor
+
+      // 額外處理：如果變化太小（例如觸控板的微小抖動），忽略之以節省效能
+      if (Math.abs(newZoom - startZoom) < 0.01) return
+
+      newZoom = clampZoom(newZoom)
 
       // 3. 更新狀態
       viewMode.value = 'actual'
       zoomTarget.value = newZoom
 
-      // 4. 使用 nextTick 修正滾動位置
-      nextTick(() => {
-        const mouseViewportX = mouseX - rootRect.left
-        const mouseViewportY = mouseY - rootRect.top
+      // 4. 修正滾動位置
+      // 使用 Math 運算比 nextTick + DOM 測量更穩定，不會有 Reflow 延遲
+      const effectiveScale = newZoom / startZoom
+      const mouseViewportX = mouseX - rootRect.left
+      const mouseViewportY = mouseY - rootRect.top
 
-        // --- [修正 2] 根據是否有錨點，決定修正策略 ---
-        if (anchorData) {
-          // A. 錨點模式 (解決偏移問題)：
-          // 找出該頁面新的 DOM 位置，並依據之前的比例還原位置
-          const newCardEl = getPageCardElement(anchorData.pageIndex)
+      if (anchorData && !wasInFitMode) {
+        // A. 精確錨點模式 (Anchor Mode)
+        // 只有在非 Fit 模式切換時，我們才能信賴 offsetTop 的線性比例
+        // 這裡我們直接獲取當前的 DOM 位置，然後用 scale 預測未來位置
+        const currentCardEl = getPageCardElement(anchorData.pageIndex)
 
-          if (newCardEl) {
-            const { top, left } = getAbsolutePosition(newCardEl, root)
-            const newH = newCardEl.offsetHeight
-            const newW = newCardEl.offsetWidth
+        if (currentCardEl) {
+          // 使用 nextTick 確保 DOM 更新後再調整滾動位置
+          nextTick(() => {
+             const newCardEl = getPageCardElement(anchorData!.pageIndex)
+             if (newCardEl) {
+                const { top, left } = getAbsolutePosition(newCardEl, root)
+                const realNewH = newCardEl.offsetHeight
+                const realNewW = newCardEl.offsetWidth
 
-            // 公式：頁面頂端 + (頁面高度 * 相對比例) - 滑鼠在視窗的位置
-            root.scrollTop = top + (newH * anchorData.ratioY) - mouseViewportY
+                // 還原 Y 軸
+                root.scrollTop = top + (realNewH * anchorData!.ratioY) - mouseViewportY
 
-            if (root.scrollWidth > root.clientWidth) {
-              root.scrollLeft = left + (newW * anchorData.ratioX) - mouseViewportX
-            } else {
-              root.scrollLeft = 0
-            }
-          }
-        } else {
-          // B. 純數學模式 (Fallback)：
-          // 當滑鼠指在縫隙時，回退到原本的邏輯
-          const scale = newZoom / startZoom
-          const targetScrollTop = (root.scrollTop + mouseViewportY) * scale - mouseViewportY
-
-          let targetScrollLeft = root.scrollLeft
-          if (root.scrollWidth <= root.clientWidth) {
-            targetScrollLeft = 0
-          } else {
-            targetScrollLeft = (root.scrollLeft + mouseViewportX) * scale - mouseViewportX
-          }
-
-          root.scrollTop = targetScrollTop
-          root.scrollLeft = targetScrollLeft
+                // 還原 X 軸
+                if (root.scrollWidth > root.clientWidth) {
+                   root.scrollLeft = left + (realNewW * anchorData!.ratioX) - mouseViewportX
+                } else {
+                   root.scrollLeft = 0
+                }
+             }
+             if (onZoomChange) onZoomChange()
+          })
+          return // 結束，交給 nextTick 處理
         }
+      }
 
-        if (onZoomChange) onZoomChange()
-      })
+      // B. 純數學模式 (Fallback or Fit-to-Actual transition)
+      // 當從 Fit 切換到 Actual，或者沒指到頁面時，使用全域數學縮放
+      // 這在 Fit 轉 Actual 時特別有用，因為 DOM 結構改變較大
+
+      // 計算滑鼠在內容空間 (Content Space) 的座標
+      const contentX = root.scrollLeft + mouseViewportX
+      const contentY = root.scrollTop + mouseViewportY
+
+      // 直接依比例放大座標
+      const targetScrollTop = contentY * effectiveScale - mouseViewportY
+      const targetScrollLeft = contentX * effectiveScale - mouseViewportX
+
+      root.scrollTop = targetScrollTop
+      if (root.scrollWidth > root.clientWidth) {
+          root.scrollLeft = targetScrollLeft
+      } else {
+          root.scrollLeft = 0
+      }
+
+      if (onZoomChange) onZoomChange()
     })
   }
 
