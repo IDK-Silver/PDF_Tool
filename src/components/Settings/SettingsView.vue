@@ -227,6 +227,18 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">向可見區域上下預載的頁數。預設 4。</p>
             </div>
+            <div>
+              <label class="block mb-1">DOM 結構保留範圍</label>
+              <input
+                type="number"
+                min="1"
+                max="100"
+                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+                :value="s.structureOverscan"
+                @input="s.structureOverscan = number($event, s.structureOverscan)"
+              />
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">視野外 ± N 頁仍保留 DOM 結構，超出範圍只渲染占位。預設 10。</p>
+            </div>
           </div>
         </div>
       </section>
@@ -318,6 +330,21 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             />
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
               互動結束後延遲顯示文字層的時間（僅在啟用隱藏時生效）。預設 0ms。
+            </p>
+          </div>
+
+          <div :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
+            <label class="block mb-1">文字層渲染範圍</label>
+            <input
+              type="number"
+              min="0"
+              max="20"
+              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+              :value="s.textLayerRange"
+              @input="s.textLayerRange = number($event, s.textLayerRange)"
+            />
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              中心頁面 ± N 頁會渲染文字層。較大值允許更遠頁面的文字選取，但會增加 DOM 節點。預設 1。
             </p>
           </div>
 

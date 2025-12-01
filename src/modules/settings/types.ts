@@ -49,6 +49,10 @@ export interface SettingsState {
   textLayerSmallGapSpacing: number       // 小間距時的調整值
   textLayerGlobalOffsetX: number         // 全局水平偏移（像素，正值向右）
   textLayerGlobalOffsetY: number         // 全局垂直偏移（像素，正值向下）
+  textLayerRange: number                 // 文字層渲染範圍（中心頁面 ± N 頁）
+
+  // === DOM 虛擬化 ===
+  structureOverscan: number              // 頁面結構渲染範圍（視野外 ± N 頁仍保留 DOM 結構）
 }
 
 export const defaultSettings: SettingsState = {
@@ -100,6 +104,10 @@ export const defaultSettings: SettingsState = {
   textLayerSmallGapSpacing: 0.5,      // 預設：小間距調整為 0.5 像素
   textLayerGlobalOffsetX: 0,          // 預設：無全局水平偏移
   textLayerGlobalOffsetY: 0,          // 預設：無全局垂直偏移
+  textLayerRange: 1,                  // 預設：中心頁面 ± 1 頁
+
+  // DOM 虛擬化
+  structureOverscan: 10,              // 預設：視野外 ± 10 頁保留 DOM 結構
 }
 
 // 舊版參數映射（用於遷移）
@@ -144,5 +152,9 @@ export function migrateFromV1(old: any): SettingsState {
     textLayerSmallGapSpacing: old.textLayerSmallGapSpacing ?? defaultSettings.textLayerSmallGapSpacing,
     textLayerGlobalOffsetX: old.textLayerGlobalOffsetX ?? defaultSettings.textLayerGlobalOffsetX,
     textLayerGlobalOffsetY: old.textLayerGlobalOffsetY ?? defaultSettings.textLayerGlobalOffsetY,
+    textLayerRange: old.textLayerRange ?? defaultSettings.textLayerRange,
+
+    // DOM 虛擬化
+    structureOverscan: old.structureOverscan ?? defaultSettings.structureOverscan,
   }
 }

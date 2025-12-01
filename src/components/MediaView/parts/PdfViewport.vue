@@ -1105,6 +1105,16 @@ const mountedPages = computed(() => {
   return set
 })
 
+const STRUCTURE_OVERSCAN = computed(() => settings.s.structureOverscan || 10)
+function shouldRenderStructure(idx: number) {
+  // Always render if total pages is small to avoid flickering
+  if ((totalPages.value || 0) < 30) return true
+  
+  const s = visibleStart.value - STRUCTURE_OVERSCAN.value
+  const e = visibleEnd.value + STRUCTURE_OVERSCAN.value
+  return idx >= s && idx <= e
+}
+
 function shouldRenderPageContent(idx: number) {
   return mountedPages.value.has(idx)
 }
@@ -1116,7 +1126,7 @@ const pendingIdx = new Set<number>()
 const containerW = ref(0)
 let hiResTimer: number | null = null
 const pageCardSizes = ref<Record<number, { width: number; height: number }>>({})
-const pendingCardSizeUpdates = new Map<number, { width: number; height: number }>()
+const pendingCardSizeUpdates = new Map<number, { width: number, height: number }>()
 let sizeFlushRaf: number | null = null
 const pageCardObservers = new Map<number, ResizeObserver>()
 
@@ -1684,14 +1694,14 @@ function getPageTextLayerPropsList(idx: number) {
  * 效能優化：只為中心附近的頁面渲染文字層
  * 減少 DOM 節點數量，大幅提升滾動效能
  */
-const TEXT_LAYER_RANGE = 1 // 中心頁面 ±1 頁
 function shouldRenderTextLayer(idx: number): boolean {
   if (!settings.s.enableTextExtraction) return false
   // 搜尋時需要高亮，擴大範圍
   if (searchVisible.value && searchMatches.value.some(m => m.pageIndex === idx)) {
     return true
   }
-  return Math.abs(idx - centerIndex.value) <= TEXT_LAYER_RANGE
+  const textLayerRange = settings.s.textLayerRange ?? 1
+  return Math.abs(idx - centerIndex.value) <= textLayerRange
 }
 
 defineExpose({
@@ -1739,65 +1749,71 @@ defineExpose({
           :data-pdf-page="idx"
           @contextmenu.prevent="onPageContextMenu(idx, $event)"
         >
-          <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
-            <div
-              :class="['bg-card rounded-md shadow border border-border relative inline-block', viewMode === 'fit' ? 'overflow-hidden w-full' : 'overflow-visible']"
-              :style="pageCardStyle(idx)"
-              :ref="(el) => registerPageCard(idx, el as HTMLElement | null)"
-            >
-              <!-- DOM 虛擬化：只渲染視野附近頁面的實際內容 -->
-              <template v-if="shouldRenderPageContent(idx)">
-                <img
-                  v-if="getPageDisplayUrl(idx)"
-                  :src="getPageDisplayUrl(idx)"
-                  :alt="`page-${idx}`"
-                  :class="[
-                    viewMode === 'fit' ? 'w-full block' : 'block',
-                    'disable-live-text',
-                  ]"
-                  :style="imgStyle(idx)"
-                  style="pointer-events: none;"
-                  decoding="async"
-                  loading="lazy"
-                  draggable="false"
-                />
-                <canvas
-                  v-else-if="isRawPage(idx)"
-                  :class="[
-                    viewMode === 'fit' ? 'w-full block' : 'block',
-                    'disable-live-text',
-                  ]"
-                  :style="imgStyle(idx)"
-                  style="pointer-events: none;"
-                  :data-raw-page="idx"
-                  :ref="(el: any) => drawRawInto(el as HTMLCanvasElement | null, idx)"
-                />
-                <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
-
-                <!-- Text selection layer (只渲染中心附近頁面以優化效能) -->
-                <div
-                  v-if="docId != null && shouldRenderTextLayer(idx)"
-                  class="absolute inset-0 pointer-events-none"
-                  :style="{
-                    zIndex: 1,
-                    opacity: (settings.s.hideTextLayerWhileInteracting && isInteracting) ? 0 : 1,
-                    transition: 'opacity 0.12s ease-out',
-                  }"
-                >
-                  <PdfTextLayer
-                    v-for="layerProps in getPageTextLayerPropsList(idx)"
-                    :key="`text-layer-${idx}`"
-                    :doc-id="docId"
-                    :page-index="idx"
-                    v-bind="layerProps"
-                    style="pointer-events: auto;"
+          <template v-if="shouldRenderStructure(idx)">
+            <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
+              <div
+                :class="['bg-card rounded-md shadow border border-border relative inline-block', viewMode === 'fit' ? 'overflow-hidden w-full' : 'overflow-visible']"
+                :style="pageCardStyle(idx)"
+                :ref="(el) => registerPageCard(idx, el as HTMLElement | null)"
+              >
+                <!-- DOM 虛擬化：只渲染視野附近頁面的實際內容 -->
+                <template v-if="shouldRenderPageContent(idx)">
+                  <img
+                    v-if="getPageDisplayUrl(idx)"
+                    :src="getPageDisplayUrl(idx)"
+                    :alt="`page-${idx}`"
+                    :class="[
+                      viewMode === 'fit' ? 'w-full block' : 'block',
+                      'disable-live-text',
+                    ]"
+                    :style="imgStyle(idx)"
+                    style="pointer-events: none;"
+                    decoding="async"
+                    loading="lazy"
+                    draggable="false"
                   />
-                </div>
-              </template>
-              <!-- 未掛載的頁面：空白占位，保持高度 -->
-              <div v-else class="w-full aspect-[1/1.414] bg-muted/30"></div>
+                  <canvas
+                    v-else-if="isRawPage(idx)"
+                    :class="[
+                      viewMode === 'fit' ? 'w-full block' : 'block',
+                      'disable-live-text',
+                    ]"
+                    :style="imgStyle(idx)"
+                    style="pointer-events: none;"
+                    :data-raw-page="idx"
+                    :ref="(el: any) => drawRawInto(el as HTMLCanvasElement | null, idx)"
+                  />
+                  <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
+
+                  <!-- Text selection layer (只渲染中心附近頁面以優化效能) -->
+                  <div
+                    v-if="docId != null && shouldRenderTextLayer(idx)"
+                    class="absolute inset-0 pointer-events-none"
+                    :style="{
+                      zIndex: 1,
+                      opacity: (settings.s.hideTextLayerWhileInteracting && isInteracting) ? 0 : 1,
+                      transition: 'opacity 0.12s ease-out',
+                    }"
+                  >
+                    <PdfTextLayer
+                      v-for="layerProps in getPageTextLayerPropsList(idx)"
+                      :key="`text-layer-${idx}`"
+                      :doc-id="docId"
+                      :page-index="idx"
+                      v-bind="layerProps"
+                      style="pointer-events: auto;"
+                    />
+                  </div>
+                </template>
+                <!-- 未掛載的頁面：空白占位，保持高度 -->
+                <div v-else class="w-full aspect-[1/1.414] bg-muted/30"></div>
+              </div>
+              <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
             </div>
-            <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
+          </template>
+          <div v-else :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
+            <div :style="pageCardStyle(idx)"></div>
+            <div style="height: 28px"></div>
           </div>
         </div>
       </div>
