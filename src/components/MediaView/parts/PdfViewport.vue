@@ -274,6 +274,9 @@ function triggerRerender(delay: number = 0) {
   scheduleHiResRerender(delay)
 }
 
+// 頁面頂部的視覺留白，讓閱讀體驗更舒適
+const VISUAL_PADDING = 32
+
 const centerIndex = ref(0)
 const displayPageIndex = ref(0)
 const currentPage = computed(() => {
@@ -360,12 +363,12 @@ async function gotoPage(page: number) {
       if (elHeight < containerHeight) {
         targetTop = elTop - (containerHeight / 2) + (elHeight / 2)
       }
-      // Case B: 頁面大於視窗 -> 靠上對齊
+      // Case B: 頁面大於視窗 -> 靠上對齊，並保留視覺留白
       else {
         const rootRect = root.getBoundingClientRect()
         const cardRect = targetEl.getBoundingClientRect()
         const cardTopRelativeToRoot = cardRect.top - rootRect.top + root.scrollTop
-        targetTop = cardTopRelativeToRoot
+        targetTop = cardTopRelativeToRoot - VISUAL_PADDING
       }
 
       // 執行垂直捲動
