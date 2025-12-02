@@ -282,24 +282,22 @@ const currentPage = computed(() => {
   return Math.min(tp, Math.max(1, displayPageIndex.value + 1))
 })
 
-// [Fix] 用於等待容器寬度與佈局穩定的 Helper
 async function waitForLayout(maxRetries = 20) {
-  // 1. 等待 ResizeObserver 抓到容器寬度
+  // 1. 等待寬度
   for (let i = 0; i < maxRetries; i++) {
     const w = scrollRootEl.value?.clientWidth || 0
     if (w > 0) {
-      containerW.value = w // 強制同步
+      containerW.value = w
       break
     }
     await new Promise(r => requestAnimationFrame(r))
   }
 
-  // 2. 強制計算 Fit 比例
-  updateFitPercent()
+  // 2. 等待 Fit 計算
+  await updateFitPercent()
 
-  // 3. 等待 Vue 更新 DOM (CSS 變數應用)
+  // 3. 等待 Vue 更新
   await nextTick()
-  // 額外等待一個 Frame 讓瀏覽器完成 Reflow
   await new Promise(r => requestAnimationFrame(r))
 }
 
@@ -311,7 +309,19 @@ async function gotoPage(page: number) {
   centerIndex.value = idx
   displayPageIndex.value = idx
 
-  // 1. 維持這個關鍵修正：等待 Layout 與 Zoom 穩定，避免頁碼計算錯誤
+  // [垂直修正核心] 預載尺寸
+  // 確保目標頁面及之前所有頁面都有尺寸，防止 offsetTop 計算錯誤
+  const missingIndices: number[] = []
+  for (let i = 0; i <= idx; i++) {
+    if (!media.pageSizesPt[i]) {
+      missingIndices.push(i)
+    }
+  }
+  if (missingIndices.length > 0) {
+    await Promise.all(missingIndices.map(i => media.getPageSizePt(i).catch(() => {})))
+  }
+
+  // 等待 Layout 與 Zoom 穩定
   if (viewMode.value === 'fit') {
     await waitForLayout()
   } else {
@@ -321,50 +331,64 @@ async function gotoPage(page: number) {
   const root = scrollRootEl.value
   if (!root) return
 
-  // 2. 移除 scrollIntoView，改回手動計算，確保不影響外部 Layout
   const tryScroll = async (retries = 5) => {
     const el = root.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
 
     if (el) {
-      // 嘗試獲取內部的頁面卡片元素，更精準對齊
       const cardEl = el.querySelector('.bg-card') as HTMLElement | null
-      const targetEl = cardEl || el
 
-      // 取得尺寸數據
+      // 若 Card 還沒渲染出來，繼續重試
+      if (!cardEl && retries > 0) {
+        requestAnimationFrame(() => tryScroll(retries - 1))
+        return
+      }
+
+      const targetEl = cardEl || el
       const elTop = targetEl.offsetTop
       const elHeight = targetEl.offsetHeight
+      const elWidth = targetEl.offsetWidth
       const containerHeight = root.clientHeight
 
-      let targetTop = 0
+      // 安全檢查：尺寸異常小代表 CSS 未載入，重試
+      if ((elHeight < 10 || elWidth < 10) && retries > 0) {
+        requestAnimationFrame(() => tryScroll(retries - 1))
+        return
+      }
 
-      // [Fix] 智慧對齊邏輯：
-      // 情況 A：如果頁面高度 < 視窗高度 (例如縮很小)，則維持「垂直置中」比較美觀
+      let targetTop = 0
+      // Case A: 頁面小於視窗 -> 垂直置中
       if (elHeight < containerHeight) {
         targetTop = elTop - (containerHeight / 2) + (elHeight / 2)
       }
-      // 情況 B：正常閱讀狀況 (Fit 或 Zoom In)，改為「靠上對齊」
-      // 這樣可以確保你看到的是頁首，而不是頁尾
+      // Case B: 頁面大於視窗 -> 靠上對齊
       else {
-        // 獲取容器頂部的實際 padding
         const rootRect = root.getBoundingClientRect()
         const cardRect = targetEl.getBoundingClientRect()
-
-        // 計算卡片相對於滾動容器的實際位置
         const cardTopRelativeToRoot = cardRect.top - rootRect.top + root.scrollTop
-
-        // 保留少量視覺空間（可調整此值：0 = 完全對齊)
-        const VISUAL_PADDING = 32
-        targetTop = cardTopRelativeToRoot - VISUAL_PADDING
+        targetTop = cardTopRelativeToRoot
       }
 
-      // 防止捲動到負數（這行必須保留，否則不會滾動）
+      // 執行垂直捲動
       root.scrollTop = Math.max(0, targetTop)
 
-      // 水平依舊維持置中
+      // 執行水平置中
       centerPageHorizontally(idx)
 
       pendingIdx.add(idx)
       scheduleProcess()
+
+      // [水平修正核心] 三段式確保置中
+      // 1. AnimationFrame: 等待渲染層更新
+      requestAnimationFrame(() => {
+        centerPageHorizontally(idx)
+      })
+
+      // 2. setTimeout: [關鍵] 等待 Scrollbar 出現導致的 Layout Shift 穩定
+      // 這能解決「灰色區域很寬、內容跑去右邊」的問題
+      setTimeout(() => {
+        centerPageHorizontally(idx)
+      }, 50)
+
     } else if (retries > 0) {
       requestAnimationFrame(() => tryScroll(retries - 1))
     }
@@ -375,21 +399,18 @@ async function gotoPage(page: number) {
 
 watch(
   () => media.descriptor?.path,
-  async (p, oldP) => {
+  async (p) => {
     const d = media.descriptor
     if (!p || !d || d.type !== 'pdf') return
-
-    console.log('[PdfViewport] Path changed from', oldP, 'to', p)
 
     displayPageIndex.value = 0
     centerIndex.value = 0
 
     try { await filelist.whenReady() } catch { }
     const last = filelist.getLastPage(p)
-    console.log('[PdfViewport] Last page from storage:', last)
 
     if (typeof last === 'number' && last >= 1) {
-      // 1. 等待 PDF 解析 Loading 結束
+      // 1. 等待 PDF 載入完成
       await new Promise<void>((resolve) => {
         const checkLoading = () => {
           if (!media.loading) resolve()
@@ -398,20 +419,23 @@ watch(
         checkLoading()
       })
 
-      // 2. [Fix] 等待佈局與縮放比例完全穩定
-      // 這會防止 "頁碼跑掉" (75 -> 89) 的問題
+      const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
+
+      // 2. 預載目標頁面尺寸（提前優化，gotoPage 內部也會確保所有需要的頁面尺寸都載入）
+      try {
+        await media.getPageSizePt(targetIdx)
+      } catch (e) {
+        console.warn('[PdfViewport] Failed to preload page size:', e)
+      }
+
+      // 3. 等待 Layout 準備
       await waitForLayout()
 
-      // 3. 等待目標頁面的 DOM 節點掛載
+      // 4. 等待 DOM 元素渲染
       await new Promise<void>((resolve) => {
-        const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
-
-        // 為了讓虛擬捲動知道要渲染這一頁，先設定 indices
         displayPageIndex.value = targetIdx
         centerIndex.value = targetIdx
-
         const checkDOM = () => {
-          // 必須 root 有寬度才算準備好
           const root = scrollRootEl.value
           if (root && root.clientWidth > 0) {
             const el = root.querySelector(`[data-pdf-page="${targetIdx}"]`)
@@ -425,6 +449,7 @@ watch(
         checkDOM()
       })
 
+      // 5. 跳轉到目標頁面
       try {
         await gotoPage(last)
       } catch (e) {
@@ -1432,10 +1457,17 @@ onMounted(async () => {
     console.log('[PdfViewport] onMounted - last page from storage:', last)
 
     if (typeof last === 'number' && last >= 1) {
+      const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
+
+      // [新增] 同樣預載目標頁面尺寸
+      try {
+        await media.getPageSizePt(targetIdx)
+      } catch (e) {
+        console.warn('[PdfViewport] onMounted - Failed to preload page size:', e)
+      }
+
       // [Fix] 即使是 onMounted，也要確保 Layout 準備好
       await waitForLayout()
-
-      const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
 
       // 設定 index 觸發虛擬渲染
       displayPageIndex.value = targetIdx
@@ -1592,32 +1624,38 @@ watch(viewMode, () => {
 })
 
 let fitTimer: number | null = null
-function updateFitPercent() {
-  // 即使不是 fit 模式，也計算一下，以備切換
+async function updateFitPercent() {
   const d = media.descriptor
   if (!d || d.type !== 'pdf') return
   const cW = containerW.value || 800
   const idx = centerIndex.value
 
-  // 嘗試取得該頁面的原始寬度
-  const cachedBase = media.baseCssWidthAt100(idx)
+  // Helper
+  const apply = (widthPt: number) => {
+    const base = widthPt * (96 / 72)
+    if (base > 0) {
+      const availableW = Math.max(100, cW - 48)
+      const newPercent = Math.max(5, Math.min(400, (availableW / base) * 100))
+      displayFitPercent.value = newPercent
+    }
+  }
 
+  // 1. 嘗試快取
+  const cachedBase = media.baseCssWidthAt100(idx)
   if (cachedBase && cachedBase > 0) {
-    // 預留一些 padding (如 48px) 避免貼邊
-    const availableW = Math.max(100, cW - 48)
-    displayFitPercent.value = Math.max(5, Math.min(400, (availableW / cachedBase) * 100))
+    apply(cachedBase * (72 / 96))
     return
   }
 
-  // Fallback: 非同步取得尺寸
-  media.getPageSizePt(idx).then((sz) => {
-    if (!sz) return
-    const base = sz.widthPt * (96 / 72)
-    if (base > 0) {
-      const availableW = Math.max(100, cW - 48)
-      displayFitPercent.value = Math.max(5, Math.min(400, (availableW / base) * 100))
+  // 2. 嘗試非同步
+  try {
+    const sz = await media.getPageSizePt(idx)
+    if (sz) {
+      apply(sz.widthPt)
     }
-  })
+  } catch (e) {
+    console.error('[PdfViewport] updateFitPercent error', e)
+  }
 }
 
 function scheduleUpdateFitPercent() {
