@@ -1390,7 +1390,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
         // 最小允許世代：小於此值的渲染將被立刻忽略（最佳努力取消）
         let mut min_gen: HashMap<(u64, u32), u64> = HashMap::new();
         let cache_root = cache_dir.join(TEXT_CACHE_DIR_NAME);
-        let mut glyph_cache = GlyphCache::new(&cache_root).ok();
+        let glyph_cache = GlyphCache::new(&cache_root).ok();
         if glyph_cache.is_none() {
             warn!("文字框快取初始化失敗，將以非快取模式運行");
         }
@@ -1557,7 +1557,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", index))
                         })?;
                         {
-                            let mut pages = doc.doc.pages_mut();
+                            let pages = doc.doc.pages_mut();
                             pages
                                 .create_page_at_index(size, idx_u16)
                                 .map_err(|e| {
@@ -2271,6 +2271,7 @@ pub struct PdfPageSize {
 // Text selection structures
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // legacy char-level data structure retained for tooling/debugging
 pub struct TextChar {
     pub text: String,
     pub x: f32,
