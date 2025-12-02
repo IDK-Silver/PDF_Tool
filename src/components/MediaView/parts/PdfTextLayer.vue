@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import { useMediaStore } from '@/modules/media/store'
 import type { PageTextContent } from '@/modules/media/types'
 
@@ -32,6 +32,10 @@ const props = defineProps<{
 }>()
 
 const media = useMediaStore()
+const emit = defineEmits<{
+  (e: 'selection-change', payload: { pageIndex: number; range: { start: number; end: number } | null }): void
+  (e: 'layer-ready', payload: { pageIndex: number }): void
+}>()
 
 const textContent = shallowRef<PageTextContent | null>(null)
 // 緩存處理過的 spans 樣式，避免每次 render 重算
@@ -39,6 +43,8 @@ const renderedSpans = shallowRef<Array<{ text: string, style: any, idx: number }
 const loading = shallowRef(false)
 const error = shallowRef<string | null>(null)
 let fetchToken = 0
+const rootEl = shallowRef<HTMLDivElement | null>(null)
+const readyEmitted = shallowRef(false)
 
 // [核心] 容器層級的 Transform
 // 當 props.pxPerPointX 改變時（縮放），Vue 只需要更新這個 style 字串
@@ -107,6 +113,7 @@ watch(
         textContent.value = Object.freeze(result)
         // 收到資料後，計算一次樣式並快取起來
         renderedSpans.value = precomputeSpans(result)
+        readyEmitted.value = false
       } else {
         error.value = '無法取得頁面文字'
       }
@@ -125,6 +132,7 @@ onBeforeUnmount(() => {
   textContent.value = null
   renderedSpans.value = []
   widthCache.clear()
+  document.removeEventListener('selectionchange', handleSelectionChange)
 })
 
 // Debug：觀察掛載/卸載狀態
@@ -134,6 +142,60 @@ if (import.meta.env.DEV) {
     console.log('[PdfTextLayer] unmount', { pageIndex: props.pageIndex, docId: props.docId })
   })
 }
+
+function toCharIndex(spanIdx: number, offsetInSpan: number): number | null {
+  if (!textContent.value) return null
+  let acc = 0
+  for (let i = 0; i < textContent.value.spans.length; i++) {
+    const span = textContent.value.spans[i]
+    const len = span?.text?.length ?? 0
+    if (i === spanIdx) {
+      return acc + Math.max(0, Math.min(len, offsetInSpan))
+    }
+    acc += len
+  }
+  return null
+}
+
+function nodeToSpanInfo(node: Node | null, offset: number): { spanIdx: number; offset: number } | null {
+  if (!node) return null
+  const spanEl = (node.nodeType === Node.ELEMENT_NODE ? node as HTMLElement : node.parentElement)?.closest('.text-span') as HTMLElement | null
+  if (!spanEl || !rootEl.value || !rootEl.value.contains(spanEl)) return null
+  const spanIdx = Number(spanEl.dataset.spanIndex)
+  if (!Number.isFinite(spanIdx)) return null
+  const textLen = (spanEl.textContent ?? '').length
+  return { spanIdx, offset: Math.max(0, Math.min(textLen, offset)) }
+}
+
+function handleSelectionChange() {
+  const selection = window.getSelection()
+  const root = rootEl.value
+  if (!selection || selection.rangeCount === 0 || !root) return
+  const anchorInfo = nodeToSpanInfo(selection.anchorNode, selection.anchorOffset)
+  const focusInfo = nodeToSpanInfo(selection.focusNode, selection.focusOffset)
+  if (!anchorInfo || !focusInfo) return
+  if (selection.isCollapsed) {
+    emit('selection-change', { pageIndex: props.pageIndex, range: null })
+    return
+  }
+  const startIdx = toCharIndex(anchorInfo.spanIdx, anchorInfo.offset)
+  const endIdx = toCharIndex(focusInfo.spanIdx, focusInfo.offset)
+  if (startIdx == null || endIdx == null) return
+  const start = Math.min(startIdx, endIdx)
+  const end = Math.max(startIdx, endIdx)
+  emit('selection-change', { pageIndex: props.pageIndex, range: { start, end } })
+}
+
+onMounted(() => {
+  document.addEventListener('selectionchange', handleSelectionChange)
+})
+
+watch(renderedSpans, (spans) => {
+  if (!readyEmitted.value && spans.length > 0) {
+    readyEmitted.value = true
+    emit('layer-ready', { pageIndex: props.pageIndex })
+  }
+})
 
 // 高亮邏輯
 const highlightedSpanIndices = computed<Set<number>>(() => {
@@ -195,6 +257,7 @@ function getSpanClass(idx: number) {
 <template>
   <div
     class="pdf-text-layer"
+    ref="rootEl"
     :style="layerStyle"
   >
     <div v-if="loading" class="layer-status">載入文字中…</div>

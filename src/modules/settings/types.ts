@@ -41,8 +41,6 @@ export interface SettingsState {
 
   // === 文字層 ===
   enableTextExtraction: boolean          // 是否啟用文字讀取（關閉可提升效能）
-  hideTextLayerWhileInteracting: boolean // 互動時隱藏文字層（false=保持顯示，推薦）
-  textLayerRerenderDelayMs: number       // 互動結束後延遲顯示文字層（ms，僅在隱藏模式生效）
   textLayerOverlapThreshold: number      // 重疊檢測閾值（負值表示需要調整的重疊量）
   textLayerMinSpacing: number            // 重疊時的最小間距（像素）
   textLayerSmallGapThreshold: number     // 小間距檢測閾值
@@ -56,7 +54,7 @@ export interface SettingsState {
 
   // === 縮放互動 ===
   zoomMaxPercent: number                // PDF/圖片共用的最大縮放百分比
-  zoomSensitivity: number                // 滾輪縮放敏感度（0.001-0.003，預設 0.0015）
+  zoomSensitivity: number                // 滾輪縮放敏感度（建議 0.002–0.006，預設 0.0045）
 }
 
 export const defaultSettings: SettingsState = {
@@ -100,8 +98,6 @@ export const defaultSettings: SettingsState = {
 
   // 文字層
   enableTextExtraction: true,         // 預設：啟用文字讀取
-  hideTextLayerWhileInteracting: false, // 預設：false（互動時保持顯示，性能已優化）
-  textLayerRerenderDelayMs: 0,        // 預設：0ms（立即顯示）
   textLayerOverlapThreshold: 0.0,     // 預設：完全重疊才調整
   textLayerMinSpacing: 1.0,           // 預設：1 像素最小間距
   textLayerSmallGapThreshold: 0.5,    // 預設：0.5 像素以下視為間距太小
@@ -115,5 +111,5 @@ export const defaultSettings: SettingsState = {
 
   // 縮放互動
   zoomMaxPercent: 400,                // 預設最大縮放 400%，適用於 PDF 與圖片
-  zoomSensitivity: 0.0035,            // 預設：0.0015（適中的縮放速度）
+  zoomSensitivity: 0.0045,            // 預設：0.0045（較快的滾輪縮放）
 }

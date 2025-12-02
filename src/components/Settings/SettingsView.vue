@@ -349,32 +349,6 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             </label>
           </div>
 
-          <div class="flex items-start gap-2" :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
-            <input type="checkbox" id="hideTextLayerWhileInteracting" v-model="s.hideTextLayerWhileInteracting" class="mt-1 w-4 h-4" />
-            <label for="hideTextLayerWhileInteracting" class="flex-1">
-              <span class="font-medium">縮放/移動時隱藏文字層</span>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                啟用後在縮放或移動 PDF 時會暫時隱藏文字層，減少視覺干擾。建議保持關閉（性能已優化）。
-              </p>
-            </label>
-          </div>
-
-          <div :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction || !s.hideTextLayerWhileInteracting }">
-            <label class="block mb-1">文字層渲染延遲（毫秒）</label>
-            <input
-              type="number"
-              step="50"
-              min="0"
-              max="1000"
-              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-              :value="s.textLayerRerenderDelayMs"
-              @input="s.textLayerRerenderDelayMs = number($event, s.textLayerRerenderDelayMs)"
-            />
-            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              互動結束後延遲顯示文字層的時間（僅在啟用隱藏時生效）。預設 0ms。
-            </p>
-          </div>
-
           <div :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
             <label class="block mb-1">文字層渲染範圍</label>
             <input

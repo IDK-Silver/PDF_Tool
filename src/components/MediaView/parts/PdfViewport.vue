@@ -103,8 +103,6 @@ const searchAnchor = ref<{ top: number; left: number; width: number } | null>(nu
 const SEARCH_PANEL_MIN_WIDTH = 240
 const SEARCH_PANEL_MAX_WIDTH = 360
 const SEARCH_PANEL_MARGIN = 12
-const isInteracting = ref(false)
-let interactionTimer: number | null = null
 const isLayoutResizing = ref(false)
 
 function getRenderFormat() {
@@ -261,6 +259,7 @@ async function handleSetFitMode() {
   const ctx = createZoomContext()
   await setFitMode(ctx, { type: 'viewport-center' })
   triggerRerender(300)
+  centerPageHorizontally(displayPageIndex.value)
 }
 
 function triggerRerender(delay: number = 0) {
@@ -607,16 +606,6 @@ function handleWindowResize() {
   setSearchAnchor(true)
 }
 
-function triggerInteraction() {
-  isInteracting.value = true
-  if (interactionTimer) clearTimeout(interactionTimer)
-  const delay = settings.s.textLayerRerenderDelayMs
-  interactionTimer = window.setTimeout(() => {
-    isInteracting.value = false
-    interactionTimer = null
-  }, delay)
-}
-
 const pageHighlightMap = computed(() => {
   const map = new Map<number, Array<{ start: number; end: number; active?: boolean }>>()
   const matches = searchMatches.value
@@ -691,7 +680,7 @@ watch(
   () => {
     pageNormalizedCache.clear()
     closeSearch()
-    textLayerEpoch.value++
+    lastSelection.value = null
   },
 )
 
@@ -1072,7 +1061,10 @@ const renderIndices = computed(() => {
   return Array.from({ length: tp }, (_, i) => i)
 })
 
-const textLayerEpoch = ref(0)
+// 在模式切換期間鎖住頁面虛擬化，避免 DOM 被卸載（保留選取）
+const lockPagesDuringModeSwitch = ref(false)
+
+const lastSelection = ref<{ pageIndex: number; start: number; end: number } | null>(null)
 
 const mountedPages = computed(() => {
   const buffer = 2
@@ -1088,6 +1080,7 @@ const mountedPages = computed(() => {
 
 const STRUCTURE_OVERSCAN = computed(() => settings.s.structureOverscan || 10)
 function shouldRenderStructure(idx: number) {
+  if (lockPagesDuringModeSwitch.value) return true
   if ((totalPages.value || 0) < 30) return true
 
   const s = visibleStart.value - STRUCTURE_OVERSCAN.value
@@ -1096,6 +1089,7 @@ function shouldRenderStructure(idx: number) {
 }
 
 function shouldRenderPageContent(idx: number) {
+  if (lockPagesDuringModeSwitch.value) return true
   if (idx === displayPageIndex.value) return true
   return mountedPages.value.has(idx)
 }
@@ -1205,8 +1199,71 @@ function debugTextLayerState(label: string, idx: number) {
   })
 }
 
+function onTextSelectionChange(payload: { pageIndex: number; range: { start: number; end: number } | null }) {
+  if (payload.range) {
+    lastSelection.value = { pageIndex: payload.pageIndex, start: payload.range.start, end: payload.range.end }
+  } else if (lastSelection.value?.pageIndex === payload.pageIndex) {
+    lastSelection.value = null
+  }
+}
+
+function onTextLayerReady(pageIndex: number) {
+  if (lastSelection.value?.pageIndex === pageIndex) {
+    void restoreSelectionIfNeeded()
+  }
+}
+
+function centerPageHorizontally(idx: number) {
+  const root = scrollRootEl.value
+  if (!root || idx < 0) return
+  const pageEl = root.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
+  const cardEl = pageEl?.querySelector('.bg-card') as HTMLElement | null
+  if (!cardEl) return
+  const rootRect = root.getBoundingClientRect()
+  const cardRect = cardEl.getBoundingClientRect()
+  const cardLeftInContent = cardRect.left - rootRect.left + root.scrollLeft
+  const targetScrollLeft = cardLeftInContent - Math.max(0, (root.clientWidth - cardEl.offsetWidth) / 2)
+  root.scrollLeft = Math.max(0, targetScrollLeft)
+}
+
+async function restoreSelectionIfNeeded() {
+  const saved = lastSelection.value
+  if (!saved) return
+  await nextTick()
+  const root = scrollRootEl.value
+  const pageEl = root?.querySelector(`[data-pdf-page="${saved.pageIndex}"]`)
+  const layerEl = pageEl?.querySelector('.pdf-text-layer')
+  if (!layerEl) return
+  const spans = Array.from(layerEl.querySelectorAll('.text-span')) as HTMLSpanElement[]
+  const findNodeOffset = (charIndex: number) => {
+    let remaining = Math.max(0, charIndex)
+    for (const span of spans) {
+      const text = span.textContent ?? ''
+      const len = text.length
+      if (remaining <= len) {
+        const node = span.firstChild
+        if (node) {
+          return { node, offset: Math.max(0, Math.min(len, remaining)) }
+        }
+        break
+      }
+      remaining -= len
+    }
+    return null
+  }
+  const startPos = findNodeOffset(saved.start)
+  const endPos = findNodeOffset(saved.end)
+  if (!startPos || !endPos) return
+  const selection = window.getSelection()
+  if (!selection) return
+  const range = document.createRange()
+  range.setStart(startPos.node, startPos.offset)
+  range.setEnd(endPos.node, endPos.offset)
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
 function onScroll() {
-  triggerInteraction()
   if (scrollRaf !== null) return
   if (scrollEndTimer) clearTimeout(scrollEndTimer)
   scrollRaf = requestAnimationFrame(() => {
@@ -1415,6 +1472,7 @@ watch(viewMode, () => {
   // 切換顯示模式時，DOM 佈局會劇烈重排，必須鎖定可視範圍計算
   // 否則 updateVisibleByScroll 會在過渡期間誤判 centerIndex，導致當前頁文字層被移除
   isLayoutResizing.value = true
+  lockPagesDuringModeSwitch.value = true
   const lockedPage = displayPageIndex.value
 
   // 立即更新 Fit Percent 確保 currentRenderingZoom 有正確數值
@@ -1431,8 +1489,10 @@ watch(viewMode, () => {
     updateVisibleByScroll()
     restoreCurrentPageAfterLayout(lockedPage)
     debugTextLayerState('after-mode-change', lockedPage)
-    void primeTextLayerForPage(lockedPage)
-    textLayerEpoch.value++
+    await primeTextLayerForPage(lockedPage)
+    await restoreSelectionIfNeeded()
+    lockPagesDuringModeSwitch.value = false
+    centerPageHorizontally(lockedPage)
   }, 200)
 })
 
@@ -1492,14 +1552,9 @@ onBeforeUnmount(() => {
   if (container) {
     container.removeEventListener('wheel', handleWheelZoom)
   }
-  if (interactionTimer) {
-    clearTimeout(interactionTimer)
-    interactionTimer = null
-  }
 })
 
 function handleWheelZoom(e: WheelEvent) {
-  triggerInteraction()
   const ctx = createZoomContext()
   if (!ctx) return
   zoomHandleWheel(e, ctx, () => triggerRerender(300))
@@ -1633,23 +1688,20 @@ defineExpose({
     }"
   >
     <div v-if="!totalPages" class="p-4">尚未載入頁面</div>
-    <div
-      v-else
-      :class="viewMode === 'fit' ? 'p-4 space-y-3' : 'p-4 space-y-3 inline-block min-w-full'"
-    >
+    <div v-else class="p-4 space-y-3 inline-block min-w-full">
       <div class="w-full min-h-full pt-4 pb-10">
         <div
           v-for="idx in renderIndices"
           :key="idx"
-          :class="viewMode === 'fit' ? 'w-full mb-10 flex justify-center' : 'mb-10 flex justify-center'"
-          :style="viewMode === 'actual' ? { marginBottom: 'calc(40px * var(--zoom-factor))' } : undefined"
+          class="mb-10 flex justify-center"
+          :style="{ marginBottom: 'calc(32px * var(--zoom-factor))' }"
           :data-pdf-page="idx"
           @contextmenu.prevent="onPageContextMenu(idx, $event)"
         >
           <template v-if="shouldRenderStructure(idx)">
-            <div :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full flex flex-col items-center' : 'px-6'">
+            <div class="mx-auto px-6 max-w-none w-full flex flex-col items-center">
               <div
-                :class="['bg-card rounded-md shadow border border-border relative', viewMode === 'fit' ? 'overflow-hidden' : 'overflow-visible inline-block']"
+                :class="['bg-card rounded-md shadow border border-border relative inline-block overflow-visible']"
                 :style="pageCardStyle(idx)"
               >
                 <!-- DOM 虛擬化：只渲染視野附近頁面的實際內容 -->
@@ -1658,10 +1710,7 @@ defineExpose({
                     v-if="getPageDisplayUrl(idx)"
                     :src="getPageDisplayUrl(idx)"
                     :alt="`page-${idx}`"
-                    :class="[
-                      viewMode === 'fit' ? 'w-full block' : 'block',
-                      'disable-live-text',
-                    ]"
+                    class="block disable-live-text"
                     :style="imgStyle(idx)"
                     style="pointer-events: none;"
                     decoding="async"
@@ -1670,10 +1719,7 @@ defineExpose({
                   />
                   <canvas
                     v-else-if="isRawPage(idx)"
-                    :class="[
-                      viewMode === 'fit' ? 'w-full block' : 'block',
-                      'disable-live-text',
-                    ]"
+                    class="block disable-live-text"
                     :style="imgStyle(idx)"
                     style="pointer-events: none;"
                     :data-raw-page="idx"
@@ -1691,10 +1737,12 @@ defineExpose({
                   >
                     <PdfTextLayer
                       v-for="layerProps in getPageTextLayerPropsList(idx)"
-                      :key="`text-layer-${idx}-${textLayerEpoch}`"
+                      :key="`text-layer-${idx}`"
                       :doc-id="docId"
                       :page-index="idx"
                       v-bind="layerProps"
+                      @selection-change="onTextSelectionChange"
+                      @layer-ready="onTextLayerReady(idx)"
                       style="pointer-events: auto;"
                     />
                   </div>
