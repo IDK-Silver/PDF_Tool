@@ -282,24 +282,95 @@ const currentPage = computed(() => {
   return Math.min(tp, Math.max(1, displayPageIndex.value + 1))
 })
 
+// [Fix] 用於等待容器寬度與佈局穩定的 Helper
+async function waitForLayout(maxRetries = 20) {
+  // 1. 等待 ResizeObserver 抓到容器寬度
+  for (let i = 0; i < maxRetries; i++) {
+    const w = scrollRootEl.value?.clientWidth || 0
+    if (w > 0) {
+      containerW.value = w // 強制同步
+      break
+    }
+    await new Promise(r => requestAnimationFrame(r))
+  }
+
+  // 2. 強制計算 Fit 比例
+  updateFitPercent()
+
+  // 3. 等待 Vue 更新 DOM (CSS 變數應用)
+  await nextTick()
+  // 額外等待一個 Frame 讓瀏覽器完成 Reflow
+  await new Promise(r => requestAnimationFrame(r))
+}
+
 async function gotoPage(page: number) {
   const tp = totalPages.value || 0
   if (tp <= 0) return
   const idx = Math.min(tp - 1, Math.max(0, Math.floor(page) - 1))
+
   centerIndex.value = idx
   displayPageIndex.value = idx
-  await nextTick()
+
+  // 1. 維持這個關鍵修正：等待 Layout 與 Zoom 穩定，避免頁碼計算錯誤
+  if (viewMode.value === 'fit') {
+    await waitForLayout()
+  } else {
+    await nextTick()
+  }
+
   const root = scrollRootEl.value
   if (!root) return
-  const el = root.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
-  if (el) {
-    const offsetTop = el.offsetTop
-    const scrollTarget = offsetTop - (root.clientHeight / 2) + (el.clientHeight / 2)
-    root.scrollTop = scrollTarget
 
-    pendingIdx.add(idx)
-    scheduleProcess()
+  // 2. 移除 scrollIntoView，改回手動計算，確保不影響外部 Layout
+  const tryScroll = async (retries = 5) => {
+    const el = root.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
+
+    if (el) {
+      // 嘗試獲取內部的頁面卡片元素，更精準對齊
+      const cardEl = el.querySelector('.bg-card') as HTMLElement | null
+      const targetEl = cardEl || el
+
+      // 取得尺寸數據
+      const elTop = targetEl.offsetTop
+      const elHeight = targetEl.offsetHeight
+      const containerHeight = root.clientHeight
+
+      let targetTop = 0
+
+      // [Fix] 智慧對齊邏輯：
+      // 情況 A：如果頁面高度 < 視窗高度 (例如縮很小)，則維持「垂直置中」比較美觀
+      if (elHeight < containerHeight) {
+        targetTop = elTop - (containerHeight / 2) + (elHeight / 2)
+      }
+      // 情況 B：正常閱讀狀況 (Fit 或 Zoom In)，改為「靠上對齊」
+      // 這樣可以確保你看到的是頁首，而不是頁尾
+      else {
+        // 獲取容器頂部的實際 padding
+        const rootRect = root.getBoundingClientRect()
+        const cardRect = targetEl.getBoundingClientRect()
+
+        // 計算卡片相對於滾動容器的實際位置
+        const cardTopRelativeToRoot = cardRect.top - rootRect.top + root.scrollTop
+
+        // 保留少量視覺空間（可調整此值：0 = 完全對齊)
+        const VISUAL_PADDING = 32
+        targetTop = cardTopRelativeToRoot - VISUAL_PADDING
+      }
+
+      // 防止捲動到負數（這行必須保留，否則不會滾動）
+      root.scrollTop = Math.max(0, targetTop)
+
+      // 水平依舊維持置中
+      centerPageHorizontally(idx)
+
+      pendingIdx.add(idx)
+      scheduleProcess()
+    } else if (retries > 0) {
+      requestAnimationFrame(() => tryScroll(retries - 1))
+    }
   }
+
+  tryScroll()
 }
 
 watch(
@@ -318,29 +389,40 @@ watch(
     console.log('[PdfViewport] Last page from storage:', last)
 
     if (typeof last === 'number' && last >= 1) {
+      // 1. 等待 PDF 解析 Loading 結束
       await new Promise<void>((resolve) => {
         const checkLoading = () => {
-          if (!media.loading) {
-            resolve()
-          } else {
-            requestAnimationFrame(checkLoading)
-          }
+          if (!media.loading) resolve()
+          else requestAnimationFrame(checkLoading)
         }
         checkLoading()
       })
 
+      // 2. [Fix] 等待佈局與縮放比例完全穩定
+      // 這會防止 "頁碼跑掉" (75 -> 89) 的問題
+      await waitForLayout()
+
+      // 3. 等待目標頁面的 DOM 節點掛載
       await new Promise<void>((resolve) => {
         const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
+
+        // 為了讓虛擬捲動知道要渲染這一頁，先設定 indices
+        displayPageIndex.value = targetIdx
+        centerIndex.value = targetIdx
+
         const checkDOM = () => {
+          // 必須 root 有寬度才算準備好
           const root = scrollRootEl.value
-          const el = root?.querySelector(`[data-pdf-page="${targetIdx}"]`)
-          if (el) {
-            resolve()
-          } else {
-            requestAnimationFrame(checkDOM)
+          if (root && root.clientWidth > 0) {
+            const el = root.querySelector(`[data-pdf-page="${targetIdx}"]`)
+            if (el) {
+              resolve()
+              return
+            }
           }
+          requestAnimationFrame(checkDOM)
         }
-        nextTick().then(() => checkDOM())
+        checkDOM()
       })
 
       try {
@@ -1339,26 +1421,39 @@ onMounted(async () => {
   window.addEventListener('keydown', onGlobalKeyDown, { capture: true })
   window.addEventListener('resize', handleWindowResize)
 
+  // 初始計算 Fit
+  scheduleUpdateFitPercent()
+
   const p = media.descriptor?.path
   const d = media.descriptor
   if (p && d && d.type === 'pdf') {
     try { await filelist.whenReady() } catch { }
     const last = filelist.getLastPage(p)
     console.log('[PdfViewport] onMounted - last page from storage:', last)
+
     if (typeof last === 'number' && last >= 1) {
-      await nextTick()
+      // [Fix] 即使是 onMounted，也要確保 Layout 準備好
+      await waitForLayout()
+
       const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
-      const el = scrollRootEl.value?.querySelector(`[data-pdf-page="${targetIdx}"]`)
-      console.log('[PdfViewport] onMounted - target element exists:', !!el, 'targetIdx:', targetIdx)
-      if (el) {
-        try {
-          console.log('[PdfViewport] onMounted - calling gotoPage:', last)
+
+      // 設定 index 觸發虛擬渲染
+      displayPageIndex.value = targetIdx
+      centerIndex.value = targetIdx
+
+      await nextTick()
+
+      // 簡單的 retry 機制
+      const attemptScroll = async (retries = 0) => {
+        const el = scrollRootEl.value?.querySelector(`[data-pdf-page="${targetIdx}"]`)
+        if (el) {
           await gotoPage(last)
-          console.log('[PdfViewport] onMounted - gotoPage completed')
-        } catch (e) {
-          console.error('[PdfViewport] onMounted - gotoPage failed:', e)
+        } else if (retries < 20) {
+          // 增加重試次數
+          requestAnimationFrame(() => attemptScroll(retries + 1))
         }
       }
+      attemptScroll()
     }
   }
 
