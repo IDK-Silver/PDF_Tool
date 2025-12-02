@@ -1824,18 +1824,17 @@ defineExpose({
     }"
   >
     <div v-if="!totalPages" class="p-4">尚未載入頁面</div>
-    <div v-else class="p-4 space-y-3 inline-block min-w-full">
-      <div class="w-full min-h-full pt-4 pb-10">
-        <div
-          v-for="idx in renderIndices"
-          :key="idx"
-          class="mb-10 flex justify-center"
-          :style="{ marginBottom: 'calc(32px * var(--zoom-factor))' }"
-          :data-pdf-page="idx"
-          @contextmenu.prevent="onPageContextMenu(idx, $event)"
-        >
-          <template v-if="shouldRenderStructure(idx)">
-            <div class="mx-auto px-6 max-w-none w-full flex flex-col items-center">
+    <div v-else class="flex flex-col items-center min-w-full w-fit py-10 px-4 space-y-3">
+      <div
+        v-for="idx in renderIndices"
+        :key="idx"
+        class="flex justify-center"
+        :style="{ marginBottom: 'calc(32px * var(--zoom-factor))' }"
+        :data-pdf-page="idx"
+        @contextmenu.prevent="onPageContextMenu(idx, $event)"
+      >
+        <template v-if="shouldRenderStructure(idx)">
+          <div class="px-6 max-w-none flex flex-col items-center">
               <div
                 :class="['bg-card rounded-md shadow border border-border relative inline-block overflow-visible']"
                 :style="pageCardStyle(idx)"
@@ -1886,13 +1885,12 @@ defineExpose({
                 <!-- 未掛載的頁面：空白占位，保持高度 -->
                 <div v-else class="w-full aspect-[1/1.414] bg-muted/30"></div>
               </div>
-              <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
-            </div>
-          </template>
-          <div v-else :class="viewMode === 'fit' ? 'mx-auto px-6 max-w-none w-full' : 'px-6'">
-            <div :style="pageCardStyle(idx)"></div>
-            <div style="height: 28px"></div>
+            <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
           </div>
+        </template>
+        <div v-else :class="viewMode === 'fit' ? 'px-6 max-w-none' : 'px-6'">
+          <div :style="pageCardStyle(idx)"></div>
+          <div style="height: 28px"></div>
         </div>
       </div>
     </div>

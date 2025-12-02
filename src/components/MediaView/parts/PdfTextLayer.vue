@@ -260,7 +260,7 @@ function getSpanClass(idx: number) {
     ref="rootEl"
     :style="layerStyle"
   >
-    <div v-if="loading" class="layer-status">載入文字中…</div>
+    <!-- <div v-if="loading" class="layer-status">載入文字中…</div> -->
     <div v-if="error" class="layer-status error">錯誤: {{ error }}</div>
 
     <span
