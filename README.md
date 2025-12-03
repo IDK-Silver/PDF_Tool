@@ -32,8 +32,8 @@
 
 | 平台 | 版本 | 連結 |
 |------|------|------|
-| macOS | Apple Silicon (ARM64) | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/3.5.2/Kano.PDF.Tool_3.5.2_aarch64.dmg) |
-| Windows | x64 | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/3.5.2/Kano.PDF.Tool_3.5.2_x64_en-US.msi) |
+| macOS | Apple Silicon (ARM64) | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/3.7.0/Kano.PDF.Tool_3.7.0_aarch64.dmg) |
+| Windows | x64 | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/3.7.0/Kano.PDF.Tool_3.7.0_x64-setup.exe) |
 | Linux | - | 請參考下方的開發環境設定自行編譯 |
 
 ## Star History
