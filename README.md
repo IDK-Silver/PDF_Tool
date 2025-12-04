@@ -36,6 +36,14 @@
 | Windows | x64 | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/3.7.0/Kano.PDF.Tool_3.7.0_x64-setup.exe) |
 | Linux | - | 請參考下方的開發環境設定自行編譯 |
 
+### macOS 使用說明
+
+由於未申請 Apple 開發者帳號，macOS 系統可能會阻擋應用程式執行。安裝後請執行以下命令來移除隔離屬性：
+
+```bash
+sudo xattr -cr /Applications/Kano\ PDF\ Tool.app/
+```
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=IDK-Silver/PDF_Tool&type=Date)](https://star-history.com/#IDK-Silver/PDF_Tool&Date)
