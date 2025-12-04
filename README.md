@@ -4,6 +4,12 @@
 
 ![Kano PDF Tool](docs/asset/image/app_cover.jpg)
 
+## 支持這個專案
+
+如果這個專案對你有幫助，歡迎請我喝杯咖啡 ☕
+
+<a href="https://www.buymeacoffee.com/yuuf.25"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=yuuf.25&button_colour=5F7FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" /></a>
+
 ## 主要功能
 
 ### PDF 編輯
