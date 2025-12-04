@@ -10,7 +10,9 @@
 
 ### Buy Me a Coffee
 
-<a href="https://www.buymeacoffee.com/yuuf.25"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=yuuf.25&button_colour=5F7FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" /></a>
+[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=yuuf.25&button_colour=5F7FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00)](https://www.buymeacoffee.com/yuuf.25)
+
+或掃描 QR Code：
 
 <img src="docs/asset/image/buymeacoffee-qr-code.png" alt="Buy me a coffee QR Code" width="200" />
 
