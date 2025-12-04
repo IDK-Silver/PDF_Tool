@@ -10,7 +10,7 @@
 
 ### Buy Me a Coffee
 
-[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=yuuf.25&button_colour=5F7FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00)](https://www.buymeacoffee.com/yuuf.25)
+[<img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" width="150">](https://www.buymeacoffee.com/yuuf.25)
 
 或掃描 QR Code：
 
