@@ -6,9 +6,13 @@
 
 ## 支持這個專案
 
-如果這個專案對你有幫助，歡迎請我喝杯咖啡 ☕
+如果這個專案對你有幫助，歡迎透過以下方式支持 ☕
+
+### Buy Me a Coffee
 
 <a href="https://www.buymeacoffee.com/yuuf.25"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=yuuf.25&button_colour=5F7FFF&font_colour=ffffff&font_family=Cookie&outline_colour=000000&coffee_colour=FFDD00" /></a>
+
+<img src="docs/asset/image/buymeacoffee-qr-code.png" alt="Buy me a coffee QR Code" width="200" />
 
 ## 主要功能
 
