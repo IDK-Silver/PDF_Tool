@@ -1,20 +1,85 @@
 name: Manual Tauri Release
 
 on:
+  # 還是可以手動按
   workflow_dispatch:
+
+  # 只要有人 push 並且有改到 tauri.conf.json，就自動觸發
+  push:
+    paths:
+      - "src-tauri/tauri.conf.json"
 
 # 讓 GITHUB_TOKEN 有權限可以 push
 permissions:
   contents: write
 
 jobs:
+  detect-version-change:
+    name: Detect version change
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          # 要看到上一個 commit
+          fetch-depth: 2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check version changed
+        id: check
+        run: |
+          # 讀現在的版本
+          CURR=$(node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8')); const v=cfg.version || (cfg.package && cfg.package.version) || ''; if(!v){console.error('current version not found'); process.exit(1);} console.log(v);")
+
+          echo "version=$CURR" >> $GITHUB_OUTPUT
+
+          # 如果是手動觸發，不管版本有沒有變都照跑
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger detected, will release regardless of version change."
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 自動觸發時才檢查版本是否改變
+          echo "Auto trigger detected, checking version change..."
+
+          # 嘗試讀上一個 commit 的 tauri.conf.json
+          if git show HEAD^:src-tauri/tauri.conf.json > /tmp/prev-tauri.conf.json 2>/dev/null; then
+            PREV=$(node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('/tmp/prev-tauri.conf.json','utf8')); const v=cfg.version || (cfg.package && cfg.package.version) || ''; console.log(v);")
+          else
+            PREV=""
+          fi
+
+          echo "Current version: $CURR"
+          echo "Previous version: $PREV"
+
+          if [ "$CURR" != "$PREV" ]; then
+            echo "Version changed, should release."
+            echo "should_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version did not change, skip release."
+            echo "should_release=false" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
   prepare-release:
     name: Prepare changelog with LLM
     runs-on: ubuntu-latest
+    needs: detect-version-change
+    if: ${{ needs.detect-version-change.outputs.should_release == 'true' }}
     outputs:
       changelog: ${{ steps.changelog.outputs.body }}
       release_title: ${{ steps.changelog.outputs.title }}
-      version: ${{ steps.tauri_version.outputs.version }}
+      # version 可以直接沿用 detect 的
+      version: ${{ needs.detect-version-change.outputs.version }}
 
     steps:
       - name: Checkout repo
@@ -26,13 +91,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Read version from Tauri config
-        id: tauri_version
-        run: |
-          VERSION=$(node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json','utf8')); const v=cfg.version || (cfg.package && cfg.package.version) || ''; if(!v){console.error('version not found'); process.exit(1);} console.log(v);")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-        shell: bash
 
       - name: Get previous tag
         id: prev_tag
@@ -67,7 +125,7 @@ jobs:
         run: |
           # 使用 jq 來構建 JSON，避免轉義問題
           JSON=$(jq -n \
-            --arg model "gpt-5-mini-2025-08-07" \
+            --arg model "gpt-5.1-2025-11-13" \
             --arg system_content "你是一個專業的軟體更新紀錄撰寫助手。請分析 commit 訊息並以 JSON 格式輸出。\n\n輸出格式：\n{\n  \"title\": \"簡短總結（5-10 字，用詞客觀不誇張）\",\n  \"body\": \"詳細更新內容\"\n}\n\ntitle 規則：\n- 用詞客觀、專業，避免「重大」、「全新」、「革命性」等誇張詞彙\n- 簡潔描述本次更新的主要內容\n- 不包含版本號（版本號會自動添加）\n- 範例：「新增選單系統與錯誤修復」、「優化效能與介面調整」、「修復多項問題」\n\nbody 格式：\n## 新功能 (Features)\n- **子分類**\n  - 功能描述（重點用粗體標記）\n\n---\n\n## 效能優化 (Performance)\n- **子分類**\n  - 優化描述\n\n---\n\n## 問題修復 (Fixes)\n- **子分類**\n  - 修復描述\n\n---\n\n## 重構與內部改進 (Refactoring & Chores)\n- 重構描述\n\nbody 注意事項：\n1. 每個大類別用 --- 分隔\n2. 子分類用粗體標記\n3. 重點功能/技術名詞用粗體標記\n4. 描述要專業且詳細\n5. 如果某個類別沒有內容，可以省略該類別\n\n請確保輸出是有效的 JSON 格式。" \
             --arg user_content "以下是上一個版本到現在的 commit 訊息，請整理成更新紀錄：\n\n$COMMITS" \
             '{
@@ -139,6 +197,7 @@ jobs:
     name: Build Tauri App
     runs-on: ${{ matrix.os }}
     needs: prepare-release
+    if: ${{ needs.prepare-release.result == 'success' }}
 
     strategy:
       fail-fast: false
