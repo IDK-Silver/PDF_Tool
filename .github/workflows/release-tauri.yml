@@ -65,6 +65,10 @@ jobs:
         run: |
           choco install -y nsis jq
 
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli@latest
+        shell: bash
+
       - name: Build & Release with Tauri
         uses: tauri-apps/tauri-action@v0
         env:
