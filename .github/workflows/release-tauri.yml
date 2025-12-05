@@ -8,63 +8,8 @@ permissions:
   contents: write
 
 jobs:
-  update-readme:
-    name: Update README download links
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install jq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-      - name: Read version from Tauri config
-        id: tauri_version
-        run: |
-          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
-          if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
-            echo "Could not read .version from src-tauri/tauri.conf.json"
-            exit 1
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-        shell: bash
-
-      - name: Update README download links
-        run: |
-          VERSION=${{ steps.tauri_version.outputs.version }}
-
-          # 更新 macOS 下載連結
-          sed -E -i "s#(releases/download/)[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_aarch64\.dmg)#\1${VERSION}\2${VERSION}\3#g" README.md
-
-          # 更新 Windows 下載連結
-          sed -E -i "s#(releases/download/)[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_x64-setup\.exe)#\1${VERSION}\2${VERSION}\3#g" README.md
-
-        shell: bash
-
-      - name: Commit and push if changed
-        run: |
-          VERSION=${{ steps.tauri_version.outputs.version }}
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # 如果有修改才 commit
-          if ! git diff --quiet; then
-            git commit -am "chore: update README download links for v${VERSION}"
-            git push
-          else
-            echo "No README changes"
-          fi
-        shell: bash
-
   build:
     name: Build Tauri App
-    needs: update-readme
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -130,3 +75,59 @@ jobs:
           releaseBody: "Release for version ${{ steps.tauri_version.outputs.version }}"
           releaseDraft: false
           prerelease: false
+
+  update-readme:
+    name: Update README download links
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ needs.build.result == 'success' }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Read version from Tauri config
+        id: tauri_version
+        run: |
+          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
+            echo "Could not read .version from src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Update README download links
+        run: |
+          VERSION=${{ steps.tauri_version.outputs.version }}
+
+          # 更新 macOS 下載連結
+          sed -E -i "s#(releases/download/)[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_aarch64\.dmg)#\1${VERSION}\2${VERSION}\3#g" README.md
+
+          # 更新 Windows 下載連結
+          sed -E -i "s#(releases/download/)[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_x64-setup\.exe)#\1${VERSION}\2${VERSION}\3#g" README.md
+
+        shell: bash
+
+      - name: Commit and push if changed
+        run: |
+          VERSION=${{ steps.tauri_version.outputs.version }}
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 如果有修改才 commit
+          if ! git diff --quiet; then
+            git commit -am "chore: update README download links for v${VERSION}"
+            git push
+          else
+            echo "No README changes"
+          fi
+        shell: bash
