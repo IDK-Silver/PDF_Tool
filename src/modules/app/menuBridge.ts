@@ -76,12 +76,8 @@ export async function initMenuBridge(): Promise<() => void> {
       window.dispatchEvent(new CustomEvent('menu:zoom-out'))
     })
 
-    const unlistenFitWidth = await listen('menu:fit-width', () => {
-      window.dispatchEvent(new CustomEvent('menu:fit-width'))
-    })
-
-    const unlistenFitPage = await listen('menu:fit-page', () => {
-      window.dispatchEvent(new CustomEvent('menu:fit-page'))
+    const unlistenFitMode = await listen('menu:fit-mode', () => {
+      window.dispatchEvent(new CustomEvent('menu:fit-mode'))
     })
 
     const unlistenActualSize = await listen('menu:actual-size', () => {
@@ -95,8 +91,7 @@ export async function initMenuBridge(): Promise<() => void> {
       unlistenFind,
       unlistenZoomIn,
       unlistenZoomOut,
-      unlistenFitWidth,
-      unlistenFitPage,
+      unlistenFitMode,
       unlistenActualSize
     ]
 

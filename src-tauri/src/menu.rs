@@ -17,8 +17,7 @@ const FIND_ID: &str = "find";
 // View menu IDs
 const ZOOM_IN_ID: &str = "zoom-in";
 const ZOOM_OUT_ID: &str = "zoom-out";
-const FIT_WIDTH_ID: &str = "fit-width";
-const FIT_PAGE_ID: &str = "fit-page";
+const FIT_MODE_ID: &str = "fit-mode";
 const ACTUAL_SIZE_ID: &str = "actual-size";
 
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -41,9 +40,8 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // View menu items
     let zoom_in_item = MenuItem::with_id(app, ZOOM_IN_ID, "Zoom In", true, Some("CmdOrCtrl+Plus"))?;
     let zoom_out_item = MenuItem::with_id(app, ZOOM_OUT_ID, "Zoom Out", true, Some("CmdOrCtrl+Minus"))?;
-    let fit_width_item = MenuItem::with_id(app, FIT_WIDTH_ID, "Fit Width", true, Some("CmdOrCtrl+1"))?;
-    let fit_page_item = MenuItem::with_id(app, FIT_PAGE_ID, "Fit Page", true, Some("CmdOrCtrl+0"))?;
-    let actual_size_item = MenuItem::with_id(app, ACTUAL_SIZE_ID, "Actual Size", true, Some("CmdOrCtrl+2"))?;
+    let fit_mode_item = MenuItem::with_id(app, FIT_MODE_ID, "Fit to Window", true, Some("CmdOrCtrl+0"))?;
+    let actual_size_item = MenuItem::with_id(app, ACTUAL_SIZE_ID, "Actual Size", true, Some("CmdOrCtrl+1"))?;
 
     // About menu item
     let about_item = MenuItem::with_id(app, ABOUT_MENU_ID, "About", true, None::<&str>)?;
@@ -81,8 +79,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &zoom_in_item,
             &zoom_out_item,
             &PredefinedMenuItem::separator(app)?,
-            &fit_width_item,
-            &fit_page_item,
+            &fit_mode_item,
             &actual_size_item,
         ],
     )?;
@@ -144,11 +141,8 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent) {
         ZOOM_OUT_ID => {
             let _ = app.emit("menu:zoom-out", ());
         }
-        FIT_WIDTH_ID => {
-            let _ = app.emit("menu:fit-width", ());
-        }
-        FIT_PAGE_ID => {
-            let _ = app.emit("menu:fit-page", ());
+        FIT_MODE_ID => {
+            let _ = app.emit("menu:fit-mode", ());
         }
         ACTUAL_SIZE_ID => {
             let _ = app.emit("menu:actual-size", ());

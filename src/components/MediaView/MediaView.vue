@@ -243,6 +243,43 @@ function handleToggleSearch() {
   if (!viewport) return
   viewport.toggleSearch()
 }
+
+// Menu event handlers
+function onMenuZoomIn() {
+  handleZoomIn()
+}
+
+function onMenuZoomOut() {
+  handleZoomOut()
+}
+
+function onMenuFitMode() {
+  handleSetFitMode()
+}
+
+function onMenuActualSize() {
+  handleResetZoom()
+}
+
+function onMenuFind() {
+  handleToggleSearch()
+}
+
+onMounted(() => {
+  window.addEventListener('menu:zoom-in', onMenuZoomIn)
+  window.addEventListener('menu:zoom-out', onMenuZoomOut)
+  window.addEventListener('menu:fit-mode', onMenuFitMode)
+  window.addEventListener('menu:actual-size', onMenuActualSize)
+  window.addEventListener('menu:find', onMenuFind)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('menu:zoom-in', onMenuZoomIn)
+  window.removeEventListener('menu:zoom-out', onMenuZoomOut)
+  window.removeEventListener('menu:fit-mode', onMenuFitMode)
+  window.removeEventListener('menu:actual-size', onMenuActualSize)
+  window.removeEventListener('menu:find', onMenuFind)
+})
 </script>
 
 <template>
