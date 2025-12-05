@@ -19,7 +19,6 @@ jobs:
 
     env:
       TAURI_SKIP_ISOLATION: true
-      NODE_ENV: production
 
     steps:
       - name: Checkout repo
