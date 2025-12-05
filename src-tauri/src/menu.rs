@@ -77,6 +77,8 @@ fn show_about_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         return Ok(());
     }
 
+    let empty_menu = Menu::new(app)?;
+
     WebviewWindowBuilder::new(
         app,
         ABOUT_WINDOW_LABEL,
@@ -87,6 +89,7 @@ fn show_about_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     .min_inner_size(480.0, 600.0)
     .resizable(true)
     .visible(true)
+    .menu(empty_menu)
     .build()?;
 
     Ok(())
