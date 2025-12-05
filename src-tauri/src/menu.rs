@@ -19,6 +19,7 @@ const ZOOM_IN_ID: &str = "zoom-in";
 const ZOOM_OUT_ID: &str = "zoom-out";
 const FIT_MODE_ID: &str = "fit-mode";
 const ACTUAL_SIZE_ID: &str = "actual-size";
+const TOGGLE_SIDEBAR_ID: &str = "toggle-sidebar";
 
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // File menu items
@@ -42,6 +43,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let zoom_out_item = MenuItem::with_id(app, ZOOM_OUT_ID, "Zoom Out", true, Some("CmdOrCtrl+Minus"))?;
     let fit_mode_item = MenuItem::with_id(app, FIT_MODE_ID, "Fit to Window", true, Some("CmdOrCtrl+0"))?;
     let actual_size_item = MenuItem::with_id(app, ACTUAL_SIZE_ID, "Actual Size", true, Some("CmdOrCtrl+1"))?;
+    let toggle_sidebar_item = MenuItem::with_id(app, TOGGLE_SIDEBAR_ID, "Toggle Sidebar", true, Some("CmdOrCtrl+B"))?;
 
     // About menu item
     let about_item = MenuItem::with_id(app, ABOUT_MENU_ID, "About", true, None::<&str>)?;
@@ -81,6 +83,8 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::separator(app)?,
             &fit_mode_item,
             &actual_size_item,
+            &PredefinedMenuItem::separator(app)?,
+            &toggle_sidebar_item,
         ],
     )?;
 
@@ -146,6 +150,9 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent) {
         }
         ACTUAL_SIZE_ID => {
             let _ = app.emit("menu:actual-size", ());
+        }
+        TOGGLE_SIDEBAR_ID => {
+            let _ = app.emit("menu:toggle-sidebar", ());
         }
         _ => {}
     }

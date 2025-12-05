@@ -2,6 +2,7 @@ import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useMediaStore } from '@/modules/media/store'
+import { useUiStore } from '@/modules/ui/store'
 import { openInFileManager } from '@/modules/media/openInFileManager'
 
 function isTauriEnv() {
@@ -16,6 +17,7 @@ export async function initMenuBridge(): Promise<() => void> {
 
   const filelist = useFileListStore()
   const media = useMediaStore()
+  const ui = useUiStore()
 
   try {
     // File menu: Open
@@ -84,6 +86,10 @@ export async function initMenuBridge(): Promise<() => void> {
       window.dispatchEvent(new CustomEvent('menu:actual-size'))
     })
 
+    const unlistenToggleSidebar = await listen('menu:toggle-sidebar', () => {
+      ui.toggleSidebar()
+    })
+
     unlisteners = [
       unlistenOpen,
       unlistenClose,
@@ -92,7 +98,8 @@ export async function initMenuBridge(): Promise<() => void> {
       unlistenZoomIn,
       unlistenZoomOut,
       unlistenFitMode,
-      unlistenActualSize
+      unlistenActualSize,
+      unlistenToggleSidebar
     ]
 
     return () => {
