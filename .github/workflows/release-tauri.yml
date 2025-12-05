@@ -1,0 +1,132 @@
+name: Manual Tauri Release
+
+on:
+  workflow_dispatch:
+
+# 讓 GITHUB_TOKEN 有權限可以 push
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    name: Update README download links
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Read version from Tauri config
+        id: tauri_version
+        run: |
+          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
+            echo "Could not read .version from src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Update README download links
+        run: |
+          VERSION=${{ steps.tauri_version.outputs.version }}
+
+          # 更新 macOS 下載連結
+          sed -E -i "s#(releases/download/)[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_aarch64\.dmg)#\1${VERSION}\2${VERSION}\3#g" README.md
+
+          # 更新 Windows 下載連結
+          sed -E -i "s#(releases/download/)[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_x64-setup\.exe)#\1${VERSION}\2${VERSION}\3#g" README.md
+
+        shell: bash
+
+      - name: Commit and push if changed
+        run: |
+          VERSION=${{ steps.tauri_version.outputs.version }}
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # 如果有修改才 commit
+          if ! git diff --quiet; then
+            git commit -am "chore: update README download links for v${VERSION}"
+            git push
+          else
+            echo "No README changes"
+          fi
+        shell: bash
+
+  build:
+    name: Build Tauri App
+    needs: update-readme
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    env:
+      TAURI_SKIP_ISOLATION: true
+      NODE_ENV: production
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Read version from Tauri config
+        id: tauri_version
+        run: |
+          VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          if [ "$VERSION" = "null" ] || [ -z "$VERSION" ]; then
+            echo "Could not read .version from src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+        shell: bash
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add macOS targets
+        if: matrix.os == 'macos-latest'
+        run: |
+          rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin || true
+
+      - name: Install Windows dependencies
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install -y nsis jq
+
+      - name: Build & Release with Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: "v${{ steps.tauri_version.outputs.version }}"
+          releaseName: "v${{ steps.tauri_version.outputs.version }}"
+          releaseBody: "Release for version ${{ steps.tauri_version.outputs.version }}"
+          releaseDraft: false
+          prerelease: false
