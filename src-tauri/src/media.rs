@@ -1015,10 +1015,39 @@ fn get_pdfium() -> Result<pdfium_render::prelude::Pdfium, MediaError> {
         ));
     };
 
-    // Try each platform subdir under resources/pdfium/
     let base = res_dir.join("pdfium");
     let mut tried: Vec<String> = Vec::new();
 
+    // 優先嘗試匹配當前架構的動態庫
+    let current_arch = if cfg!(target_arch = "aarch64") {
+        "aarch64-apple-darwin"
+    } else if cfg!(target_arch = "x86_64") {
+        "x86_64-apple-darwin"
+    } else if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
+        "x86_64-pc-windows-msvc"
+    } else if cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") {
+        "x86_64-unknown-linux-gnu"
+    } else {
+        ""
+    };
+
+    // 先嘗試當前架構
+    if !current_arch.is_empty() {
+        let dir = base.join(current_arch);
+        if dir.exists() {
+            let lib_path = Pdfium::pdfium_platform_library_name_at_path(&dir);
+            tried.push(format!("{} (current arch)", lib_path.to_string_lossy()));
+            if lib_path.exists() {
+                return Pdfium::bind_to_library(&lib_path)
+                    .map(Pdfium::new)
+                    .map_err(|e| {
+                        MediaError::new("parse_error", format!("PDFium 載入失敗 ({}): {e}", current_arch))
+                    });
+            }
+        }
+    }
+
+    // 如果當前架構不存在，再嘗試其他架構（fallback）
     if let Ok(entries) = fs::read_dir(&base) {
         for entry in entries.flatten() {
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
