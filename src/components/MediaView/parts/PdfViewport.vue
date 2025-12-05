@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog'
 import { tempDir, join } from '@tauri-apps/api/path'
 
@@ -157,12 +157,21 @@ function normalizeSearchString(value: string) {
 
 function buildNormalizedPageData(pageIndex: number, content: PageTextContent | null) {
   if (!content) return { normalized: '', map: [] as number[] }
+
+  // 使用 toRaw 獲取原始物件，避免 Vue Proxy 問題
+  const rawContent = toRaw(content)
+
   const cached = pageNormalizedCache.get(pageIndex)
-  if (cached && cached.source === content) return cached
+  if (cached && cached.source === rawContent) return cached
+
   const normalizedParts: string[] = []
   const indexMap: number[] = []
   let charIndex = 0
-  for (const span of content.spans) {
+
+  // 確保 spans 是原始陣列，避免 Proxy 迭代問題
+  const spans = toRaw(rawContent.spans) || []
+
+  for (const span of spans) {
     if (!span) continue
     const raw = span.text || ''
     if (!raw) continue
@@ -174,7 +183,7 @@ function buildNormalizedPageData(pageIndex: number, content: PageTextContent | n
       charIndex++
     }
   }
-  const data = { normalized: normalizedParts.join(''), map: indexMap, source: content }
+  const data = { normalized: normalizedParts.join(''), map: indexMap, source: rawContent }
   pageNormalizedCache.set(pageIndex, data)
   return data
 }
@@ -259,7 +268,19 @@ async function handleSetFitMode() {
   const ctx = createZoomContext()
   await setFitMode(ctx, { type: 'viewport-center' })
   triggerRerender(300)
-  centerPageHorizontally(displayPageIndex.value)
+
+  // 多次嘗試置中，確保在 Fit 模式計算完成後置中
+  const idx = displayPageIndex.value
+  centerPageHorizontally(idx)
+  requestAnimationFrame(() => {
+    centerPageHorizontally(idx)
+  })
+  setTimeout(() => {
+    centerPageHorizontally(idx)
+  }, 100)
+  setTimeout(() => {
+    centerPageHorizontally(idx)
+  }, 300)
 }
 
 function triggerRerender(delay: number = 0) {
@@ -374,23 +395,27 @@ async function gotoPage(page: number) {
       // 執行垂直捲動
       root.scrollTop = Math.max(0, targetTop)
 
-      // 執行水平置中
-      centerPageHorizontally(idx)
-
       pendingIdx.add(idx)
       scheduleProcess()
 
-      // [水平修正核心] 三段式確保置中
-      // 1. AnimationFrame: 等待渲染層更新
+      // [水平修正核心] 多段式確保置中，處理各種非同步佈局情況
+      // 1. 立即嘗試置中
+      centerPageHorizontally(idx)
+
+      // 2. AnimationFrame: 等待渲染層更新
       requestAnimationFrame(() => {
         centerPageHorizontally(idx)
       })
 
-      // 2. setTimeout: [關鍵] 等待 Scrollbar 出現導致的 Layout Shift 穩定
-      // 這能解決「灰色區域很寬、內容跑去右邊」的問題
+      // 3. setTimeout 50ms: [關鍵] 等待 Scrollbar 出現導致的 Layout Shift 穩定
       setTimeout(() => {
         centerPageHorizontally(idx)
       }, 50)
+
+      // 4. setTimeout 150ms: 確保在 Fit 模式計算完成後再次置中
+      setTimeout(() => {
+        centerPageHorizontally(idx)
+      }, 150)
 
     } else if (retries > 0) {
       requestAnimationFrame(() => tryScroll(retries - 1))
@@ -1519,6 +1544,10 @@ onMounted(async () => {
             // [關鍵] 當容器寬度改變時，若在 Fit 模式，立即更新 FitPercent
             // 這樣 currentRenderingZoom 會立刻反應，文字層與圖片層會同步縮放
             updateFitPercent()
+            // [修復] Scrollbar 出現/消失時也需要重新置中
+            requestAnimationFrame(() => {
+              centerPageHorizontally(centerIndex.value)
+            })
           }
         }, 100)
         return
@@ -1527,7 +1556,6 @@ onMounted(async () => {
       if (oldW > 0 && w !== oldW) {
         const root = scrollRootEl.value
         const currentPageEl = root?.querySelector(`[data-pdf-page="${centerIndex.value}"]`) as HTMLElement
-        const savedScrollLeft = root?.scrollLeft || 0
         const savedScrollTop = root?.scrollTop || 0
 
         containerW.value = w
@@ -1549,11 +1577,12 @@ onMounted(async () => {
 
               if (isVisible) {
                 root.scrollTop = savedScrollTop
-                root.scrollLeft = savedScrollLeft
               } else {
                 root.scrollTop = elementTop - containerHeight / 2 + elementHeight / 2
-                root.scrollLeft = savedScrollLeft
               }
+
+              // [修復] 容器寬度變化後重新計算水平置中
+              centerPageHorizontally(centerIndex.value)
             }
           })
         })
@@ -1568,6 +1597,18 @@ onMounted(async () => {
         containerW.value = w
         updateFitPercent()
         if (searchVisible.value) setSearchAnchor(true)
+
+        // [修復] 初次載入時也需要置中
+        if (oldW === 0 && w > 0) {
+          nextTick(() => {
+            requestAnimationFrame(() => {
+              centerPageHorizontally(centerIndex.value)
+            })
+            setTimeout(() => {
+              centerPageHorizontally(centerIndex.value)
+            }, 100)
+          })
+        }
       }
     })
     resizeObs.observe(scrollRootEl.value)
@@ -1622,7 +1663,15 @@ watch(viewMode, () => {
     await primeTextLayerForPage(lockedPage)
     await restoreSelectionIfNeeded()
     lockPagesDuringModeSwitch.value = false
+
+    // [修復] 模式切換後多次嘗試置中，確保佈局完全穩定後置中
     centerPageHorizontally(lockedPage)
+    requestAnimationFrame(() => {
+      centerPageHorizontally(lockedPage)
+    })
+    setTimeout(() => {
+      centerPageHorizontally(lockedPage)
+    }, 50)
   }, 200)
 })
 
