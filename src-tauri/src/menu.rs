@@ -10,20 +10,9 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let about_item = MenuItem::with_id(
         app,
         ABOUT_MENU_ID,
-        "About Kano PDF Tool",
+        "About",
         true,
         None::<&str>,
-    )?;
-
-    let app_menu = Submenu::with_items(
-        app,
-        "Kano PDF Tool",
-        true,
-        &[
-            &about_item,
-            &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
-        ],
     )?;
 
     let edit_menu = Submenu::with_items(
@@ -41,7 +30,31 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         ],
     )?;
 
-    Menu::with_items(app, &[&app_menu, &edit_menu])
+    #[cfg(target_os = "macos")]
+    {
+        let app_menu = Submenu::with_items(
+            app,
+            "Kano PDF Tool",
+            true,
+            &[
+                &about_item,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::quit(app, None)?,
+            ],
+        )?;
+        Menu::with_items(app, &[&app_menu, &edit_menu])
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let help_menu = Submenu::with_items(
+            app,
+            "Help",
+            true,
+            &[&about_item],
+        )?;
+        Menu::with_items(app, &[&edit_menu, &help_menu])
+    }
 }
 
 pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent) {
