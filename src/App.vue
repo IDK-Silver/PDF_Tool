@@ -3,13 +3,30 @@ import ModeChooseList from './components/ModeChooseList.vue'
 import SettingBar from './components/SettingBar.vue'
 import { useGlobalFileDrop } from '@/modules/filedrop/useFileDrop'
 import { initOpenFileBridge } from '@/modules/app/openFileBridge'
-import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useUiStore } from '@/modules/ui/store'
+import { useRoute, useRouter } from 'vue-router'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
-const { isDragging } = useGlobalFileDrop()
+// Detect if we are in a secondary window (like About)
+let isSecondaryWindow = false
+try {
+  // Check window label if in Tauri
+  const win = getCurrentWindow()
+  if (win.label === 'about-window') isSecondaryWindow = true
+} catch {
+  // Fallback for dev/browser
+  isSecondaryWindow = window.location.hash.includes('/about')
+}
+
+const { isDragging } = isSecondaryWindow ? { isDragging: ref(false) } : useGlobalFileDrop()
 const ui = useUiStore()
+const route = useRoute()
+const router = useRouter()
+
 const asideClass = computed(() => ui.sidebarCollapsed ? 'hidden' : 'w-[260px]')
 let disposeOpenBridge: (() => void) | null = null
+const isSimpleLayout = computed(() => isSecondaryWindow || route.meta.simpleLayout === true)
 
 function isEditableTarget(el: EventTarget | null): boolean {
   const t = el as HTMLElement | null
@@ -30,6 +47,15 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 onMounted(async () => {
+  if (isSecondaryWindow) {
+    // Ensure we are on the correct route if the window label matches
+    await router.isReady()
+    if (router.currentRoute.value.path !== '/about') {
+      await router.replace('/about')
+    }
+    return
+  }
+
   window.addEventListener('keydown', onKeydown, { passive: false })
   try {
     disposeOpenBridge = await initOpenFileBridge()
@@ -39,6 +65,8 @@ onMounted(async () => {
   }
 })
 onBeforeUnmount(() => {
+  if (isSecondaryWindow) return
+
   window.removeEventListener('keydown', onKeydown as any)
   if (disposeOpenBridge) {
     try { disposeOpenBridge() } catch (err) {
@@ -50,7 +78,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex flex-row h-screen w-screen">
+  <div
+    v-if="isSimpleLayout"
+    class="h-screen w-screen bg-background text-[hsl(var(--foreground))]"
+  >
+    <RouterView />
+  </div>
+  <div v-else class="flex flex-row h-screen w-screen">
     <aside
       class="flex-shrink-0 bg-background flex flex-col border-r border-[hsl(var(--border))] pl-2 pr-4 relative z-50"
       :class="asideClass"

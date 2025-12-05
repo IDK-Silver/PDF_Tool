@@ -1,4 +1,5 @@
 mod media;
+mod menu;
 
 use std::{
     path::{Path, PathBuf},
@@ -137,6 +138,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
+        .menu(|app| crate::menu::build_menu(app))
+        .on_menu_event(|app, event| {
+            crate::menu::handle_menu_event(app, &event);
+        })
         .setup(|app| {
             let cache_dir = app
                 .path()

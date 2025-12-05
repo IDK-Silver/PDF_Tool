@@ -35,6 +35,12 @@ const routes: RouteRecordRaw[] = [
       filelist: () => import('../components/Settings/SettingsNav.vue'),
     },
   },
+  {
+    path: '/about',
+    name: 'about',
+    component: () => import('../components/About/AboutView.vue'),
+    meta: { simpleLayout: true },
+  },
 ];
 
 
