@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       changelog: ${{ steps.changelog.outputs.body }}
+      release_title: ${{ steps.changelog.outputs.title }}
       version: ${{ steps.tauri_version.outputs.version }}
 
     steps:
@@ -64,35 +65,72 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           COMMITS: ${{ steps.commits.outputs.text }}
         run: |
-          JSON=$(cat << 'EOF'
-          {
-            "model": "gpt-5-mini-2025-08-07",
-            "messages": [
-              {
-                "role": "system",
-                "content": "你是一個專業的軟體更新紀錄撰寫助手。請使用繁體中文，輸出格式如下：\n\n## 新功能 (Features)\n- **子分類**\n  - 功能描述（重點用粗體標記）\n\n---\n\n## 效能優化 (Performance)\n- **子分類**\n  - 優化描述\n\n---\n\n## 問題修復 (Fixes)\n- **子分類**\n  - 修復描述\n\n---\n\n## 重構與內部改進 (Refactoring & Chores)\n- 重構描述\n\n注意事項：\n1. 每個大類別用 --- 分隔\n2. 子分類用粗體標記\n3. 重點功能/技術名詞用粗體標記\n4. 描述要專業且詳細\n5. 如果某個類別沒有內容，可以省略該類別"
-              },
-              {
-                "role": "user",
-                "content": "以下是上一個版本到現在的 commit 訊息，請整理成更新紀錄：\n\nCOMMITS_PLACEHOLDER"
-              }
-            ]
-          }
-          EOF
-          )
+          # 使用 jq 來構建 JSON，避免轉義問題
+          JSON=$(jq -n \
+            --arg model "gpt-5-mini-2025-08-07" \
+            --arg system_content "你是一個專業的軟體更新紀錄撰寫助手。請分析 commit 訊息並以 JSON 格式輸出。\n\n輸出格式：\n{\n  \"title\": \"簡短總結（5-10 字，用詞客觀不誇張）\",\n  \"body\": \"詳細更新內容\"\n}\n\ntitle 規則：\n- 用詞客觀、專業，避免「重大」、「全新」、「革命性」等誇張詞彙\n- 簡潔描述本次更新的主要內容\n- 不包含版本號（版本號會自動添加）\n- 範例：「新增選單系統與錯誤修復」、「優化效能與介面調整」、「修復多項問題」\n\nbody 格式：\n## 新功能 (Features)\n- **子分類**\n  - 功能描述（重點用粗體標記）\n\n---\n\n## 效能優化 (Performance)\n- **子分類**\n  - 優化描述\n\n---\n\n## 問題修復 (Fixes)\n- **子分類**\n  - 修復描述\n\n---\n\n## 重構與內部改進 (Refactoring & Chores)\n- 重構描述\n\nbody 注意事項：\n1. 每個大類別用 --- 分隔\n2. 子分類用粗體標記\n3. 重點功能/技術名詞用粗體標記\n4. 描述要專業且詳細\n5. 如果某個類別沒有內容，可以省略該類別\n\n請確保輸出是有效的 JSON 格式。" \
+            --arg user_content "以下是上一個版本到現在的 commit 訊息，請整理成更新紀錄：\n\n$COMMITS" \
+            '{
+              model: $model,
+              messages: [
+                {role: "system", content: $system_content},
+                {role: "user", content: $user_content}
+              ]
+            }')
 
-          JSON=$(echo "$JSON" | sed "s|COMMITS_PLACEHOLDER|$COMMITS|g")
-
+          echo "Calling OpenAI API..."
           RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
             -H "Authorization: Bearer $OPENAI_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$JSON")
 
-          TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+          # 檢查是否有錯誤
+          ERROR=$(echo "$RESPONSE" | jq -r '.error.message // empty')
+          if [ -n "$ERROR" ]; then
+            echo "OpenAI API Error: $ERROR"
+            echo "Full response: $RESPONSE"
+            exit 1
+          fi
 
+          # 提取 LLM 回應的內容
+          CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+
+          if [ -z "$CONTENT" ] || [ "$CONTENT" = "null" ]; then
+            echo "Failed to extract content from response"
+            echo "Full response: $RESPONSE"
+            exit 1
+          fi
+
+          # 解析 JSON 格式的 title 和 body
+          TITLE=$(echo "$CONTENT" | jq -r '.title // empty')
+          BODY=$(echo "$CONTENT" | jq -r '.body // empty')
+
+          if [ -z "$TITLE" ] || [ "$TITLE" = "null" ]; then
+            echo "Failed to extract title from LLM response"
+            echo "LLM response: $CONTENT"
+            exit 1
+          fi
+
+          if [ -z "$BODY" ] || [ "$BODY" = "null" ]; then
+            echo "Failed to extract body from LLM response"
+            echo "LLM response: $CONTENT"
+            exit 1
+          fi
+
+          echo "Changelog generated successfully"
+          echo "Title: $TITLE"
+
+          # 輸出 title
+          {
+            echo 'title<<EOF'
+            echo "$TITLE"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+          # 輸出 body
           {
             echo 'body<<EOF'
-            echo "$TEXT"
+            echo "$BODY"
             echo 'EOF'
           } >> $GITHUB_OUTPUT
         shell: bash
@@ -162,7 +200,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: "v${{ needs.prepare-release.outputs.version }}"
-          releaseName: "v${{ needs.prepare-release.outputs.version }}"
+          releaseName: "v${{ needs.prepare-release.outputs.version }} - ${{ needs.prepare-release.outputs.release_title }}"
           releaseBody: ${{ needs.prepare-release.outputs.changelog }}
           releaseDraft: false
           prerelease: false
@@ -185,10 +223,11 @@ jobs:
           VERSION=${{ needs.prepare-release.outputs.version }}
 
           # 更新 macOS 下載連結（Universal Binary）
-          sed -E -i "s#(releases/download/)[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_universal\.dmg)#\1${VERSION}\2${VERSION}\3#g" README.md
+          # tag 帶 v 前綴，但檔名不帶 v
+          sed -E -i "s#(releases/download/)v?[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_universal\.dmg)#\1v${VERSION}\2${VERSION}\3#g" README.md
 
           # 更新 Windows 下載連結
-          sed -E -i "s#(releases/download/)[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_x64-setup\.exe)#\1${VERSION}\2${VERSION}\3#g" README.md
+          sed -E -i "s#(releases/download/)v?[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_x64-setup\.exe)#\1v${VERSION}\2${VERSION}\3#g" README.md
 
         shell: bash
 
