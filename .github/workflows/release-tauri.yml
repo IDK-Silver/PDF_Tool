@@ -46,19 +46,18 @@ jobs:
           fi
         shell: bash
 
-      - name: Fetch PDFium binaries
+      - name: Fetch PDFium binaries (macOS)
+        if: matrix.os == 'macos-latest'
         run: |
-          if [ "${{ matrix.os }}" == "macos-latest" ]; then
-            # macOS Universal Binary 需要兩個架構的 PDFium
-            npm run pdfium:fetch -- --targets aarch64-apple-darwin,x86_64-apple-darwin
-          elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-            # Windows x64
-            npm run pdfium:fetch -- --targets x86_64-pc-windows-msvc
-          else
-            # 自動偵測
-            npm run pdfium:fetch
-          fi
+          # macOS Universal Binary 需要兩個架構的 PDFium
+          npm run pdfium:fetch -- --targets aarch64-apple-darwin,x86_64-apple-darwin
         shell: bash
+
+      - name: Fetch PDFium binaries (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          # Windows x64
+          npm run pdfium:fetch -- --targets x86_64-pc-windows-msvc
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
