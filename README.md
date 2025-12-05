@@ -58,6 +58,13 @@
 sudo xattr -cr /Applications/Kano\ PDF\ Tool.app/
 ```
 
+或使用以下指令，同步清除隔離並加入 Gatekeeper 信任：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Kano\ PDF\ Tool.app && \
+spctl --add --label "KanoPDFTool" /Applications/Kano\ PDF\ Tool.app
+```
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=IDK-Silver/PDF_Tool&type=Date)](https://star-history.com/#IDK-Silver/PDF_Tool&Date)
