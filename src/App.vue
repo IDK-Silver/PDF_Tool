@@ -3,6 +3,7 @@ import ModeChooseList from './components/ModeChooseList.vue'
 import SettingBar from './components/SettingBar.vue'
 import { useGlobalFileDrop } from '@/modules/filedrop/useFileDrop'
 import { initOpenFileBridge } from '@/modules/app/openFileBridge'
+import { initMenuBridge } from '@/modules/app/menuBridge'
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useUiStore } from '@/modules/ui/store'
 import { useRoute, useRouter } from 'vue-router'
@@ -26,6 +27,7 @@ const router = useRouter()
 
 const asideClass = computed(() => ui.sidebarCollapsed ? 'hidden' : 'w-[260px]')
 let disposeOpenBridge: (() => void) | null = null
+let disposeMenuBridge: (() => void) | null = null
 const isSimpleLayout = computed(() => isSecondaryWindow || route.meta.simpleLayout === true)
 
 function isEditableTarget(el: EventTarget | null): boolean {
@@ -63,6 +65,12 @@ onMounted(async () => {
     console.error('[App] Failed to init open-file bridge', err)
     disposeOpenBridge = null
   }
+  try {
+    disposeMenuBridge = await initMenuBridge()
+  } catch (err) {
+    console.error('[App] Failed to init menu bridge', err)
+    disposeMenuBridge = null
+  }
 })
 onBeforeUnmount(() => {
   if (isSecondaryWindow) return
@@ -73,6 +81,12 @@ onBeforeUnmount(() => {
       console.error('[App] Failed to teardown open-file bridge', err)
     }
     disposeOpenBridge = null
+  }
+  if (disposeMenuBridge) {
+    try { disposeMenuBridge() } catch (err) {
+      console.error('[App] Failed to teardown menu bridge', err)
+    }
+    disposeMenuBridge = null
   }
 })
 </script>
