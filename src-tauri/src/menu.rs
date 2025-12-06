@@ -20,6 +20,7 @@ const ZOOM_OUT_ID: &str = "zoom-out";
 const FIT_MODE_ID: &str = "fit-mode";
 const ACTUAL_SIZE_ID: &str = "actual-size";
 const TOGGLE_SIDEBAR_ID: &str = "toggle-sidebar";
+const TOGGLE_DEVTOOLS_ID: &str = "toggle-devtools";
 
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // File menu items
@@ -44,6 +45,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let fit_mode_item = MenuItem::with_id(app, FIT_MODE_ID, "Fit to Window", true, Some("CmdOrCtrl+0"))?;
     let actual_size_item = MenuItem::with_id(app, ACTUAL_SIZE_ID, "Actual Size", true, Some("CmdOrCtrl+1"))?;
     let toggle_sidebar_item = MenuItem::with_id(app, TOGGLE_SIDEBAR_ID, "Toggle Sidebar", true, Some("CmdOrCtrl+B"))?;
+    let toggle_devtools_item = MenuItem::with_id(app, TOGGLE_DEVTOOLS_ID, "Toggle Developer Tools", true, Some("CmdOrCtrl+Alt+I"))?;
 
     // About menu item
     let about_item = MenuItem::with_id(app, ABOUT_MENU_ID, "About", true, None::<&str>)?;
@@ -85,6 +87,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &actual_size_item,
             &PredefinedMenuItem::separator(app)?,
             &toggle_sidebar_item,
+            &toggle_devtools_item,
         ],
     )?;
 
@@ -154,7 +157,31 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent) {
         TOGGLE_SIDEBAR_ID => {
             let _ = app.emit("menu:toggle-sidebar", ());
         }
+        TOGGLE_DEVTOOLS_ID => {
+            toggle_devtools_for_active_window(app);
+        }
         _ => {}
+    }
+}
+
+fn toggle_devtools_for_active_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(about_win) = app.get_webview_window(ABOUT_WINDOW_LABEL) {
+        if about_win.is_focused().unwrap_or(false) {
+            toggle_devtools(&about_win);
+            return;
+        }
+    }
+
+    if let Some(main_win) = app.get_webview_window("main") {
+        toggle_devtools(&main_win);
+    }
+}
+
+fn toggle_devtools<R: Runtime>(win: &tauri::WebviewWindow<R>) {
+    if win.is_devtools_open() {
+        win.close_devtools();
+    } else {
+        win.open_devtools();
     }
 }
 
@@ -164,8 +191,6 @@ fn show_about_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         let _ = win.set_focus();
         return Ok(());
     }
-
-    let empty_menu = Menu::new(app)?;
 
     WebviewWindowBuilder::new(
         app,
@@ -177,7 +202,7 @@ fn show_about_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     .min_inner_size(480.0, 600.0)
     .resizable(true)
     .visible(true)
-    .menu(empty_menu)
+    .devtools(true)
     .build()?;
 
     Ok(())

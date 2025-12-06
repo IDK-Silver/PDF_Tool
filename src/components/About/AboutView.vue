@@ -1,30 +1,57 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getVersion, getName } from '@tauri-apps/api/app'
-import { openPath } from '@tauri-apps/plugin-opener'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import qrCodeImage from '@/assets/donate/buymeacoffee/buymeacoffee-qr-code.png'
 import buttonImage from '@/assets/donate/buymeacoffee/buymeacoffee-button.png'
 import appIcon from '@/assets/app-icon.png'
 
 const appName = ref('Kano PDF Tool')
-const version = ref('3.7.0')
+const version = ref('')
 
 onMounted(async () => {
-  try {
-    appName.value = await getName()
-    const v = await getVersion()
-    if (v) version.value = v
-  } catch (err) {
-    console.error('[AboutView] failed to load app info', err)
+  const hasTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  if (!hasTauri) return
+
+  const [nameResult, versionResult] = await Promise.allSettled([getName(), getVersion()])
+
+  if (nameResult.status === 'fulfilled' && nameResult.value) {
+    appName.value = nameResult.value
+  }
+
+  if (versionResult.status === 'fulfilled' && versionResult.value) {
+    version.value = versionResult.value
+  }
+
+  if (nameResult.status === 'rejected' || versionResult.status === 'rejected') {
+    console.error('[AboutView] failed to load app info', {
+      nameError: nameResult.status === 'rejected' ? nameResult.reason : undefined,
+      versionError: versionResult.status === 'rejected' ? versionResult.reason : undefined,
+    })
   }
 })
 
 async function openSponsor() {
-  await openPath('https://www.buymeacoffee.com/yuuf.25')
+  await openLink('https://www.buymeacoffee.com/yuuf.25')
 }
 
 async function openHomepage() {
-  await openPath('https://github.com/IDK-Silver/PDF_Tool')
+  await openLink('https://github.com/IDK-Silver/PDF_Tool')
+}
+
+async function openLink(url: string) {
+  try {
+    // Prefer native opener when Tauri IPC is available
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      await openUrl(url)
+      return
+    }
+  } catch (err) {
+    console.error('[AboutView] openUrl failed, falling back to window.open', err)
+  }
+
+  // Browser/dev fallback so the button still works in plain Vite preview
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 </script>
 
