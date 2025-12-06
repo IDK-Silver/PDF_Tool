@@ -1868,12 +1868,13 @@ defineExpose({
 <template>
   <div
     ref="scrollRootEl"
-    class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain bg-muted min-h-0"
+    class="flex-1 scrollbar-visible overscroll-y-contain bg-muted min-h-0"
     :style="{
-      'scrollbar-gutter': 'stable',
       'will-change': 'scroll-position',
       'overflow-anchor': 'none',
-      '--zoom-factor': currentRenderingZoom / 100
+      '--zoom-factor': currentRenderingZoom / 100,
+      'overflow-x': viewMode === 'fit' ? 'hidden' : 'auto',
+      'overflow-y': 'scroll'
     }"
   >
     <div v-if="!totalPages" class="p-4">尚未載入頁面</div>
