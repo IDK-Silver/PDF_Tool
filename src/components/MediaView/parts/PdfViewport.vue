@@ -1767,7 +1767,6 @@ function pageCardStyle(idx: number) {
   const baseStyle: Record<string, string> = {
     contain: 'layout paint style',
     contentVisibility: 'auto',
-    containIntrinsicBlockSize: '1000px',
     position: 'relative',
   }
 
@@ -1778,8 +1777,12 @@ function pageCardStyle(idx: number) {
 
   if (base && size) {
     const ratio = size.heightPt / size.widthPt
+    // [修復] 根據實際頁面尺寸動態計算 containIntrinsicBlockSize
+    // 避免對於很長的 PDF 頁面因為預估值太小而無法顯示完整
+    const estimatedHeight = Math.ceil(base * ratio)
     return {
       ...baseStyle,
+      containIntrinsicBlockSize: `${estimatedHeight}px`,
       '--page-base-width': `${base}px`,
       '--page-ratio': `${ratio}`,
       // 無論 Fit 還是 Actual，都使用這套計算公式
@@ -1790,6 +1793,7 @@ function pageCardStyle(idx: number) {
   }
 
   // Fallback (通常不會發生，除非尚未載入尺寸)
+  baseStyle.containIntrinsicBlockSize = '1000px'
   if (size) {
     baseStyle.aspectRatio = `${size.widthPt} / ${size.heightPt}`
   }
