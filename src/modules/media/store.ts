@@ -169,6 +169,11 @@ export const useMediaStore = defineStore('media', () => {
         // 初始化頁框
         pdfPages.value = Array.from({ length: opened.pages }, () => null)
         highResPages.clear()
+        // 預先載入第 0 頁的 pt 尺寸，確保頁面能正確計算寬高
+        try {
+          const size0 = await pdfPageSize(opened.docId, 0)
+          pageSizesPt.value[0] = { widthPt: size0.widthPt, heightPt: size0.heightPt }
+        } catch (_) { /* 容錯：若失敗，後續會再嘗試 */ }
         // 直接載入第 0 頁高清內容（RAW 預設足夠快速）
         const containerWidth = 800
         const fmt = settings.s.renderFormat
