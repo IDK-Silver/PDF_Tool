@@ -50,21 +50,6 @@
 
 > **macOS 說明**：Universal Binary 版本包含 Intel (x86_64) 和 Apple Silicon (ARM64) 兩種架構，可自動適配您的 Mac 機型。
 
-### macOS 使用說明
-
-由於未申請 Apple 開發者帳號，macOS 系統可能會阻擋應用程式執行。安裝後請執行以下命令來移除隔離屬性：
-
-```bash
-sudo xattr -cr /Applications/Kano\ PDF\ Tool.app/
-```
-
-或使用以下指令，同步清除隔離並加入 Gatekeeper 信任：
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Kano\ PDF\ Tool.app && \
-spctl --add --label "KanoPDFTool" /Applications/Kano\ PDF\ Tool.app
-```
-
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=IDK-Silver/PDF_Tool&type=Date)](https://star-history.com/#IDK-Silver/PDF_Tool&Date)
