@@ -122,24 +122,20 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           COMMITS: ${{ steps.commits.outputs.text }}
-          REASONING_EFFORT: medium
         run: |
           # 使用 jq 來構建 JSON，避免轉義問題
           JSON=$(jq -n \
             --arg model "gpt-5.1-2025-11-13" \
             --arg system_content "你是一個專業的軟體更新紀錄撰寫助手。請分析 commit 訊息並以 JSON 格式輸出。\n\n輸出格式：\n{\n  \"title\": \"簡短總結（5-10 字，用詞客觀不誇張）\",\n  \"body\": \"詳細更新內容\"\n}\n\ntitle 規則：\n- 用詞客觀、專業，避免「重大」、「全新」、「革命性」等誇張詞彙\n- 簡潔描述本次更新的主要內容\n- 不包含版本號（版本號會自動添加）\n- 範例：「新增選單系統與錯誤修復」、「優化效能與介面調整」、「修復多項問題」\n\nbody 格式：\n## 新功能 (Features)\n- **子分類**\n  - 功能描述（重點用粗體標記）\n\n---\n\n## 效能優化 (Performance)\n- **子分類**\n  - 優化描述\n\n---\n\n## 問題修復 (Fixes)\n- **子分類**\n  - 修復描述\n\n---\n\n## 重構與內部改進 (Refactoring & Chores)\n- 重構描述\n\nbody 注意事項：\n1. 每個大類別用 --- 分隔\n2. 子分類用粗體標記\n3. 重點功能/技術名詞用粗體標記\n4. 描述要專業且詳細\n5. 如果某個類別沒有內容，可以省略該類別\n6. **避免提到檔名、路徑、函式名稱、變數名稱等程式碼細節，除非與使用者功能高度相關**\n7. **盡量用使用者或產品角度描述變更，例如「改善 PDF 渲染效能」、「新增批次匯出功能」，而不是描述具體程式碼修改**\n8. **對於純重構、命名調整、lint 修正等細微改動，可以合併成一兩條概括敘述，不要逐條展開**\n\n請確保輸出是有效的 JSON 格式。" \
             --arg user_content "以下是上一個版本到現在的 commit 訊息，請整理成更新紀錄：\n\n$COMMITS" \
-            --arg reasoning_effort "${REASONING_EFFORT:-}" \
             '{
               model: $model,
               messages: [
                 {role: "system", content: $system_content},
                 {role: "user", content: $user_content}
-              ]
-            }
-            + ( ($reasoning_effort | length) > 0
-              ? {reasoning_effort: $reasoning_effort}
-              : {} )')
+              ],
+              reasoning_effort: "medium"
+            }')
 
           echo "Calling OpenAI API..."
           RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
