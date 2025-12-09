@@ -49,6 +49,12 @@
 | Linux | - | 請參考下方的開發環境設定自行編譯 |
 
 > **macOS 說明**：Universal Binary 版本包含 Intel (x86_64) 和 Apple Silicon (ARM64) 兩種架構，可自動適配您的 Mac 機型。
+>
+> 由於作者沒有錢錢購買 Apple 開發者帳號進行簽名，若遇到「應用程式已損毀」或無法開啟的情況，請在終端機執行以下指令修復：
+> ```bash
+> sudo xattr -cr /Applications/Kano\ PDF\ Tool.app/
+> ```
+>
 
 ## Star History
 
