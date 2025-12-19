@@ -22,6 +22,9 @@ const ACTUAL_SIZE_ID: &str = "actual-size";
 const TOGGLE_SIDEBAR_ID: &str = "toggle-sidebar";
 const TOGGLE_DEVTOOLS_ID: &str = "toggle-devtools";
 
+// App menu IDs
+const CHECK_UPDATE_ID: &str = "check-update";
+
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // File menu items
     let open_file_item = MenuItem::with_id(app, OPEN_FILE_ID, "Open", true, Some("CmdOrCtrl+O"))?;
@@ -49,6 +52,9 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     // About menu item
     let about_item = MenuItem::with_id(app, ABOUT_MENU_ID, "About", true, None::<&str>)?;
+
+    // Check for updates menu item
+    let check_update_item = MenuItem::with_id(app, CHECK_UPDATE_ID, "Check for Updates...", true, None::<&str>)?;
 
     // Build File menu
     let file_menu = Submenu::with_items(
@@ -99,6 +105,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             true,
             &[
                 &about_item,
+                &check_update_item,
                 &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::quit(app, None)?,
             ],
@@ -112,7 +119,11 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             app,
             "Help",
             true,
-            &[&about_item],
+            &[
+                &check_update_item,
+                &PredefinedMenuItem::separator(app)?,
+                &about_item,
+            ],
         )?;
         Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu, &help_menu])
     }
@@ -159,6 +170,9 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent) {
         }
         TOGGLE_DEVTOOLS_ID => {
             toggle_devtools_for_active_window(app);
+        }
+        CHECK_UPDATE_ID => {
+            let _ = app.emit("menu:check-update", ());
         }
         _ => {}
     }

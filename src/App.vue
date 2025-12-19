@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import ModeChooseList from './components/ModeChooseList.vue'
 import SettingBar from './components/SettingBar.vue'
+import UpdateDialog from './components/UpdateDialog.vue'
 import { useGlobalFileDrop } from '@/modules/filedrop/useFileDrop'
 import { initOpenFileBridge } from '@/modules/app/openFileBridge'
 import { initMenuBridge } from '@/modules/app/menuBridge'
+import { initUpdaterBridge } from '@/modules/updater/bridge'
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useUiStore } from '@/modules/ui/store'
 import { useRoute, useRouter } from 'vue-router'
@@ -28,6 +30,7 @@ const router = useRouter()
 const asideClass = computed(() => ui.sidebarCollapsed ? 'hidden' : 'w-[260px]')
 let disposeOpenBridge: (() => void) | null = null
 let disposeMenuBridge: (() => void) | null = null
+let disposeUpdaterBridge: (() => void) | null = null
 const isSimpleLayout = computed(() => isSecondaryWindow || route.meta.simpleLayout === true)
 
 function isEditableTarget(el: EventTarget | null): boolean {
@@ -71,6 +74,12 @@ onMounted(async () => {
     console.error('[App] Failed to init menu bridge', err)
     disposeMenuBridge = null
   }
+  try {
+    disposeUpdaterBridge = await initUpdaterBridge()
+  } catch (err) {
+    console.error('[App] Failed to init updater bridge', err)
+    disposeUpdaterBridge = null
+  }
 })
 onBeforeUnmount(() => {
   if (isSecondaryWindow) return
@@ -87,6 +96,12 @@ onBeforeUnmount(() => {
       console.error('[App] Failed to teardown menu bridge', err)
     }
     disposeMenuBridge = null
+  }
+  if (disposeUpdaterBridge) {
+    try { disposeUpdaterBridge() } catch (err) {
+      console.error('[App] Failed to teardown updater bridge', err)
+    }
+    disposeUpdaterBridge = null
   }
 })
 </script>
@@ -127,5 +142,6 @@ onBeforeUnmount(() => {
         將 PDF 或圖片拖曳到這裡
       </div>
     </div>
+    <UpdateDialog />
   </div>
 </template>

@@ -1,5 +1,6 @@
 mod media;
 mod menu;
+mod updater;
 
 use std::{
     path::{Path, PathBuf},
@@ -147,7 +148,26 @@ pub fn run() {
                 .path()
                 .app_cache_dir()
                 .unwrap_or_else(|_| std::env::temp_dir().join("kano_pdf_tool_cache"));
-            crate::media::init_pdf_worker(cache_dir);
+            crate::media::init_pdf_worker(cache_dir.clone());
+
+            // Initialize updater database
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .unwrap_or_else(|_| cache_dir.clone());
+            crate::updater::init_update_db(data_dir);
+
+            // Background update check (delayed 3 seconds)
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                let result = crate::updater::check_for_update_internal(&app_handle, false).await;
+                if result.has_update && !result.is_skipped && !result.is_remind_later {
+                    info!("[updater] Update available, emitting event");
+                    let _ = app_handle.emit("update-available", &result);
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -173,6 +193,10 @@ pub fn run() {
             media::pdf_export_page_image,
             media::pdf_export_page_pdf,
             media::pdf_rotate_page_relative,
+            updater::check_for_update,
+            updater::skip_version,
+            updater::remind_later,
+            updater::open_release_page,
         ]);
 
     let app = builder
