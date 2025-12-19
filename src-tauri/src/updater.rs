@@ -327,3 +327,31 @@ pub async fn open_release_page(app: tauri::AppHandle, url: String) -> Result<(),
         .open_url(&url, None::<&str>)
         .map_err(|e| format!("Failed to open URL: {}", e))
 }
+
+#[tauri::command]
+pub fn get_platform() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        if cfg!(target_arch = "aarch64") {
+            "macos-arm64".to_string()
+        } else {
+            "macos-x64".to_string()
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        if cfg!(target_arch = "aarch64") {
+            "windows-arm64".to_string()
+        } else {
+            "windows-x64".to_string()
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        "linux-x64".to_string()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        "unknown".to_string()
+    }
+}

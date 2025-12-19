@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { UpdateState, UpdateCheckResult } from './types'
-import { checkForUpdate, skipVersion, remindLater, openReleasePage } from './service'
+import { checkForUpdate, skipVersion, remindLater, openReleasePage, getPlatform, findPlatformAsset } from './service'
 
 export const useUpdaterStore = defineStore('updater', () => {
   const state = ref<UpdateState>({
@@ -35,11 +35,26 @@ export const useUpdaterStore = defineStore('updater', () => {
   }
 
   async function downloadNow() {
-    const url = state.value.result?.releaseInfo?.htmlUrl
-    if (url) {
-      await openReleasePage(url)
-      state.value.dialogVisible = false
+    const releaseInfo = state.value.result?.releaseInfo
+    if (!releaseInfo) return
+
+    try {
+      const platform = await getPlatform()
+      const asset = findPlatformAsset(releaseInfo.assets, platform)
+
+      if (asset) {
+        // Open the direct download URL (will auto-download)
+        await openReleasePage(asset.browserDownloadUrl)
+      } else {
+        // Fallback to release page if no matching asset found
+        await openReleasePage(releaseInfo.htmlUrl)
+      }
+    } catch (err) {
+      // Fallback to release page on error
+      await openReleasePage(releaseInfo.htmlUrl)
     }
+
+    state.value.dialogVisible = false
   }
 
   async function later(hours = 24) {

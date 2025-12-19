@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { marked } from 'marked'
 import { useUpdaterStore } from '@/modules/updater/store'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
+
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+})
 
 const updater = useUpdaterStore()
 const visible = computed(() => updater.state.dialogVisible)
@@ -12,6 +18,10 @@ const hasUpdate = computed(() => result.value?.hasUpdate ?? false)
 const currentVersion = computed(() => result.value?.currentVersion ?? '')
 const latestVersion = computed(() => result.value?.latestVersion ?? '')
 const changelog = computed(() => result.value?.releaseInfo?.body ?? '')
+const changelogHtml = computed(() => {
+  if (!changelog.value) return ''
+  return marked.parse(changelog.value) as string
+})
 
 function onBackdropClick(e: MouseEvent) {
   if (e.target === e.currentTarget) {
@@ -79,9 +89,10 @@ function onBackdropClick(e: MouseEvent) {
               <!-- Changelog -->
               <div v-if="changelog" class="space-y-2">
                 <h3 class="text-sm font-medium">更新內容</h3>
-                <div class="rounded-md border border-border bg-[hsl(var(--card))] p-3 max-h-48 overflow-y-auto">
-                  <pre class="text-xs whitespace-pre-wrap font-sans text-[hsl(var(--muted-foreground))]">{{ changelog }}</pre>
-                </div>
+                <div
+                  class="changelog-content rounded-md border border-border bg-[hsl(var(--card))] p-3 max-h-48 overflow-y-auto text-sm"
+                  v-html="changelogHtml"
+                ></div>
               </div>
             </template>
           </div>
@@ -132,5 +143,73 @@ function onBackdropClick(e: MouseEvent) {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.changelog-content :deep(h1),
+.changelog-content :deep(h2),
+.changelog-content :deep(h3) {
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.changelog-content :deep(h1) {
+  font-size: 1.125rem;
+}
+
+.changelog-content :deep(h2) {
+  font-size: 1rem;
+}
+
+.changelog-content :deep(h3) {
+  font-size: 0.875rem;
+}
+
+.changelog-content :deep(p) {
+  margin-bottom: 0.5rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.changelog-content :deep(ul),
+.changelog-content :deep(ol) {
+  margin-left: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.changelog-content :deep(ul) {
+  list-style-type: disc;
+}
+
+.changelog-content :deep(ol) {
+  list-style-type: decimal;
+}
+
+.changelog-content :deep(li) {
+  margin-bottom: 0.25rem;
+}
+
+.changelog-content :deep(code) {
+  background: hsl(var(--muted));
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.8em;
+}
+
+.changelog-content :deep(a) {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+
+.changelog-content :deep(a:hover) {
+  opacity: 0.8;
+}
+
+.changelog-content :deep(> :first-child) {
+  margin-top: 0;
+}
+
+.changelog-content :deep(> :last-child) {
+  margin-bottom: 0;
 }
 </style>

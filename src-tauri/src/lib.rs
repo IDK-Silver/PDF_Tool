@@ -197,6 +197,7 @@ pub fn run() {
             updater::skip_version,
             updater::remind_later,
             updater::open_release_page,
+            updater::get_platform,
         ]);
 
     let app = builder
