@@ -805,6 +805,8 @@ async function rotatePlus90(pageIndex: number) {
     }
 
     media.pdfPages[pageIndex] = null
+    // 清除文字層緩存，旋轉後文字坐標會改變
+    media.clearPageText(pageIndex)
     pendingIdx.add(pageIndex)
 
     // 等待 Vue 更新後再觸發重新渲染

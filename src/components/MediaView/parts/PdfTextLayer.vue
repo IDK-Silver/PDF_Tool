@@ -94,7 +94,8 @@ function precomputeSpans(content: PageTextContent) {
 }
 
 watch(
-  () => [props.docId, props.pageIndex],
+  // 監聽 pageWidthPt/pageHeightPt：當頁面旋轉時寬高會交換，需要重新獲取文字內容
+  () => [props.docId, props.pageIndex, props.pageWidthPt, props.pageHeightPt],
   async () => {
     if (!props.docId || props.pageIndex < 0) return
 

@@ -2066,6 +2066,14 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let width_pt = page.width().value as f32;
                         let height_pt = page.height().value as f32;
 
+                        // 計算原始頁面尺寸（旋轉前）
+                        // PDFium 的 page.width()/height() 返回旋轉後的尺寸
+                        // 但文字坐標是基於原始坐標系統的
+                        let (orig_width, orig_height) = match rotation_deg {
+                            90 | 270 => (height_pt, width_pt),
+                            _ => (width_pt, height_pt),
+                        };
+
                         // Extract text with character positions
                         let text_page = page.text().map_err(|e| {
                             MediaError::new("parse_error", format!("無法提取文字: {e}"))
@@ -2098,10 +2106,26 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             if let Ok(text_char) = text_page.chars().get(i) {
                                 if let Some(text_ch) = text_char.unicode_char() {
                                     // Get geometry with improved fallback
-                                    if let Some((raw_x, y, mut width, mut height)) =
+                                    if let Some((raw_x, raw_y, raw_width, raw_height)) =
                                         char_geometry(&text_char, global_offset_x, global_offset_y)
                                     {
-                                        let mut x = raw_x;
+                                        // 根據頁面旋轉角度轉換坐標
+                                        // PDFium 文字坐標是基於原始坐標系統的，需要轉換到旋轉後的坐標系統
+                                        let (mut x, y, mut width, mut height) = match rotation_deg {
+                                            90 => {
+                                                // 旋轉 90 度順時針: (x, y) -> (y, orig_width - x - width)
+                                                (raw_y, orig_width - raw_x - raw_width, raw_height, raw_width)
+                                            }
+                                            180 => {
+                                                // 旋轉 180 度: (x, y) -> (orig_width - x - width, orig_height - y - height)
+                                                (orig_width - raw_x - raw_width, orig_height - raw_y - raw_height, raw_width, raw_height)
+                                            }
+                                            270 => {
+                                                // 旋轉 270 度順時針 (或 90 度逆時針): (x, y) -> (orig_height - y - height, x)
+                                                (orig_height - raw_y - raw_height, raw_x, raw_height, raw_width)
+                                            }
+                                            _ => (raw_x, raw_y, raw_width, raw_height),
+                                        };
 
                                         // Track height for running average (O(1) instead of median's O(N log N))
                                         if height > 0.1 && height < 1000.0 {

@@ -534,6 +534,14 @@ export const useMediaStore = defineStore('media', () => {
     pageText.value = {}
   }
 
+  function clearPageText(index: number) {
+    if (pageText.value[index] !== undefined) {
+      const newPageText = { ...pageText.value }
+      delete newPageText[index]
+      pageText.value = newPageText
+    }
+  }
+
   return {
     // state
     selected,
@@ -572,6 +580,7 @@ export const useMediaStore = defineStore('media', () => {
     getPageTextContent,
     getCachedPageText,
     resetPageTextCache,
+    clearPageText,
     markDirty,
     clearDirty,
   }

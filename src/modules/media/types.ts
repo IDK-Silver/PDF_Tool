@@ -72,4 +72,6 @@ export interface PageTextContent {
   spans: TextSpan[]
   widthPt: number
   heightPt: number
+  /** 頁面旋轉角度 (0, 90, 180, 270) */
+  rotationDeg?: number
 }
