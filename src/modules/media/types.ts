@@ -40,11 +40,32 @@ export interface PageRenderBytesRaw {
 export interface PdfOpenResult {
   docId: number
   pages: number
+  dirty: boolean
+  revision: number
 }
 
 export interface PdfPageSize {
   widthPt: number
   heightPt: number
+}
+
+export interface PdfMutationResult {
+  pages: number
+  dirty: boolean
+  revision: number
+}
+
+export interface PdfRotationResult {
+  rotationDeg: number
+  dirty: boolean
+  revision: number
+}
+
+export interface PdfSaveResult {
+  path: string
+  pages: number
+  dirty: boolean
+  revision: number
 }
 
 // Text selection types (legacy - kept for reference)

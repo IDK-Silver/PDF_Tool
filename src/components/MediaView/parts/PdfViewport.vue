@@ -508,6 +508,7 @@ async function deletePageFromMenu(pageIndex: number) {
   const oldSizes: Record<number, { widthPt: number; heightPt: number }> = { ...media.pageSizesPt }
   const oldCenter = centerIndex.value
   const oldDirty = media.dirty
+  const oldRevision = media.revision
   try {
     media.pdfPages.splice(pageIndex, 1)
     const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
@@ -530,7 +531,7 @@ async function deletePageFromMenu(pageIndex: number) {
     } catch { }
     const res = await pdfDeletePagesDoc({ docId: id, indices: [pageIndex] })
     media.descriptor = { ...media.descriptor!, pages: res.pages } as any
-    media.markDirty()
+    media.setDirtyState(res.dirty, res.revision)
     pendingIdx.clear()
     const tp = res.pages
     for (let i = pageIndex; i < Math.min(tp, pageIndex + 5); i++) pendingIdx.add(i)
@@ -540,8 +541,7 @@ async function deletePageFromMenu(pageIndex: number) {
     media.pageSizesPt = oldSizes as any
     media.descriptor = oldDescriptor as any
     centerIndex.value = oldCenter
-    if (oldDirty) media.markDirty()
-    else media.clearDirty()
+    media.setDirtyState(oldDirty, oldRevision)
     alert(e?.message || String(e))
   }
 }
@@ -637,6 +637,7 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
   const oldSizes: Record<number, { widthPt: number; heightPt: number }> = { ...media.pageSizesPt }
   const oldCenter = centerIndex.value
   const oldDirty = media.dirty
+  const oldRevision = media.revision
   try {
     media.pdfPages.splice(insertIndex, 0, null)
     const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
@@ -650,9 +651,9 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
     media.pageSizesPt = shifted as any
     media.descriptor = { ...d, pages: Math.max(0, (d.pages || 0) + 1) } as any
     if (insertIndex <= oldCenter) centerIndex.value = oldCenter + 1
-    media.markDirty()
     const res = await pdfInsertBlank({ docId: id, index: insertIndex, widthPt, heightPt })
     media.descriptor = { ...media.descriptor!, pages: res.pages } as any
+    media.setDirtyState(res.dirty, res.revision)
     pendingIdx.clear()
     const tp = res.pages
     for (let i = insertIndex; i < Math.min(tp, insertIndex + 6); i++) pendingIdx.add(i)
@@ -662,8 +663,7 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
     media.pageSizesPt = oldSizes as any
     media.descriptor = oldDescriptor as any
     centerIndex.value = oldCenter
-    if (oldDirty) media.markDirty()
-    else media.clearDirty()
+    media.setDirtyState(oldDirty, oldRevision)
     alert(e?.message || String(e))
   }
 }
@@ -699,9 +699,11 @@ async function insertFileAt(pageIndex: number, before: boolean) {
   const oldSizes: Record<number, { widthPt: number; heightPt: number }> = { ...media.pageSizesPt }
   const oldCenter = centerIndex.value
   const oldDirty = media.dirty
+  const oldRevision = media.revision
 
   let inserted = 0
   let finalPages = d.pages || 0
+  let lastMutation: { dirty: boolean; revision: number; pages: number } | null = null
 
   try {
     if (lower.endsWith('.pdf')) {
@@ -721,7 +723,6 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       media.pageSizesPt = shifted as any
       media.descriptor = { ...d, pages: Math.max(0, (d.pages || 0) + inserted) } as any
       if (insertIndex <= oldCenter) centerIndex.value = oldCenter + inserted
-      media.markDirty()
       pendingIdx.clear()
       for (let i = insertIndex; i < insertIndex + Math.min(inserted + 6, (media.descriptor?.pages || 0) - insertIndex); i++) pendingIdx.add(i)
       scheduleHiResRerender(0)
@@ -729,6 +730,7 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       for (let i = 0; i < src.pages; i++) {
         const res = await pdfCopyPage({ srcDocId: src.docId, srcIndex: i, destDocId: id, destIndex: insertIndex + i })
         finalPages = res.pages
+        lastMutation = res
       }
       try { await pdfClose(src.docId) } catch { }
     } else {
@@ -745,7 +747,6 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       media.pageSizesPt = shifted as any
       media.descriptor = { ...d, pages: Math.max(0, (d.pages || 0) + 1) } as any
       if (insertIndex <= oldCenter) centerIndex.value = oldCenter + 1
-      media.markDirty()
       pendingIdx.clear()
       for (let i = insertIndex; i < insertIndex + Math.min(inserted + 6, (media.descriptor?.pages || 0) - insertIndex); i++) pendingIdx.add(i)
       scheduleHiResRerender(0)
@@ -756,6 +757,7 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       const src = await pdfOpen(tempPath)
       const res = await pdfCopyPage({ srcDocId: src.docId, srcIndex: 0, destDocId: id, destIndex: insertIndex })
       finalPages = res.pages
+      lastMutation = res
       try { await pdfClose(src.docId) } catch { }
     }
 
@@ -765,14 +767,16 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       const tp = finalPages
       for (let i = insertIndex; i < Math.min(tp, insertIndex + inserted + 6); i++) pendingIdx.add(i)
       scheduleHiResRerender(0)
+      if (lastMutation) {
+        media.setDirtyState(lastMutation.dirty, lastMutation.revision)
+      }
     }
   } catch (e: any) {
     media.pdfPages = oldPagesArr as any
     media.pageSizesPt = oldSizes as any
     media.descriptor = oldDescriptor as any
     centerIndex.value = oldCenter
-    if (oldDirty) media.markDirty()
-    else media.clearDirty()
+    media.setDirtyState(oldDirty, oldRevision)
     alert(e?.message || String(e))
   }
 }
@@ -783,10 +787,11 @@ async function rotatePlus90(pageIndex: number) {
   const id = media.docId
   if (!d || d.type !== 'pdf' || id == null) return
   const oldDirty = media.dirty
+  const oldRevision = media.revision
   try {
     const delta = (shiftDown.value ? -90 : 90)
-    await pdfRotatePageRelative({ docId: id, index: pageIndex, deltaDeg: delta })
-    media.markDirty()
+    const res = await pdfRotatePageRelative({ docId: id, index: pageIndex, deltaDeg: delta })
+    media.setDirtyState(res.dirty, res.revision)
     try {
       media.cancelInflight(pageIndex)
     } catch { }
@@ -818,8 +823,7 @@ async function rotatePlus90(pageIndex: number) {
       updateFitPercent()
     }
   } catch (e: any) {
-    if (oldDirty) media.markDirty()
-    else media.clearDirty()
+    media.setDirtyState(oldDirty, oldRevision)
     alert(e?.message || String(e))
   }
 }

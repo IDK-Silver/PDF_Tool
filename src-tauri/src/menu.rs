@@ -1,6 +1,6 @@
 use tauri::{
-    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
     AppHandle, Emitter, Manager, Runtime, WebviewUrl, WebviewWindowBuilder,
+    menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
 
 const ABOUT_WINDOW_LABEL: &str = "about-window";
@@ -28,33 +28,78 @@ const CHECK_UPDATE_ID: &str = "check-update";
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // File menu items
     let open_file_item = MenuItem::with_id(app, OPEN_FILE_ID, "Open", true, Some("CmdOrCtrl+O"))?;
-    let remove_file_item = MenuItem::with_id(app, REMOVE_FILE_ID, "Close File", true, Some("CmdOrCtrl+W"))?;
+    let remove_file_item =
+        MenuItem::with_id(app, REMOVE_FILE_ID, "Close File", true, Some("CmdOrCtrl+W"))?;
 
     #[cfg(target_os = "macos")]
-    let open_in_fm_item = MenuItem::with_id(app, OPEN_IN_FILE_MANAGER_ID, "Reveal in Finder", true, Some("CmdOrCtrl+Shift+R"))?;
+    let open_in_fm_item = MenuItem::with_id(
+        app,
+        OPEN_IN_FILE_MANAGER_ID,
+        "Reveal in Finder",
+        true,
+        Some("CmdOrCtrl+Shift+R"),
+    )?;
 
     #[cfg(target_os = "windows")]
-    let open_in_fm_item = MenuItem::with_id(app, OPEN_IN_FILE_MANAGER_ID, "Show in Folder", true, Some("CmdOrCtrl+Shift+R"))?;
+    let open_in_fm_item = MenuItem::with_id(
+        app,
+        OPEN_IN_FILE_MANAGER_ID,
+        "Show in Folder",
+        true,
+        Some("CmdOrCtrl+Shift+R"),
+    )?;
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    let open_in_fm_item = MenuItem::with_id(app, OPEN_IN_FILE_MANAGER_ID, "Show in File Manager", true, Some("CmdOrCtrl+Shift+R"))?;
+    let open_in_fm_item = MenuItem::with_id(
+        app,
+        OPEN_IN_FILE_MANAGER_ID,
+        "Show in File Manager",
+        true,
+        Some("CmdOrCtrl+Shift+R"),
+    )?;
 
     // Edit menu items
     let find_item = MenuItem::with_id(app, FIND_ID, "Find", true, Some("CmdOrCtrl+F"))?;
 
     // View menu items
     let zoom_in_item = MenuItem::with_id(app, ZOOM_IN_ID, "Zoom In", true, Some("CmdOrCtrl+Plus"))?;
-    let zoom_out_item = MenuItem::with_id(app, ZOOM_OUT_ID, "Zoom Out", true, Some("CmdOrCtrl+Minus"))?;
-    let fit_mode_item = MenuItem::with_id(app, FIT_MODE_ID, "Fit to Window", true, Some("CmdOrCtrl+0"))?;
-    let actual_size_item = MenuItem::with_id(app, ACTUAL_SIZE_ID, "Actual Size", true, Some("CmdOrCtrl+1"))?;
-    let toggle_sidebar_item = MenuItem::with_id(app, TOGGLE_SIDEBAR_ID, "Toggle Sidebar", true, Some("CmdOrCtrl+B"))?;
-    let toggle_devtools_item = MenuItem::with_id(app, TOGGLE_DEVTOOLS_ID, "Toggle Developer Tools", true, Some("CmdOrCtrl+Alt+I"))?;
+    let zoom_out_item =
+        MenuItem::with_id(app, ZOOM_OUT_ID, "Zoom Out", true, Some("CmdOrCtrl+Minus"))?;
+    let fit_mode_item =
+        MenuItem::with_id(app, FIT_MODE_ID, "Fit to Window", true, Some("CmdOrCtrl+0"))?;
+    let actual_size_item = MenuItem::with_id(
+        app,
+        ACTUAL_SIZE_ID,
+        "Actual Size",
+        true,
+        Some("CmdOrCtrl+1"),
+    )?;
+    let toggle_sidebar_item = MenuItem::with_id(
+        app,
+        TOGGLE_SIDEBAR_ID,
+        "Toggle Sidebar",
+        true,
+        Some("CmdOrCtrl+B"),
+    )?;
+    let toggle_devtools_item = MenuItem::with_id(
+        app,
+        TOGGLE_DEVTOOLS_ID,
+        "Toggle Developer Tools",
+        true,
+        Some("CmdOrCtrl+Alt+I"),
+    )?;
 
     // About menu item
     let about_item = MenuItem::with_id(app, ABOUT_MENU_ID, "About", true, None::<&str>)?;
 
     // Check for updates menu item
-    let check_update_item = MenuItem::with_id(app, CHECK_UPDATE_ID, "Check for Updates...", true, None::<&str>)?;
+    let check_update_item = MenuItem::with_id(
+        app,
+        CHECK_UPDATE_ID,
+        "Check for Updates...",
+        true,
+        None::<&str>,
+    )?;
 
     // Build File menu
     let file_menu = Submenu::with_items(

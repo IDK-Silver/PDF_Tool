@@ -62,11 +62,15 @@ impl From<GitHubReleaseInfo> for ReleaseInfo {
             body: gh.body.unwrap_or_default(),
             html_url: gh.html_url,
             published_at: gh.published_at,
-            assets: gh.assets.into_iter().map(|a| ReleaseAsset {
-                name: a.name,
-                browser_download_url: a.browser_download_url,
-                size: a.size,
-            }).collect(),
+            assets: gh
+                .assets
+                .into_iter()
+                .map(|a| ReleaseAsset {
+                    name: a.name,
+                    browser_download_url: a.browser_download_url,
+                    size: a.size,
+                })
+                .collect(),
         }
     }
 }
@@ -143,10 +147,8 @@ impl UpdateDb {
     }
 
     fn delete(&self, key: &str) -> Result<(), rusqlite::Error> {
-        self.conn.execute(
-            "DELETE FROM update_state WHERE key = ?1",
-            params![key],
-        )?;
+        self.conn
+            .execute("DELETE FROM update_state WHERE key = ?1", params![key])?;
         Ok(())
     }
 }
@@ -182,10 +184,16 @@ fn is_newer_version(current: &str, latest: &str) -> bool {
     let current_clean = current.trim_start_matches('v');
     let latest_clean = latest.trim_start_matches('v');
 
-    match (semver::Version::parse(current_clean), semver::Version::parse(latest_clean)) {
+    match (
+        semver::Version::parse(current_clean),
+        semver::Version::parse(latest_clean),
+    ) {
         (Ok(c), Ok(l)) => l > c,
         _ => {
-            warn!("[updater] Failed to parse versions: current={}, latest={}", current, latest);
+            warn!(
+                "[updater] Failed to parse versions: current={}, latest={}",
+                current, latest
+            );
             false
         }
     }
@@ -287,7 +295,10 @@ pub async fn check_for_update_internal(app: &tauri::AppHandle, force: bool) -> U
 // ============================================================================
 
 #[tauri::command]
-pub async fn check_for_update(app: tauri::AppHandle, force: bool) -> Result<UpdateCheckResult, String> {
+pub async fn check_for_update(
+    app: tauri::AppHandle,
+    force: bool,
+) -> Result<UpdateCheckResult, String> {
     Ok(check_for_update_internal(&app, force).await)
 }
 
@@ -313,7 +324,10 @@ pub fn remind_later(hours: u32) -> Result<(), String> {
         let until = unix_timestamp() + (hours as i64 * 3600);
         db.set(KEY_REMIND_LATER_UNTIL, &until.to_string())
             .map_err(|e| format!("Failed to save remind later: {}", e))?;
-        info!("[updater] Remind later set for {} hours (until {})", hours, until);
+        info!(
+            "[updater] Remind later set for {} hours (until {})",
+            hours, until
+        );
         Ok(())
     } else {
         Err("Database not initialized".to_string())

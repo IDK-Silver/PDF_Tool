@@ -27,6 +27,7 @@ export const useMediaStore = defineStore('media', () => {
   const pdfPages = ref<Array<PageRender | null>>([])
   const docId = ref<number | null>(null)
   const dirty = ref(false)
+  const revision = ref(0)
   const pageSizesPt = ref<Record<number, { widthPt: number; heightPt: number }>>({})
   const pageText = ref<Record<number, PageTextContent | null>>({})
   const inflightCount = ref(0)
@@ -167,7 +168,7 @@ export const useMediaStore = defineStore('media', () => {
     resetPdfState()
     descriptor.value = null
     // 切換或重新載入文件時，未儲存變更不再有效（舊 session 會被關閉）
-    dirty.value = false
+    setDirtyState(false, 0)
     // 關閉上一份文件 session
     if (docId.value != null) {
       try { await pdfClose(docId.value) } catch(_) {}
@@ -189,6 +190,7 @@ export const useMediaStore = defineStore('media', () => {
         const opened = await pdfOpen(d.path)
         docId.value = opened.docId
         descriptor.value = { ...d, pages: opened.pages }
+        setDirtyState(opened.dirty ?? false, opened.revision ?? 0)
         // 初始化頁框
         pdfPages.value = Array.from({ length: opened.pages }, () => null)
         highResPages.clear()
@@ -224,8 +226,15 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  function markDirty() { dirty.value = true }
-  function clearDirty() { dirty.value = false }
+  function setDirtyState(next: boolean, nextRevision?: number) {
+    dirty.value = next
+    if (typeof nextRevision === 'number') {
+      revision.value = nextRevision
+    }
+  }
+
+  function markDirty() { setDirtyState(true) }
+  function clearDirty() { setDirtyState(false) }
 
   // 儲存目前文件（若是 PDF 且有變更）。拋出例外代表使用者取消或失敗。
   async function saveCurrentIfNeeded(): Promise<void> {
@@ -244,11 +253,11 @@ export const useMediaStore = defineStore('media', () => {
       const res = await pdfSave({ docId: id, destPath: picked, overwrite: true })
       try { filelist.add(res.path) } catch {}
       descriptor.value = { ...d, path: res.path, pages: res.pages } as any
-      dirty.value = false
+      setDirtyState(res.dirty, res.revision)
     } else {
       const res = await pdfSave({ docId: id, overwrite: true })
       descriptor.value = { ...d, path: res.path, pages: res.pages } as any
-      dirty.value = false
+      setDirtyState(res.dirty, res.revision)
     }
   }
 
@@ -279,7 +288,7 @@ export const useMediaStore = defineStore('media', () => {
     })
     if (discard) {
       // 放棄變更：直接清除 dirty
-      dirty.value = false
+      setDirtyState(false, revision.value)
       return true
     }
     return false
@@ -463,7 +472,7 @@ export const useMediaStore = defineStore('media', () => {
   function clear() {
     selected.value = null
     descriptor.value = null
-    dirty.value = false
+    setDirtyState(false, 0)
     // 釋放 blob URLs（雙快取）
     if (imageObjectUrl.value) {
       URL.revokeObjectURL(imageObjectUrl.value)
@@ -552,6 +561,7 @@ export const useMediaStore = defineStore('media', () => {
     pdfPages,
     docId,
     dirty,
+    revision,
     inflightCount,
     queue,
     pageText,
@@ -581,6 +591,7 @@ export const useMediaStore = defineStore('media', () => {
     getCachedPageText,
     resetPageTextCache,
     clearPageText,
+    setDirtyState,
     markDirty,
     clearDirty,
   }

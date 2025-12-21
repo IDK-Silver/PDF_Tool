@@ -1,5 +1,13 @@
 import { invoke } from '@tauri-apps/api/core'
-import type { MediaDescriptor, PageRender, PageRenderBytesRaw, PdfOpenResult } from './types'
+import type {
+  MediaDescriptor,
+  PageRender,
+  PageRenderBytesRaw,
+  PdfOpenResult,
+  PdfMutationResult,
+  PdfRotationResult,
+  PdfSaveResult,
+} from './types'
 import type { PdfPageSize, PageTextContent } from './types'
 
 export async function analyzeMedia(path: string): Promise<MediaDescriptor> {
@@ -104,15 +112,15 @@ export async function pdfRenderCancel(docId: number, pageIndex: number, minGen: 
 // 舊的以路徑直接刪頁 API 已移除
 
 // New docId-based API for immediate, stateful deletion.
-export async function pdfDeletePagesDoc(opts: { docId: number, indices: number[] }): Promise<{ pages: number }> {
+export async function pdfDeletePagesDoc(opts: { docId: number, indices: number[] }): Promise<PdfMutationResult> {
   const { docId, indices } = opts
-  return invoke<{ pages: number }>('pdf_delete_pages', { docId, indices })
+  return invoke<PdfMutationResult>('pdf_delete_pages', { docId, indices })
 }
 
 // Save current document to path (overwrite when destPath omitted and overwrite=true)
-export async function pdfSave(opts: { docId: number, destPath?: string, overwrite?: boolean }): Promise<{ path: string, pages: number }> {
+export async function pdfSave(opts: { docId: number, destPath?: string, overwrite?: boolean }): Promise<PdfSaveResult> {
   const { docId, destPath, overwrite } = opts
-  return invoke<{ path: string, pages: number }>('pdf_save', { docId, destPath, overwrite })
+  return invoke<PdfSaveResult>('pdf_save', { docId, destPath, overwrite })
 }
 
 export async function pdfExportPageImage(opts: {
@@ -195,22 +203,22 @@ export async function compressPdfSmart(opts: CompressPdfSmartOpts): Promise<{
   return invoke('compress_pdf_smart', { args: opts })
 }
 
-export async function pdfInsertBlank(opts: { docId: number, index: number, widthPt: number, heightPt: number}): Promise<{ pages: number }> {
+export async function pdfInsertBlank(opts: { docId: number, index: number, widthPt: number, heightPt: number}): Promise<PdfMutationResult> {
   const { docId, index, widthPt, heightPt } = opts
-  return invoke<{ pages: number }>('pdf_insert_blank', { docId, index, widthPt, heightPt })
+  return invoke<PdfMutationResult>('pdf_insert_blank', { docId, index, widthPt, heightPt })
 }
 
-export async function pdfRotatePage(opts: { docId: number, index: number, rotateDeg: 0|90|180|270 }): Promise<void> {
+export async function pdfRotatePage(opts: { docId: number, index: number, rotateDeg: 0|90|180|270 }): Promise<PdfRotationResult> {
   const { docId, index, rotateDeg } = opts
-  await invoke('pdf_rotate_page', { docId, index, rotateDeg })
+  return invoke<PdfRotationResult>('pdf_rotate_page', { docId, index, rotateDeg })
 }
 
-export async function pdfRotatePageRelative(opts: { docId: number, index: number, deltaDeg: number }): Promise<number> {
+export async function pdfRotatePageRelative(opts: { docId: number, index: number, deltaDeg: number }): Promise<PdfRotationResult> {
   const { docId, index, deltaDeg } = opts
-  return invoke<number>('pdf_rotate_page_relative', { docId, index, deltaDeg })
+  return invoke<PdfRotationResult>('pdf_rotate_page_relative', { docId, index, deltaDeg })
 }
 
-export async function pdfCopyPage(opts: { srcDocId: number, srcIndex: number, destDocId: number, destIndex: number }): Promise<{ pages: number }> {
+export async function pdfCopyPage(opts: { srcDocId: number, srcIndex: number, destDocId: number, destIndex: number }): Promise<PdfMutationResult> {
   const { srcDocId, srcIndex, destDocId, destIndex } = opts
-  return invoke<{ pages: number }>('pdf_copy_page', { srcDocId, srcIndex, destDocId, destIndex } as any)
+  return invoke<PdfMutationResult>('pdf_copy_page', { srcDocId, srcIndex, destDocId, destIndex } as any)
 }
