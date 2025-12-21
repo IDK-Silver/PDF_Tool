@@ -34,6 +34,7 @@ export const useMediaStore = defineStore('media', () => {
   const settings = useSettingsStore()
   const pdfInflight = new Set<number>()
   const pageGen = ref<Record<number, number>>({})
+  const renderSessionId = ref(0)
   const priorityIndex = ref(0)
   // 雙快取策略：追蹤高解析度頁面用於 LRU 淘汰（動態上限）
   const highResPages = new Set<number>()
@@ -74,6 +75,37 @@ export const useMediaStore = defineStore('media', () => {
         if (idx === 0) pdfFirstPage.value = pdfPages.value[0]
       }
     })
+  }
+
+  function resetRenderPipeline() {
+    renderSessionId.value += 1
+    queue.value = []
+    inflightCount.value = 0
+    pdfInflight.clear()
+    pageGen.value = {}
+    pendingApply.length = 0
+    applyScheduled = false
+    evictCounter = 0
+    priorityIndex.value = 0
+  }
+
+  function releasePdfPages() {
+    try {
+      for (const p of pdfPages.value) {
+        if (p?.contentUrl) URL.revokeObjectURL(p.contentUrl)
+        if (p?.highResUrl) URL.revokeObjectURL(p.highResUrl)
+        if (p) (p as any).rawImageData = undefined
+      }
+    } catch (_) {}
+  }
+
+  function resetPdfState() {
+    releasePdfPages()
+    pdfFirstPage.value = null
+    pdfPages.value = []
+    pageSizesPt.value = {}
+    pageText.value = {}
+    highResPages.clear()
   }
 
   function nextGen(idx: number) {
@@ -131,10 +163,9 @@ export const useMediaStore = defineStore('media', () => {
   async function loadDescriptor(path: string) {
     loading.value = true
     error.value = null
+    resetRenderPipeline()
+    resetPdfState()
     descriptor.value = null
-    pdfFirstPage.value = null
-    pdfPages.value = []
-    pageText.value = {}
     // 切換或重新載入文件時，未儲存變更不再有效（舊 session 會被關閉）
     dirty.value = false
     // 關閉上一份文件 session
@@ -142,14 +173,6 @@ export const useMediaStore = defineStore('media', () => {
       try { await pdfClose(docId.value) } catch(_) {}
       docId.value = null
     }
-    // 釋放舊 PDF blob URLs
-    try {
-      for (const p of pdfPages.value) {
-        if (p?.contentUrl) URL.revokeObjectURL(p.contentUrl)
-        if (p?.highResUrl) URL.revokeObjectURL(p.highResUrl)
-      }
-    } catch (_) {}
-    highResPages.clear()
     // 清除舊的 blob
     if (imageObjectUrl.value) {
       URL.revokeObjectURL(imageObjectUrl.value)
@@ -337,8 +360,9 @@ export const useMediaStore = defineStore('media', () => {
   }
 
   async function processQueue() {
+    const sessionId = renderSessionId.value
     const max = Math.max(1, settings.s.maxConcurrentRenders)
-    while (inflightCount.value < max && queue.value.length > 0) {
+    while (renderSessionId.value === sessionId && inflightCount.value < max && queue.value.length > 0) {
       // Pick the job closest to current priority index (center page)
       let pickAt = 0
       if (queue.value.length > 1) {
@@ -366,6 +390,12 @@ export const useMediaStore = defineStore('media', () => {
       const gen = nextGen(idx)
       pdfRenderPage({ docId: docId.value!, pageIndex: idx, targetWidth: job.targetWidth, dpi: job.dpi, format: job.format, quality: q, gen })
         .then(p => {
+          if (renderSessionId.value !== sessionId) {
+            if (p.contentUrl) {
+              try { URL.revokeObjectURL(p.contentUrl) } catch {}
+            }
+            return
+          }
           // 只在世代一致時套用，避免過期回應覆蓋
           if (pageGen.value[idx] === gen) {
             pendingApply.push({ idx, page: p })
@@ -379,8 +409,13 @@ export const useMediaStore = defineStore('media', () => {
             try { URL.revokeObjectURL(p.contentUrl) } catch {}
           }
         })
-        .catch(e => console.warn('渲染頁面失敗', idx, e))
+        .catch(e => {
+          if (renderSessionId.value === sessionId) {
+            console.warn('渲染頁面失敗', idx, e)
+          }
+        })
         .finally(() => {
+          if (renderSessionId.value !== sessionId) return
           pdfInflight.delete(idx)
           inflightCount.value--
           processQueue()
@@ -434,20 +469,10 @@ export const useMediaStore = defineStore('media', () => {
       URL.revokeObjectURL(imageObjectUrl.value)
       imageObjectUrl.value = null
     }
-    try {
-      for (const p of pdfPages.value) {
-        if (p?.contentUrl) URL.revokeObjectURL(p.contentUrl)
-        if (p?.highResUrl) URL.revokeObjectURL(p.highResUrl)
-        if (p) (p as any).rawImageData = undefined
-      }
-    } catch (_) {}
-    pdfFirstPage.value = null
+    resetRenderPipeline()
+    resetPdfState()
     error.value = null
     loading.value = false
-    pdfPages.value = []
-    pageSizesPt.value = {}
-    pageText.value = {}
-    highResPages.clear()
   }
 
   async function getPageSizePt(index: number): Promise<{ widthPt: number; heightPt: number } | null> {

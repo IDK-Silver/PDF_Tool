@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog'
 import { tempDir, join } from '@tauri-apps/api/path'
 
@@ -8,9 +8,11 @@ import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useExportSettings } from '@/modules/export/settings'
 import { useZoom, type ZoomContext } from '@/modules/media/useZoom'
-import type { PageTextContent } from '@/modules/media/types'
 
 import PdfTextLayer from './PdfTextLayer.vue'
+import PdfSearchPanel from './PdfSearchPanel.vue'
+import PdfPageContextMenu from './PdfPageContextMenu.vue'
+import { usePdfSearch } from './usePdfSearch'
 
 import {
   pdfDeletePagesDoc,
@@ -32,12 +34,6 @@ const settings = useSettingsStore()
 const filelist = useFileListStore()
 const exportSettings = useExportSettings()
 
-type SearchMatch = {
-  pageIndex: number
-  startCharIndex: number
-  endCharIndex: number
-}
-
 const {
   viewMode,
   zoomTarget, // 使用者手動設定的 Zoom (Actual 模式用)
@@ -51,6 +47,8 @@ const {
   setEffectiveMax,
   handleWheelZoom: zoomHandleWheel,
 } = useZoom({ max: 800 })
+
+const scrollRootEl = ref<HTMLElement | null>(null)
 
 // [重構核心] 統一的渲染縮放比例
 // 無論是 Fit 還是 Actual，畫面渲染都依賴這個 computed
@@ -86,23 +84,6 @@ function createZoomContext(): ZoomContext | null {
   }
 }
 
-const searchVisible = ref(false)
-const searchTerm = ref('')
-const searchMatches = ref<SearchMatch[]>([])
-const searchActiveIndex = ref(-1)
-const searchPageMap = ref<Record<number, number[]>>({})
-const searchPageIndex = ref<Record<number, number>>({})
-const searchBusy = ref(false)
-const searchError = ref<string | null>(null)
-const searchInputEl = ref<HTMLInputElement | null>(null)
-let searchDebounceTimer: number | null = null
-let activeSearchToken = 0
-const pageNormalizedCache = new Map<number, { normalized: string; map: number[]; source: PageTextContent }>()
-let pendingScrollAnimation: number | null = null
-const searchAnchor = ref<{ top: number; left: number; width: number } | null>(null)
-const SEARCH_PANEL_MIN_WIDTH = 240
-const SEARCH_PANEL_MAX_WIDTH = 360
-const SEARCH_PANEL_MARGIN = 12
 const isLayoutResizing = ref(false)
 
 function getRenderFormat() {
@@ -150,98 +131,6 @@ function dpiForActual() {
   const cap = Math.max(48, settings.s.actualModeDpiCap || dpi)
   return Math.min(dpi, cap)
 }
-
-function normalizeSearchString(value: string) {
-  return value.replace(/\s+/g, '').toLowerCase()
-}
-
-function buildNormalizedPageData(pageIndex: number, content: PageTextContent | null) {
-  if (!content) return { normalized: '', map: [] as number[] }
-
-  // 使用 toRaw 獲取原始物件，避免 Vue Proxy 問題
-  const rawContent = toRaw(content)
-
-  const cached = pageNormalizedCache.get(pageIndex)
-  if (cached && cached.source === rawContent) return cached
-
-  const normalizedParts: string[] = []
-  const indexMap: number[] = []
-  let charIndex = 0
-
-  // 確保 spans 是原始陣列，避免 Proxy 迭代問題
-  const spans = toRaw(rawContent.spans) || []
-
-  for (const span of spans) {
-    if (!span) continue
-    const raw = span.text || ''
-    if (!raw) continue
-    for (const unit of Array.from(raw)) {
-      if (!/\s/.test(unit)) {
-        normalizedParts.push(unit.toLowerCase())
-        indexMap.push(charIndex)
-      }
-      charIndex++
-    }
-  }
-  const data = { normalized: normalizedParts.join(''), map: indexMap, source: rawContent }
-  pageNormalizedCache.set(pageIndex, data)
-  return data
-}
-
-function setSearchAnchor(force = false) {
-  const rootRect = scrollRootEl.value?.getBoundingClientRect() ?? null
-  if (!rootRect) {
-    if (force) searchAnchor.value = null
-    return
-  }
-  if (!force && searchAnchor.value) return
-
-  const viewportWidth = window.innerWidth || 0
-  const availableViewportWidth = viewportWidth > 0 ? viewportWidth - SEARCH_PANEL_MARGIN * 2 : SEARCH_PANEL_MAX_WIDTH
-  const availableRootWidth = Math.max(120, rootRect.width - SEARCH_PANEL_MARGIN * 2)
-  let panelWidth = Math.min(SEARCH_PANEL_MAX_WIDTH, Math.max(SEARCH_PANEL_MIN_WIDTH, Math.min(availableViewportWidth, availableRootWidth)))
-  const minWidth = Math.min(availableViewportWidth, availableRootWidth)
-  if (minWidth < SEARCH_PANEL_MIN_WIDTH) {
-    panelWidth = Math.max(200, minWidth)
-  }
-
-  const baseLeft = rootRect.left + SEARCH_PANEL_MARGIN
-  const maxLeftWithinRoot = rootRect.right - SEARCH_PANEL_MARGIN - panelWidth
-  let desiredLeft = baseLeft
-  desiredLeft = Math.max(baseLeft, desiredLeft)
-  desiredLeft = Math.min(desiredLeft, Math.max(baseLeft, maxLeftWithinRoot))
-
-  const top = rootRect.top + SEARCH_PANEL_MARGIN
-  searchAnchor.value = { top: Math.max(SEARCH_PANEL_MARGIN, top), left: desiredLeft, width: panelWidth }
-}
-
-const searchPanelStyle = computed(() => {
-  const anchor = searchAnchor.value
-  if (anchor) {
-    return {
-      top: `${anchor.top}px`,
-      left: `${anchor.left}px`,
-      width: `${anchor.width}px`,
-    }
-  }
-  const rootRect = scrollRootEl.value?.getBoundingClientRect() ?? null
-  const viewportWidth = window.innerWidth || 0
-  const availableViewportWidth = viewportWidth > 0 ? viewportWidth - SEARCH_PANEL_MARGIN * 2 : SEARCH_PANEL_MAX_WIDTH
-  const availableRootWidth = rootRect ? Math.max(120, rootRect.width - SEARCH_PANEL_MARGIN * 2) : availableViewportWidth
-  let panelWidth = Math.min(SEARCH_PANEL_MAX_WIDTH, Math.max(SEARCH_PANEL_MIN_WIDTH, Math.min(availableViewportWidth, availableRootWidth)))
-  const minWidth = Math.min(availableViewportWidth, availableRootWidth)
-  if (minWidth < SEARCH_PANEL_MIN_WIDTH) {
-    panelWidth = Math.max(200, minWidth)
-  }
-  const top = rootRect ? Math.max(SEARCH_PANEL_MARGIN, rootRect.top + SEARCH_PANEL_MARGIN) : 72
-  const fallbackLeft = viewportWidth > 0 ? viewportWidth - panelWidth - SEARCH_PANEL_MARGIN : SEARCH_PANEL_MARGIN
-  const left = rootRect ? Math.max(SEARCH_PANEL_MARGIN, rootRect.left + SEARCH_PANEL_MARGIN) : Math.max(SEARCH_PANEL_MARGIN, fallbackLeft)
-  return {
-    top: `${top}px`,
-    left: `${left}px`,
-    width: `${panelWidth}px`,
-  }
-})
 
 async function handleZoomIn() {
   const ctx = createZoomContext()
@@ -487,321 +376,46 @@ watch(
   },
 )
 
-function clearSearchResults() {
-  searchMatches.value = []
-  searchActiveIndex.value = -1
-  searchPageMap.value = {}
-  searchPageIndex.value = {}
+type PdfSearchPanelExpose = {
+  inputEl: { value: HTMLInputElement | null }
+  focusInput: () => void
 }
 
-function closeSearch() {
-  searchVisible.value = false
-  searchTerm.value = ''
-  searchError.value = null
-  clearSearchResults()
-  searchAnchor.value = null
-}
+const searchPanelRef = ref<PdfSearchPanelExpose | null>(null)
+const getSearchInputEl = () => searchPanelRef.value?.inputEl?.value ?? null
+const focusSearchInput = () => searchPanelRef.value?.focusInput()
 
-function openSearch() {
-  setSearchAnchor(true)
-  if (searchVisible.value) {
-    nextTick(() => {
-      const el = searchInputEl.value
-      if (el) {
-        el.focus()
-        el.select()
-      }
-    })
-    return
-  }
-  searchVisible.value = true
-  searchError.value = null
-  clearSearchResults()
-  nextTick(() => {
-    searchInputEl.value?.focus()
-    searchInputEl.value?.select()
-  })
-  scheduleSearch(true)
-}
-
-function toggleSearch() {
-  if (searchVisible.value) {
-    closeSearch()
-  } else {
-    openSearch()
-  }
-}
-
-function scheduleSearch(immediate = false) {
-  if (!searchVisible.value) return
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-    searchDebounceTimer = null
-  }
-  if (immediate) {
-    runSearch()
-    return
-  }
-  searchDebounceTimer = window.setTimeout(() => {
-    searchDebounceTimer = null
-    runSearch()
-  }, 220)
-}
-
-async function runSearch() {
-  const term = normalizeSearchString(searchTerm.value)
-  const token = ++activeSearchToken
-  if (!searchVisible.value) return
-  if (!term) {
-    clearSearchResults()
-    searchError.value = null
-    searchBusy.value = false
-    return
-  }
-  searchBusy.value = true
-  searchError.value = null
-  try {
-    const total = totalPages.value || 0
-    const matches: SearchMatch[] = []
-    const pageMap: Record<number, number[]> = {}
-    for (let pageIndex = 0; pageIndex < total; pageIndex++) {
-      if (token !== activeSearchToken) return
-      const content = await media.getPageTextContent(pageIndex)
-      if (token !== activeSearchToken) return
-      const { normalized, map } = buildNormalizedPageData(pageIndex, content)
-      if (!normalized || !map.length) continue
-      let from = 0
-      while (true) {
-        const found = normalized.indexOf(term, from)
-        if (found === -1) break
-        const last = found + term.length - 1
-        const startChar = map[found]
-        const endChar = map[last]
-        if (typeof startChar === 'number' && typeof endChar === 'number') {
-          matches.push({
-            pageIndex,
-            startCharIndex: Math.min(startChar, endChar),
-            endCharIndex: Math.max(startChar, endChar),
-          })
-        }
-        from = found + 1
-      }
-      if (matches.length) {
-        const indices: number[] = []
-        for (let i = 0; i < matches.length; i++) {
-          if (matches[i].pageIndex === pageIndex) indices.push(i)
-        }
-        if (indices.length) pageMap[pageIndex] = indices
-      }
-    }
-    if (token !== activeSearchToken) return
-    const prevActive = searchActiveIndex.value
-    searchMatches.value = matches
-    searchPageMap.value = pageMap
-    const initialPageIndices: Record<number, number> = {}
-    for (const key of Object.keys(pageMap)) {
-      const page = Number(key)
-      initialPageIndices[page] = 0
-    }
-    let newActive = prevActive >= 0 && prevActive < matches.length ? prevActive : -1
-    const center = centerIndex.value
-    const centerMatches = pageMap[center] || []
-    if (centerMatches.length) {
-      if (centerMatches.includes(newActive)) {
-        initialPageIndices[center] = Math.max(0, centerMatches.indexOf(newActive))
-      } else {
-        newActive = centerMatches[0]
-        initialPageIndices[center] = 0
-      }
-    }
-    searchPageIndex.value = initialPageIndices
-    searchActiveIndex.value = newActive
-    searchError.value = null
-  } finally {
-    if (token === activeSearchToken) {
-      searchBusy.value = false
-    }
-  }
-}
-
-async function focusMatchByIndex(index: number) {
-  if (index < 0) return
-  const match = searchMatches.value[index]
-  if (!match) return
-  searchActiveIndex.value = index
-  if (match.pageIndex in searchPageMap.value) {
-    const indices = searchPageMap.value[match.pageIndex]
-    const local = indices.indexOf(index)
-    if (local >= 0) searchPageIndex.value = { ...searchPageIndex.value, [match.pageIndex]: local }
-  }
-  await scrollToMatch(match)
-}
-
-function ensurePageElement(match: SearchMatch) {
-  const root = scrollRootEl.value
-  if (!root) return { root: null, pageEl: null, charEl: null }
-  const pageEl = root.querySelector(`[data-pdf-page="${match.pageIndex}"]`) as HTMLElement | null
-  const charEl = pageEl?.querySelector(`.text-char[data-char-index="${match.startCharIndex}"]`) as HTMLElement | null
-  return { root, pageEl, charEl }
-}
-
-async function scrollToMatch(match: SearchMatch) {
-  await gotoPage(match.pageIndex + 1)
-  await nextTick()
-  if (pendingScrollAnimation !== null) {
-    cancelAnimationFrame(pendingScrollAnimation)
-    pendingScrollAnimation = null
-  }
-  pendingScrollAnimation = requestAnimationFrame(() => {
-    pendingScrollAnimation = null
-    const { root, pageEl, charEl } = ensurePageElement(match)
-    if (!root || !pageEl) return
-    if (!charEl) {
-      pageEl.scrollIntoView({ block: 'center' })
-      return
-    }
-    const rootRect = root.getBoundingClientRect()
-    const charRect = charEl.getBoundingClientRect()
-    const offsetTop = charRect.top - rootRect.top
-    const targetTop = root.scrollTop + offsetTop - root.clientHeight / 2 + charRect.height
-    root.scrollTo({ top: Math.max(0, targetTop) })
-  })
-}
-
-async function showNextMatch() {
-  if (!searchMatches.value.length) return
-  let next = searchActiveIndex.value
-  if (next < 0) {
-    const perPage = searchPageMap.value[centerIndex.value] || []
-    if (perPage.length) {
-      const local = (searchPageIndex.value[centerIndex.value] ?? 0) + 1
-      const wrappedLocal = local % perPage.length
-      searchPageIndex.value = { ...searchPageIndex.value, [centerIndex.value]: wrappedLocal }
-      next = perPage[wrappedLocal]
-    } else {
-      next = 0
-    }
-  } else {
-    next = (next + 1) % searchMatches.value.length
-  }
-  await focusMatchByIndex(next)
-}
-
-async function showPrevMatch() {
-  if (!searchMatches.value.length) return
-  const total = searchMatches.value.length
-  let prev = searchActiveIndex.value
-  if (prev < 0) {
-    const perPage = searchPageMap.value[centerIndex.value] || []
-    if (perPage.length) {
-      const currentLocal = searchPageIndex.value[centerIndex.value] ?? 0
-      const wrappedLocal = (currentLocal - 1 + perPage.length) % perPage.length
-      searchPageIndex.value = { ...searchPageIndex.value, [centerIndex.value]: wrappedLocal }
-      prev = perPage[wrappedLocal]
-    } else {
-      prev = total - 1
-    }
-  } else {
-    prev = (prev - 1 + total) % total
-  }
-  await focusMatchByIndex(prev)
-}
-
-function isEditableElement(el: EventTarget | null) {
-  if (!(el instanceof HTMLElement)) return false
-  const tag = el.tagName
-  const editable = el.isContentEditable
-  return editable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-}
-
-function onGlobalKeyDown(e: KeyboardEvent) {
-  const key = e.key?.toLowerCase()
-  if ((e.ctrlKey || e.metaKey) && key === 'f') {
-    if (isEditableElement(e.target) && e.target !== searchInputEl.value) return
-    e.preventDefault()
-    toggleSearch()
-    return
-  }
-  if (!searchVisible.value) return
-  if (key === 'escape') {
-    e.preventDefault()
-    closeSearch()
-    return
-  }
-  if (key === 'enter') {
-    if (isEditableElement(e.target) && e.target !== searchInputEl.value) return
-    e.preventDefault()
-    if (e.shiftKey) showPrevMatch()
-    else showNextMatch()
-  }
-}
-
-function handleWindowResize() {
-  if (!searchVisible.value) return
-  setSearchAnchor(true)
-}
-
-const pageHighlightMap = computed(() => {
-  const map = new Map<number, Array<{ start: number; end: number; active?: boolean }>>()
-  const matches = searchMatches.value
-  const active = searchActiveIndex.value
-  for (let i = 0; i < matches.length; i++) {
-    const match = matches[i]
-    const list = map.get(match.pageIndex) || []
-    list.push({
-      start: match.startCharIndex,
-      end: match.endCharIndex,
-      active: i === active,
-    })
-    map.set(match.pageIndex, list)
-  }
-  return map
-})
-
-function getPageHighlightRanges(idx: number) {
-  return pageHighlightMap.value.get(idx) || []
-}
-
-const searchSummary = computed(() => {
-  const term = searchTerm.value.trim()
-  const total = searchMatches.value.length
-  if (!term || total <= 0) return '0 / 0'
-  if (searchActiveIndex.value >= 0) return `${searchActiveIndex.value + 1} / ${total}`
-  const center = centerIndex.value
-  const perPage = searchPageMap.value[center]
-  if (perPage && perPage.length) {
-    const localIdx = Math.max(0, Math.min(perPage.length - 1, searchPageIndex.value[center] ?? 0))
-    const globalIdx = perPage[localIdx]
-    if (typeof globalIdx === 'number') return `${globalIdx + 1} / ${total}`
-  }
-  return `0 / ${total}`
+const {
+  searchVisible,
+  searchTerm,
+  searchMatches,
+  searchBusy,
+  searchError,
+  searchSummary,
+  searchPanelStyle,
+  openSearch,
+  closeSearch,
+  toggleSearch,
+  showNextMatch,
+  showPrevMatch,
+  onGlobalKeyDown,
+  handleWindowResize,
+  getPageHighlightRanges,
+  setSearchAnchor,
+} = usePdfSearch({
+  media,
+  scrollRootEl,
+  centerIndex,
+  totalPages,
+  gotoPage,
+  getSearchInputEl,
+  focusSearchInput,
 })
 
 watch([() => media.descriptor?.path, currentPage], ([p, cp]) => {
   const d = media.descriptor
   if (!p || !d || d.type !== 'pdf') return
   if (typeof cp === 'number' && cp > 0) filelist.setLastPage(p, cp)
-})
-
-watch(searchTerm, () => {
-  if (!searchVisible.value) return
-  scheduleSearch()
-})
-
-watch(searchVisible, (visible) => {
-  if (!visible) {
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer)
-      searchDebounceTimer = null
-    }
-    clearSearchResults()
-    searchBusy.value = false
-    searchError.value = null
-    searchAnchor.value = null
-  } else {
-    setSearchAnchor(true)
-    scheduleSearch(true)
-  }
 })
 
 watch(docId, async () => {
@@ -813,8 +427,6 @@ watch(docId, async () => {
 watch(
   () => media.descriptor?.path,
   () => {
-    pageNormalizedCache.clear()
-    closeSearch()
     lastSelection.value = null
   },
 )
@@ -826,21 +438,8 @@ const menu = ref<{ open: boolean; x: number; y: number; pageIndex: number; above
   pageIndex: -1,
   aboveHalf: true,
 })
-const exportMenu = ref<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
-let exportCloseTimer: number | null = null
-function scheduleExportClose(delay = 150) {
-  if (exportCloseTimer) clearTimeout(exportCloseTimer)
-  exportCloseTimer = window.setTimeout(() => {
-    exportMenu.value.open = false
-  }, delay)
-}
-function cancelExportClose() {
-  if (exportCloseTimer) {
-    clearTimeout(exportCloseTimer)
-    exportCloseTimer = null
-  }
-}
 function onPageContextMenu(idx: number, e: MouseEvent) {
+  closeMenu()
   const target = (e.currentTarget as HTMLElement) || (e.target as HTMLElement)
   const rect = target?.getBoundingClientRect()
   const aboveHalf = rect ? e.clientY < rect.top + rect.height / 2 : true
@@ -863,12 +462,10 @@ function onPageContextMenu(idx: number, e: MouseEvent) {
   y = Math.max(12, y)
 
   menu.value = { open: true, x, y, pageIndex: idx, aboveHalf }
-  exportMenu.value.open = false
 }
 
 function closeMenu() {
   menu.value.open = false
-  exportMenu.value.open = false
 }
 function onGlobalClick(e: MouseEvent) {
   const target = e.target as HTMLElement
@@ -910,6 +507,7 @@ async function deletePageFromMenu(pageIndex: number) {
   const oldDescriptor = { ...d }
   const oldSizes: Record<number, { widthPt: number; heightPt: number }> = { ...media.pageSizesPt }
   const oldCenter = centerIndex.value
+  const oldDirty = media.dirty
   try {
     media.pdfPages.splice(pageIndex, 1)
     const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
@@ -942,6 +540,8 @@ async function deletePageFromMenu(pageIndex: number) {
     media.pageSizesPt = oldSizes as any
     media.descriptor = oldDescriptor as any
     centerIndex.value = oldCenter
+    if (oldDirty) media.markDirty()
+    else media.clearDirty()
     alert(e?.message || String(e))
   }
 }
@@ -1036,6 +636,7 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
   const oldDescriptor = { ...d }
   const oldSizes: Record<number, { widthPt: number; heightPt: number }> = { ...media.pageSizesPt }
   const oldCenter = centerIndex.value
+  const oldDirty = media.dirty
   try {
     media.pdfPages.splice(insertIndex, 0, null)
     const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
@@ -1061,6 +662,8 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
     media.pageSizesPt = oldSizes as any
     media.descriptor = oldDescriptor as any
     centerIndex.value = oldCenter
+    if (oldDirty) media.markDirty()
+    else media.clearDirty()
     alert(e?.message || String(e))
   }
 }
@@ -1095,6 +698,7 @@ async function insertFileAt(pageIndex: number, before: boolean) {
   const oldDescriptor = { ...d }
   const oldSizes: Record<number, { widthPt: number; heightPt: number }> = { ...media.pageSizesPt }
   const oldCenter = centerIndex.value
+  const oldDirty = media.dirty
 
   let inserted = 0
   let finalPages = d.pages || 0
@@ -1167,6 +771,8 @@ async function insertFileAt(pageIndex: number, before: boolean) {
     media.pageSizesPt = oldSizes as any
     media.descriptor = oldDescriptor as any
     centerIndex.value = oldCenter
+    if (oldDirty) media.markDirty()
+    else media.clearDirty()
     alert(e?.message || String(e))
   }
 }
@@ -1176,6 +782,7 @@ async function rotatePlus90(pageIndex: number) {
   const d = media.descriptor
   const id = media.docId
   if (!d || d.type !== 'pdf' || id == null) return
+  const oldDirty = media.dirty
   try {
     const delta = (shiftDown.value ? -90 : 90)
     await pdfRotatePageRelative({ docId: id, index: pageIndex, deltaDeg: delta })
@@ -1183,10 +790,34 @@ async function rotatePlus90(pageIndex: number) {
     try {
       media.cancelInflight(pageIndex)
     } catch { }
+
+    // 旋轉後需要清除並重新獲取頁面尺寸，因為寬高會交換
+    const oldSize = media.pageSizesPt[pageIndex]
+    if (oldSize) {
+      // 旋轉 90 度或 -90 度時，寬高交換
+      media.pageSizesPt[pageIndex] = {
+        widthPt: oldSize.heightPt,
+        heightPt: oldSize.widthPt,
+      }
+    } else {
+      // 如果沒有快取，刪除該條目以強制重新獲取
+      delete media.pageSizesPt[pageIndex]
+    }
+
     media.pdfPages[pageIndex] = null
     pendingIdx.add(pageIndex)
+
+    // 等待 Vue 更新後再觸發重新渲染
+    await nextTick()
     scheduleHiResRerender(0)
+
+    // 在 Fit 模式下需要重新計算 FitPercent
+    if (viewMode.value === 'fit') {
+      updateFitPercent()
+    }
   } catch (e: any) {
+    if (oldDirty) media.markDirty()
+    else media.clearDirty()
     alert(e?.message || String(e))
   }
 }
@@ -1230,7 +861,6 @@ function shouldRenderPageContent(idx: number) {
 }
 
 let resizeObs: ResizeObserver | null = null
-const scrollRootEl = ref<HTMLElement | null>(null)
 let rafScheduled = false
 const pendingIdx = new Set<number>()
 const containerW = ref(0)
@@ -1623,14 +1253,6 @@ onBeforeUnmount(() => {
     clearTimeout(viewModeResizeTimer)
     viewModeResizeTimer = null
   }
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer)
-    searchDebounceTimer = null
-  }
-  if (pendingScrollAnimation !== null) {
-    cancelAnimationFrame(pendingScrollAnimation)
-    pendingScrollAnimation = null
-  }
   window.removeEventListener('keydown', onGlobalKeyDown, { capture: true })
   window.removeEventListener('resize', handleWindowResize)
   scrollRootEl.value?.removeEventListener('scroll', onScroll)
@@ -1948,103 +1570,28 @@ defineExpose({
         </div>
       </div>
     </div>
-    <teleport to="body">
-      <div
-        v-if="searchVisible"
-        class="fixed z-[2100] flex items-center gap-2 bg-card/95 backdrop-blur border border-border rounded-md shadow px-3 py-2 text-sm"
-        role="search"
-        :style="searchPanelStyle"
-      >
-        <input
-          ref="searchInputEl"
-          v-model="searchTerm"
-          type="text"
-          placeholder="搜尋..."
-          class="px-2 py-1 rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary/60 bg-background text-foreground flex-1 min-w-0"
-          style="width: 0;"
-        />
-        <span class="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 min-w-[48px] text-center">
-          <template v-if="searchBusy">搜尋中</template>
-          <template v-else-if="searchError">無</template>
-          <template v-else>{{ searchSummary }}</template>
-        </span>
-        <div class="flex items-center gap-1 flex-shrink-0">
-          <button
-            class="px-2 py-1 rounded border border-transparent hover:bg-hover disabled:opacity-40 flex-shrink-0"
-            type="button"
-            :disabled="!searchMatches.length || searchBusy"
-            @click="showPrevMatch"
-            title="上一個 (Shift+Enter)"
-          >
-            ↑
-          </button>
-          <button
-            class="px-2 py-1 rounded border border-transparent hover:bg-hover disabled:opacity-40 flex-shrink-0"
-            type="button"
-            :disabled="!searchMatches.length || searchBusy"
-            @click="showNextMatch"
-            title="下一個 (Enter)"
-          >
-            ↓
-          </button>
-        </div>
-        <button
-          class="px-2 py-1 rounded border border-transparent hover:bg-hover text-muted-foreground flex-shrink-0"
-          type="button"
-          @click="closeSearch"
-          title="關閉 (Esc)"
-        >
-          ✕
-        </button>
-      </div>
-    </teleport>
-    <teleport to="body">
-      <div
-        v-if="menu.open"
-        data-context-menu
-        class="fixed z-[2000] bg-card border border-border rounded shadow text-sm w-max max-w-[calc(100vw-24px)]"
-        :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
-      >
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="deletePageFromMenu(menu.pageIndex)">
-          刪除此頁
-        </button>
-        <div class="border-t border-border my-1"></div>
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="insertBlankQuick(menu.pageIndex)">
-          插入空白頁（{{ (menu.aboveHalf !== shiftDown) ? '之前' : '之後' }}）
-        </button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="insertFileQuick(menu.pageIndex)">
-          插入檔案（{{ (menu.aboveHalf !== shiftDown) ? '之前' : '之後' }}）
-        </button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="rotatePlus90(menu.pageIndex)">
-          旋轉 {{ shiftDown ? '-90°' : '+90°' }}
-        </button>
-        <div class="border-t border-border my-1"></div>
-        <button
-          class="w-full text-left px-3 py-2 hover:bg-hover flex items-center justify-between gap-4 whitespace-nowrap overflow-hidden"
-          @pointerenter="(ev: any) => { cancelExportClose(); const r = (ev.currentTarget as HTMLElement).getBoundingClientRect(); exportMenu.x = Math.round(r.right + 2); exportMenu.y = Math.round(r.top); exportMenu.open = true }"
-          @pointerleave="() => scheduleExportClose(180)"
-        >
-          <span class="overflow-hidden text-ellipsis">匯出</span>
-          <span class="opacity-60 flex-shrink-0">▸</span>
-        </button>
-      </div>
-    </teleport>
-    <teleport to="body">
-      <div
-        v-if="exportMenu.open"
-        data-export-submenu
-        class="fixed z-[2010] bg-card border border-border rounded shadow text-sm w-max max-w-[calc(100vw-24px)]"
-        :style="{ left: exportMenu.x + 'px', top: exportMenu.y + 'px' }"
-        @pointerenter="cancelExportClose"
-        @pointerleave="() => scheduleExportClose(120)"
-      >
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="exportPageAsImage(menu.pageIndex)">
-          圖片…
-        </button>
-        <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="exportPageAsPdf(menu.pageIndex)">
-          PDF…
-        </button>
-      </div>
-    </teleport>
+    <PdfSearchPanel
+      ref="searchPanelRef"
+      v-model="searchTerm"
+      :visible="searchVisible"
+      :busy="searchBusy"
+      :error="searchError"
+      :summary="searchSummary"
+      :has-matches="searchMatches.length > 0"
+      :panel-style="searchPanelStyle"
+      @prev="showPrevMatch"
+      @next="showNextMatch"
+      @close="closeSearch"
+    />
+    <PdfPageContextMenu
+      :menu="menu"
+      :shift-down="shiftDown"
+      @delete="deletePageFromMenu"
+      @insert-blank="insertBlankQuick"
+      @insert-file="insertFileQuick"
+      @rotate="rotatePlus90"
+      @export-image="exportPageAsImage"
+      @export-pdf="exportPageAsPdf"
+    />
   </div>
 </template>
