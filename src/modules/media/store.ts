@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
 import type { MediaDescriptor, PageRender, PageTextContent } from './types'
-import { analyzeMedia, imageRead, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel, pdfSave, pdfGetPageText } from './service'
+import { analyzeMedia, imageRead, pdfRenderPage, pdfOpen, pdfClose, pdfPageSize, pdfRenderCancel, pdfSave, pdfGetPageText, pdfUndo, pdfRedo } from './service'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
@@ -224,6 +224,30 @@ export const useMediaStore = defineStore('media', () => {
       try { await pdfClose(docId.value) } catch (_) {}
       docId.value = null
     }
+  }
+
+  async function undo(): Promise<{ pages: number; dirty: boolean; revision: number } | null> {
+    const d = descriptor.value
+    if (!d || d.type !== 'pdf' || docId.value == null) return null
+    const res = await pdfUndo(docId.value)
+    descriptor.value = { ...d, pages: res.pages } as any
+    resetRenderPipeline()
+    resetPdfState()
+    pdfPages.value = Array.from({ length: res.pages }, () => null)
+    setDirtyState(res.dirty, res.revision)
+    return res
+  }
+
+  async function redo(): Promise<{ pages: number; dirty: boolean; revision: number } | null> {
+    const d = descriptor.value
+    if (!d || d.type !== 'pdf' || docId.value == null) return null
+    const res = await pdfRedo(docId.value)
+    descriptor.value = { ...d, pages: res.pages } as any
+    resetRenderPipeline()
+    resetPdfState()
+    pdfPages.value = Array.from({ length: res.pages }, () => null)
+    setDirtyState(res.dirty, res.revision)
+    return res
   }
 
   function setDirtyState(next: boolean, nextRevision?: number) {
@@ -584,6 +608,8 @@ export const useMediaStore = defineStore('media', () => {
     fallbackLoadImageBlob,
     clear,
     closeDoc,
+    undo,
+    redo,
     pageSizesPt,
     getPageSizePt,
     baseCssWidthAt100,

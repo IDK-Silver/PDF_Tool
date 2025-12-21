@@ -5,7 +5,7 @@ use image::GenericImageView;
 use image::ImageEncoder;
 use log::warn;
 use once_cell::sync::Lazy;
-use pdfium_render::prelude::PdfDocument;
+use pdfium_render::prelude::{PdfDocument, PdfPagePaperSize, PdfPoints};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -1177,6 +1177,7 @@ fn get_pdfium() -> Result<pdfium_render::prelude::Pdfium, MediaError> {
 // 單執行緒 Worker：長駐 Pdfium 與 PdfDocument（避免跨執行緒 Send/Sync 問題）
 static WORKER_TX: Lazy<Mutex<Option<mpsc::Sender<PdfRequest>>>> = Lazy::new(|| Mutex::new(None));
 static NEXT_DOC_ID: AtomicU64 = AtomicU64::new(1);
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -1207,6 +1208,16 @@ struct PdfDocRecord<'a> {
     current_rot: Vec<u16>,
     next_token: u64,
     revision: u64,
+    undo_stack: Vec<HistoryEvent>,
+    redo_stack: Vec<HistoryEvent>,
+}
+
+#[derive(Clone)]
+enum HistoryEvent {
+    Rotate { index: u32, from: u16, to: u16 },
+    InsertBlank { index: u32, count: usize, width_pt: f32, height_pt: f32 },
+    InsertFromPdf { index: u32, count: usize, temp_path: PathBuf },
+    Delete { index: u32, count: usize, temp_path: PathBuf },
 }
 
 #[derive(Clone)]
@@ -1279,6 +1290,319 @@ fn init_tokens_for_doc(doc: &PdfDocument) -> Result<(Vec<u64>, Vec<u16>, u64), M
 fn recompute_dirty(record: &mut PdfDocRecord) {
     record.dirty = record.baseline_tokens != record.current_tokens
         || record.baseline_rot != record.current_rot;
+}
+
+fn temp_pdf_path(prefix: &str) -> PathBuf {
+    let mut p = std::env::temp_dir();
+    let ts = unix_ts_secs();
+    let seq = TEMP_COUNTER.fetch_add(1, Ordering::SeqCst);
+    p.push(format!("{prefix}-{ts}-{seq}.pdf"));
+    p
+}
+
+fn push_undo(record: &mut PdfDocRecord, ev: HistoryEvent) {
+    record.undo_stack.push(ev);
+    record.redo_stack.clear();
+}
+
+fn build_ranges(indices: &[u32]) -> String {
+    let mut ranges: Vec<(u32, u32)> = Vec::new();
+    for &p in indices {
+        if let Some(last) = ranges.last_mut() {
+            if p == last.1 + 1 {
+                last.1 = p;
+                continue;
+            }
+        }
+        ranges.push((p, p));
+    }
+    let mut spec = String::new();
+    for (i, (a, b)) in ranges.iter().enumerate() {
+        if i > 0 {
+            spec.push(',');
+        }
+        if a == b {
+            spec.push_str(&format!("{}", a));
+        } else {
+            spec.push_str(&format!("{}-{}", a, b));
+        }
+    }
+    spec
+}
+
+fn capture_pages_to_temp(
+    pdfium: &pdfium_render::prelude::Pdfium,
+    doc: &PdfDocument,
+    indices: &[u32],
+) -> Result<PathBuf, MediaError> {
+    if indices.is_empty() {
+        return Err(MediaError::new("invalid_input", "缺少頁索引"));
+    }
+    let mut tmp = pdfium.create_new_pdf().map_err(|e| {
+        MediaError::new("io_error", format!("建立暫存 PDF 失敗: {e}"))
+    })?;
+    let spec = build_ranges(indices);
+    tmp.pages_mut()
+        .copy_pages_from_document(doc, &spec, 0)
+        .map_err(|e| MediaError::new("io_error", format!("複製頁面到暫存 PDF 失敗: {e}")))?;
+    let path = temp_pdf_path("undo-pages");
+    tmp.save_to_file(&path)
+        .map_err(|e| MediaError::new("io_error", format!("寫入暫存 PDF 失敗: {e}")))?;
+    Ok(path)
+}
+
+fn delete_indices<'a>(
+    pdfium: &'a pdfium_render::prelude::Pdfium,
+    record: &mut PdfDocRecord<'a>,
+    mut indices: Vec<u32>,
+) -> Result<(), MediaError> {
+    let page_count = record.doc.pages().len();
+    if page_count == 0 {
+        return Err(MediaError::new("invalid_input", "文件沒有任何頁面"));
+    }
+    if indices.is_empty() {
+        return Err(MediaError::new("invalid_input", "缺少要刪除的頁索引"));
+    }
+    indices.sort_unstable();
+    indices.dedup();
+    if let Some(max) = indices.last() {
+        if *max >= page_count as u32 {
+            return Err(MediaError::new(
+                "invalid_input",
+                format!("頁索引超出範圍: {} >= {}", max, page_count),
+            ));
+        }
+    }
+    // 構建保留頁碼 spec（1-based）
+    let mut keep: Vec<u32> = (0..(page_count as u32)).collect();
+    let del: HashSet<u32> = indices.into_iter().collect();
+    keep.retain(|i| !del.contains(i));
+    if keep.is_empty() {
+        return Err(MediaError::new(
+            "invalid_input",
+            "無法刪除所有頁面，至少需保留一頁",
+        ));
+    }
+    let mut pages_1: Vec<u32> = keep.into_iter().map(|i| i + 1).collect();
+    pages_1.sort_unstable();
+    let spec_keep = build_ranges(&pages_1);
+    let mut new_doc = pdfium.create_new_pdf().map_err(|e| {
+        MediaError::new("io_error", format!("建立新 PDF 失敗: {e}"))
+    })?;
+    new_doc
+        .pages_mut()
+        .copy_pages_from_document(&record.doc, &spec_keep, 0)
+        .map_err(|e| MediaError::new("io_error", format!("複製頁面失敗: {e}")))?;
+    // 更新 tokens/rotations（刪除對應位置）
+    let new_len: usize = new_doc.pages().len() as usize;
+    let mut new_tokens: Vec<u64> = Vec::with_capacity(new_len);
+    let mut new_rot: Vec<u16> = Vec::with_capacity(new_len);
+    for (idx, (tok, rot)) in record
+        .current_tokens
+        .iter()
+        .copied()
+        .zip(record.current_rot.iter().copied())
+        .enumerate()
+    {
+        if !del.contains(&(idx as u32)) {
+            new_tokens.push(tok);
+            new_rot.push(rot);
+        }
+    }
+    record.doc = new_doc;
+    record.current_tokens = new_tokens;
+    record.current_rot = new_rot;
+    record.file_hash = None;
+    record.file_size = None;
+    record.revision = record.revision.saturating_add(1);
+    recompute_dirty(record);
+    Ok(())
+}
+
+fn insert_blank_at(
+    record: &mut PdfDocRecord,
+    index: u32,
+    width_pt: f32,
+    height_pt: f32,
+) -> Result<(), MediaError> {
+    let size = PdfPagePaperSize::Custom(PdfPoints::new(width_pt), PdfPoints::new(height_pt));
+    let idx_u16: u16 = index
+        .try_into()
+        .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+    {
+        let pages = record.doc.pages_mut();
+        pages.create_page_at_index(size, idx_u16).map_err(|e| {
+            MediaError::new("io_error", format!("插入空白頁失敗: {e}"))
+        })?;
+    }
+    let insert_at: usize = index
+        .try_into()
+        .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+    if insert_at > record.current_tokens.len() || insert_at > record.current_rot.len() {
+        return Err(MediaError::new(
+            "invalid_input",
+            "內部頁序列長度不一致，無法插入",
+        ));
+    }
+    record
+        .current_tokens
+        .insert(insert_at, record.next_token);
+    record.next_token = record.next_token.saturating_add(1);
+    record.current_rot.insert(insert_at, 0);
+    record.file_hash = None;
+    record.file_size = None;
+    record.revision = record.revision.saturating_add(1);
+    recompute_dirty(record);
+    Ok(())
+}
+
+fn insert_from_pdf_path(
+    pdfium: &pdfium_render::prelude::Pdfium,
+    record: &mut PdfDocRecord,
+    index: u32,
+    path: &Path,
+) -> Result<usize, MediaError> {
+    let idx_dest_u16: u16 = index
+        .try_into()
+        .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+    let insert_at: usize = index
+        .try_into()
+        .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+    if insert_at > record.current_tokens.len() || insert_at > record.current_rot.len() {
+        return Err(MediaError::new(
+            "invalid_input",
+            "內部頁序列長度不一致，無法插入",
+        ));
+    }
+    let src_doc = pdfium.load_pdf_from_file(path, None).map_err(|e| {
+        MediaError::new(
+            "io_error",
+            format!("載入暫存 PDF 失敗以便插入：{e}"),
+        )
+    })?;
+    let page_count: usize = src_doc.pages().len() as usize;
+    let spec = if page_count == 1 {
+        "1".to_string()
+    } else {
+        format!("1-{}", page_count)
+    };
+    record
+        .doc
+        .pages_mut()
+        .copy_pages_from_document(&src_doc, &spec, idx_dest_u16)
+        .map_err(|e| MediaError::new("io_error", format!("插入頁面失敗: {e}")))?;
+
+    // 插入 tokens 與 rotations
+    let mut rotations: Vec<u16> = Vec::with_capacity(page_count);
+    for i in 0..page_count {
+        let idx_u16: u16 = (i as u32)
+            .try_into()
+            .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", i)))?;
+        rotations.push(page_rotation_deg(&src_doc, idx_u16)?);
+    }
+    for i in 0..page_count {
+        record
+            .current_tokens
+            .insert(insert_at + i, record.next_token);
+        record.next_token = record.next_token.saturating_add(1);
+        record
+            .current_rot
+            .insert(insert_at + i, *rotations.get(i).unwrap_or(&0));
+    }
+    record.file_hash = None;
+    record.file_size = None;
+    record.revision = record.revision.saturating_add(1);
+    recompute_dirty(record);
+    Ok(page_count)
+}
+
+fn apply_history_event<'a>(
+    pdfium: &'a pdfium_render::prelude::Pdfium,
+    record: &mut PdfDocRecord<'a>,
+    ev: &HistoryEvent,
+    forward: bool,
+) -> Result<(), MediaError> {
+    match ev {
+        HistoryEvent::Rotate { index, from, to } => {
+            let target = if forward { *to } else { *from };
+            let rot = match target {
+                0 => pdfium_render::prelude::PdfPageRenderRotation::None,
+                90 => pdfium_render::prelude::PdfPageRenderRotation::Degrees90,
+                180 => pdfium_render::prelude::PdfPageRenderRotation::Degrees180,
+                270 => pdfium_render::prelude::PdfPageRenderRotation::Degrees270,
+                _ => pdfium_render::prelude::PdfPageRenderRotation::None,
+            };
+            let idx_u16: u16 = (*index)
+                .try_into()
+                .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+            let idx_usize: usize = (*index)
+                .try_into()
+                .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+            {
+                let mut page = record.doc.pages_mut().get(idx_u16).map_err(|_| {
+                    MediaError::new("not_found", format!("頁索引不存在: {}", index))
+                })?;
+                page.set_rotation(rot);
+            }
+            if idx_usize >= record.current_rot.len() {
+                return Err(MediaError::new(
+                    "invalid_input",
+                    "內部旋轉序列長度不一致，無法更新",
+                ));
+            }
+            record.current_rot[idx_usize] = target;
+            record.file_hash = None;
+            record.file_size = None;
+            record.revision = record.revision.saturating_add(1);
+            recompute_dirty(record);
+            Ok(())
+        }
+        HistoryEvent::InsertBlank {
+            index,
+            count,
+            width_pt,
+            height_pt,
+        } => {
+            if forward {
+                for i in 0..*count {
+                    insert_blank_at(record, index + i as u32, *width_pt, *height_pt)?;
+                }
+            } else {
+                let start = *index;
+                let inds: Vec<u32> = (start..start + (*count as u32)).collect();
+                delete_indices(pdfium, record, inds)?;
+            }
+            Ok(())
+        }
+        HistoryEvent::InsertFromPdf {
+            index,
+            count,
+            temp_path,
+        } => {
+            if forward {
+                insert_from_pdf_path(pdfium, record, *index, temp_path)?;
+            } else {
+                let start = *index;
+                let inds: Vec<u32> = (start..start + (*count as u32)).collect();
+                delete_indices(pdfium, record, inds)?;
+            }
+            Ok(())
+        }
+        HistoryEvent::Delete {
+            index,
+            count,
+            temp_path,
+        } => {
+            if forward {
+                let start = *index;
+                let inds: Vec<u32> = (start..start + (*count as u32)).collect();
+                delete_indices(pdfium, record, inds)?;
+            } else {
+                insert_from_pdf_path(pdfium, record, *index, temp_path)?;
+            }
+            Ok(())
+        }
+    }
 }
 
 fn page_rotation_deg(
@@ -1544,6 +1868,14 @@ enum PdfRequest {
         dest_index: u32,
         reply: mpsc::Sender<Result<MutationResult, MediaError>>,
     },
+    Undo {
+        doc_id: u64,
+        reply: mpsc::Sender<Result<MutationResult, MediaError>>,
+    },
+    Redo {
+        doc_id: u64,
+        reply: mpsc::Sender<Result<MutationResult, MediaError>>,
+    },
     Save {
         doc_id: u64,
         dest_path: Option<String>,
@@ -1608,6 +1940,8 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             current_rot: baseline_rot,
                             next_token,
                             revision: 0,
+                            undo_stack: Vec::new(),
+                            redo_stack: Vec::new(),
                         };
                         docs.insert(id, record);
                         Ok(PdfOpenResult {
@@ -1752,36 +2086,16 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let doc = docs.get_mut(&doc_id).ok_or_else(|| {
                             MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
                         })?;
-                        let size = PdfPagePaperSize::Custom(
-                            PdfPoints::new(width_pt),
-                            PdfPoints::new(height_pt),
+                        insert_blank_at(doc, index, width_pt, height_pt)?;
+                        push_undo(
+                            doc,
+                            HistoryEvent::InsertBlank {
+                                index,
+                                count: 1,
+                                width_pt,
+                                height_pt,
+                            },
                         );
-                        let idx_u16: u16 = index.try_into().map_err(|_| {
-                            MediaError::new("invalid_input", format!("頁索引過大: {}", index))
-                        })?;
-                        {
-                            let pages = doc.doc.pages_mut();
-                            pages.create_page_at_index(size, idx_u16).map_err(|e| {
-                                MediaError::new("io_error", format!("插入空白頁失敗: {e}"))
-                            })?;
-                        }
-                        let insert_at: usize = index.try_into().map_err(|_| {
-                            MediaError::new("invalid_input", format!("頁索引過大: {}", index))
-                        })?;
-                        if insert_at > doc.current_tokens.len() || insert_at > doc.current_rot.len()
-                        {
-                            return Err(MediaError::new(
-                                "invalid_input",
-                                "內部頁序列長度不一致，無法插入",
-                            ));
-                        }
-                        doc.current_tokens.insert(insert_at, doc.next_token);
-                        doc.next_token = doc.next_token.saturating_add(1);
-                        doc.current_rot.insert(insert_at, 0);
-                        doc.file_hash = None;
-                        doc.file_size = None;
-                        doc.revision = doc.revision.saturating_add(1);
-                        recompute_dirty(doc);
                         Ok(make_mutation_result(doc))
                     })();
                     let _ = reply.send(res);
@@ -1792,8 +2106,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                     reply,
                 }) => {
                     let res = (|| -> Result<MutationResult, MediaError> {
-                        // 取出文件所有權以避免與 HashMap 的借用衝突
-                        let mut record = docs.remove(&doc_id).ok_or_else(|| {
+                        let record = docs.get_mut(&doc_id).ok_or_else(|| {
                             MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
                         })?;
                         let page_count = record.doc.pages().len();
@@ -1813,77 +2126,21 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                 ));
                             }
                         }
-                        // 構建保留頁碼 spec（1-based, e.g. "1,3,5-7"）
-                        let mut keep: Vec<u32> = (0..(page_count as u32)).collect();
-                        let del: HashSet<u32> = indices.into_iter().collect();
-                        keep.retain(|i| !del.contains(i));
-                        if keep.is_empty() {
-                            return Err(MediaError::new(
-                                "invalid_input",
-                                "無法刪除所有頁面，至少需保留一頁",
-                            ));
-                        }
-                        let mut pages_1: Vec<u32> = keep.into_iter().map(|i| i + 1).collect();
-                        pages_1.sort_unstable();
-                        let mut ranges: Vec<(u32, u32)> = Vec::new();
-                        for p in pages_1 {
-                            if let Some(last) = ranges.last_mut() {
-                                if p == last.1 + 1 {
-                                    last.1 = p;
-                                    continue;
-                                }
-                            }
-                            ranges.push((p, p));
-                        }
-                        let mut spec = String::new();
-                        for (i, (a, b)) in ranges.iter().enumerate() {
-                            if i > 0 {
-                                spec.push(',');
-                            }
-                            if a == b {
-                                spec.push_str(&format!("{}", a));
-                            } else {
-                                spec.push_str(&format!("{}-{}", a, b));
-                            }
-                        }
-                        let mut new_doc = pdfium.create_new_pdf().map_err(|e| {
-                            MediaError::new("io_error", format!("建立新 PDF 失敗: {e}"))
-                        })?;
-                        new_doc
-                            .pages_mut()
-                            .copy_pages_from_document(&record.doc, &spec, 0)
-                            .map_err(|e| {
-                                MediaError::new("io_error", format!("複製頁面失敗: {e}"))
-                            })?;
-                        let pages_after = new_doc.pages().len() as usize;
-                        record.doc = new_doc;
-                        // 重新建構 page token/rotation，移除被刪除的索引
-                        let mut new_tokens: Vec<u64> = Vec::with_capacity(pages_after);
-                        let mut new_rot: Vec<u16> = Vec::with_capacity(pages_after);
-                        for (idx, (tok, rot)) in record
-                            .current_tokens
-                            .iter()
-                            .copied()
-                            .zip(record.current_rot.iter().copied())
-                            .enumerate()
-                        {
-                            if !del.contains(&(idx as u32)) {
-                                new_tokens.push(tok);
-                                new_rot.push(rot);
-                            }
-                        }
-                        record.current_tokens = new_tokens;
-                        record.current_rot = new_rot;
-                        record.file_hash = None;
-                        record.file_size = None;
-                        record.revision = record.revision.saturating_add(1);
-                        recompute_dirty(&mut record);
-                        // 替換文件
-                        docs.insert(doc_id, record);
-                        let doc_ref = docs.get(&doc_id).ok_or_else(|| {
-                            MediaError::new("not_found", "刪除後無法讀取文件狀態")
-                        })?;
-                        Ok(make_mutation_result(doc_ref))
+                        let first = *indices
+                            .first()
+                            .ok_or_else(|| MediaError::new("invalid_input", "缺少要刪除的頁索引"))?;
+                        let count = indices.len();
+                        let temp_path = capture_pages_to_temp(&pdfium, &record.doc, &indices)?;
+                        delete_indices(&pdfium, record, indices)?;
+                        push_undo(
+                            record,
+                            HistoryEvent::Delete {
+                                index: first,
+                                count,
+                                temp_path,
+                            },
+                        );
+                        Ok(make_mutation_result(record))
                     })();
                     let _ = reply.send(res);
                 }
@@ -1898,6 +2155,13 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let doc = docs.get_mut(&doc_id).ok_or_else(|| {
                             MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
                         })?;
+                        let idx_usize: usize = index.try_into().map_err(|_| {
+                            MediaError::new("invalid_input", format!("頁索引過大: {}", index))
+                        })?;
+                        let prev = *doc
+                            .current_rot
+                            .get(idx_usize)
+                            .ok_or_else(|| MediaError::new("not_found", "頁索引不存在"))?;
                         let rot = match rotate_deg {
                             90 => PdfPageRenderRotation::Degrees90,
                             180 => PdfPageRenderRotation::Degrees180,
@@ -1911,9 +2175,6 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             }
                         };
                         let idx_u16: u16 = index.try_into().map_err(|_| {
-                            MediaError::new("invalid_input", format!("頁索引過大: {}", index))
-                        })?;
-                        let idx_usize: usize = index.try_into().map_err(|_| {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", index))
                         })?;
                         {
@@ -1933,6 +2194,15 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         doc.file_size = None;
                         doc.revision = doc.revision.saturating_add(1);
                         recompute_dirty(doc);
+                        let now = doc.current_rot[idx_usize];
+                        push_undo(
+                            doc,
+                            HistoryEvent::Rotate {
+                                index,
+                                from: prev,
+                                to: now,
+                            },
+                        );
                         Ok(make_rotation_result(doc, rotation_to_degrees(rot)))
                     })();
                     let _ = reply.send(res);
@@ -1954,6 +2224,10 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let idx_usize: usize = index.try_into().map_err(|_| {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", index))
                         })?;
+                        let prev_rot = *doc
+                            .current_rot
+                            .get(idx_usize)
+                            .ok_or_else(|| MediaError::new("not_found", "頁索引不存在"))?;
                         let mut page = doc.doc.pages_mut().get(idx_u16).map_err(|_| {
                             MediaError::new("not_found", format!("頁索引不存在: {}", index))
                         })?;
@@ -1999,6 +2273,14 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             PdfPageRenderRotation::Degrees180 => 180,
                             PdfPageRenderRotation::Degrees270 => 270,
                         };
+                        push_undo(
+                            doc,
+                            HistoryEvent::Rotate {
+                                index,
+                                from: prev_rot,
+                                to: rot_deg,
+                            },
+                        );
                         Ok(make_rotation_result(doc, rot_deg))
                     })();
                     let _ = reply.send(res);
@@ -2068,6 +2350,13 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                 } else {
                                     page_rotation_deg(&record.doc, idx_src_u16)?
                                 };
+                            let temp_path = {
+                                let path = temp_pdf_path("copy-page");
+                                tmp.save_to_file(&path).map_err(|e| {
+                                    MediaError::new("io_error", format!("寫入暫存 PDF 失敗: {e}"))
+                                })?;
+                                path
+                            };
                             if idx_dest_usize > record.current_tokens.len()
                                 || idx_dest_usize > record.current_rot.len()
                             {
@@ -2085,6 +2374,14 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             record.file_size = None;
                             record.revision = record.revision.saturating_add(1);
                             recompute_dirty(&mut record);
+                            push_undo(
+                                &mut record,
+                                HistoryEvent::InsertFromPdf {
+                                    index: dest_index,
+                                    count: 1,
+                                    temp_path,
+                                },
+                            );
                             docs.insert(src_doc_id, record);
                             let doc_ref = docs.get(&src_doc_id).ok_or_else(|| {
                                 MediaError::new("not_found", "複製後無法讀取文件狀態")
@@ -2128,9 +2425,28 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                     format!("頁索引過大: {}", dest_index),
                                 )
                             })?;
+                            // 先將來源頁複製到暫存 PDF，避免跨檔案借用衝突
+                            let mut tmp = pdfium.create_new_pdf().map_err(|e| {
+                                MediaError::new("io_error", format!("建立暫存 PDF 失敗: {e}"))
+                            })?;
+                            {
+                                let src_ref = &src.doc;
+                                tmp.pages_mut()
+                                    .copy_page_from_document(src_ref, idx_src_u16, 0)
+                                    .map_err(|e| {
+                                        MediaError::new("io_error", format!("複製來源頁失敗: {e}"))
+                                    })?;
+                            }
+                            let temp_path = {
+                                let path = temp_pdf_path("copy-page");
+                                tmp.save_to_file(&path).map_err(|e| {
+                                    MediaError::new("io_error", format!("寫入暫存 PDF 失敗: {e}"))
+                                })?;
+                                path
+                            };
                             dest.doc
                                 .pages_mut()
-                                .copy_page_from_document(&src.doc, idx_src_u16, idx_dest_u16)
+                                .copy_pages_from_document(&tmp, "1", idx_dest_u16)
                                 .map_err(|e| {
                                     MediaError::new("io_error", format!("複製頁面失敗: {e}"))
                                 })?;
@@ -2155,12 +2471,48 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             dest.file_size = None;
                             dest.revision = dest.revision.saturating_add(1);
                             recompute_dirty(&mut dest);
+                            push_undo(
+                                &mut dest,
+                                HistoryEvent::InsertFromPdf {
+                                    index: dest_index,
+                                    count: 1,
+                                    temp_path,
+                                },
+                            );
                             docs.insert(dest_doc_id, dest);
                             let doc_ref = docs.get(&dest_doc_id).ok_or_else(|| {
                                 MediaError::new("not_found", "複製後無法讀取目標文件狀態")
                             })?;
                             Ok(make_mutation_result(doc_ref))
                         }
+                    })();
+                    let _ = reply.send(res);
+                }
+                Ok(PdfRequest::Undo { doc_id, reply }) => {
+                    let res = (|| -> Result<MutationResult, MediaError> {
+                        let doc = docs.get_mut(&doc_id).ok_or_else(|| {
+                            MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
+                        })?;
+                        let ev = doc.undo_stack.pop().ok_or_else(|| {
+                            MediaError::new("invalid_input", "沒有可復原的動作")
+                        })?;
+                        apply_history_event(&pdfium, doc, &ev, false)?;
+                        doc.redo_stack.push(ev);
+                        Ok(make_mutation_result(doc))
+                    })();
+                    let _ = reply.send(res);
+                }
+                Ok(PdfRequest::Redo { doc_id, reply }) => {
+                    let res = (|| -> Result<MutationResult, MediaError> {
+                        let doc = docs.get_mut(&doc_id).ok_or_else(|| {
+                            MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
+                        })?;
+                        let ev = doc.redo_stack.pop().ok_or_else(|| {
+                            MediaError::new("invalid_input", "沒有可重做的動作")
+                        })?;
+                        apply_history_event(&pdfium, doc, &ev, true)?;
+                        doc.undo_stack.push(ev);
+                        Ok(make_mutation_result(doc))
                     })();
                     let _ = reply.send(res);
                 }
@@ -2202,6 +2554,8 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         doc.dirty = false;
                         doc.baseline_tokens = doc.current_tokens.clone();
                         doc.baseline_rot = doc.current_rot.clone();
+                        doc.undo_stack.clear();
+                        doc.redo_stack.clear();
                         doc.revision = doc.revision.saturating_add(1);
                         let pages = doc.doc.pages().len() as usize;
                         Ok(SaveResult {
@@ -3183,6 +3537,34 @@ pub fn pdf_copy_page(
         .recv()
         .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))??;
     Ok(res)
+}
+
+#[tauri::command]
+pub fn pdf_undo(doc_id: u64) -> Result<MutationResult, MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    WORKER_TX
+        .lock()
+        .unwrap()
+        .as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::Undo { doc_id, reply: rtx })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    rrx.recv()
+        .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+}
+
+#[tauri::command]
+pub fn pdf_redo(doc_id: u64) -> Result<MutationResult, MediaError> {
+    let (rtx, rrx) = mpsc::channel();
+    WORKER_TX
+        .lock()
+        .unwrap()
+        .as_ref()
+        .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+        .send(PdfRequest::Redo { doc_id, reply: rtx })
+        .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+    rrx.recv()
+        .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
 }
 
 #[tauri::command]

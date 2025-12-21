@@ -412,6 +412,40 @@ const {
   focusSearchInput,
 })
 
+function handleGlobalKeyDown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement | null
+  const tag = target?.tagName
+  const isTextInput = tag === 'INPUT' || tag === 'TEXTAREA' || (target as any)?.isContentEditable
+  const meta = e.metaKey || e.ctrlKey
+  if (meta && e.key.toLowerCase() === 'z') {
+    if (isTextInput) return
+    e.preventDefault()
+    if (e.shiftKey) {
+      media.redo().then((res) => {
+        if (!res) return
+        const pages = res.pages || 0
+        const clamped = Math.max(0, Math.min(centerIndex.value, Math.max(0, pages - 1)))
+        centerIndex.value = clamped
+        displayPageIndex.value = clamped
+        pendingIdx.clear()
+        scheduleHiResRerender(0)
+      }).catch(() => {})
+    } else {
+      media.undo().then((res) => {
+        if (!res) return
+        const pages = res.pages || 0
+        const clamped = Math.max(0, Math.min(centerIndex.value, Math.max(0, pages - 1)))
+        centerIndex.value = clamped
+        displayPageIndex.value = clamped
+        pendingIdx.clear()
+        scheduleHiResRerender(0)
+      }).catch(() => {})
+    }
+    return
+  }
+  onGlobalKeyDown(e)
+}
+
 watch([() => media.descriptor?.path, currentPage], ([p, cp]) => {
   const d = media.descriptor
   if (!p || !d || d.type !== 'pdf') return
@@ -1107,7 +1141,7 @@ function scheduleProcess() {
 
 onMounted(async () => {
   console.log('[PdfViewport] Component mounted, descriptor:', media.descriptor?.path)
-  window.addEventListener('keydown', onGlobalKeyDown, { capture: true })
+  window.addEventListener('keydown', handleGlobalKeyDown, { capture: true })
   window.addEventListener('resize', handleWindowResize)
 
   // 初始計算 Fit
@@ -1259,7 +1293,7 @@ onBeforeUnmount(() => {
     clearTimeout(viewModeResizeTimer)
     viewModeResizeTimer = null
   }
-  window.removeEventListener('keydown', onGlobalKeyDown, { capture: true })
+  window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true })
   window.removeEventListener('resize', handleWindowResize)
   scrollRootEl.value?.removeEventListener('scroll', onScroll)
 

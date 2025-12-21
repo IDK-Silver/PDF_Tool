@@ -189,6 +189,8 @@ pub fn run() {
             media::pdf_delete_pages,
             media::pdf_rotate_page,
             media::pdf_copy_page,
+            media::pdf_undo,
+            media::pdf_redo,
             media::pdf_save,
             media::pdf_export_page_image,
             media::pdf_export_page_pdf,

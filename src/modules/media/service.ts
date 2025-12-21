@@ -222,3 +222,11 @@ export async function pdfCopyPage(opts: { srcDocId: number, srcIndex: number, de
   const { srcDocId, srcIndex, destDocId, destIndex } = opts
   return invoke<PdfMutationResult>('pdf_copy_page', { srcDocId, srcIndex, destDocId, destIndex } as any)
 }
+
+export async function pdfUndo(docId: number): Promise<PdfMutationResult> {
+  return invoke<PdfMutationResult>('pdf_undo', { docId })
+}
+
+export async function pdfRedo(docId: number): Promise<PdfMutationResult> {
+  return invoke<PdfMutationResult>('pdf_redo', { docId })
+}
