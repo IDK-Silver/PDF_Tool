@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useExportSettings } from '@/modules/export/settings'
+
+const exportSettings = useExportSettings()
 
 const props = defineProps<{
   menu: {
@@ -26,6 +29,10 @@ let exportCloseTimer: number | null = null
 
 const insertPositionLabel = computed(() =>
   (props.menu.aboveHalf !== props.shiftDown) ? '之前' : '之後'
+)
+
+const imageFormatLabel = computed(() =>
+  exportSettings.s.imageFormat === 'jpeg' ? 'JPEG 圖片' : 'PNG 圖片'
 )
 
 function scheduleExportClose(delay = 150) {
@@ -121,10 +128,10 @@ onBeforeUnmount(() => {
       @pointerleave="() => scheduleExportClose(120)"
     >
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="handleExportImage">
-        圖片…
+        {{ imageFormatLabel }}
       </button>
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="handleExportPdf">
-        PDF…
+        單頁 PDF
       </button>
     </div>
   </teleport>
