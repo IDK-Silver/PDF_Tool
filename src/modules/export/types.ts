@@ -8,7 +8,7 @@ export interface ExportSettingsState {
 
 export const defaultExportSettings: ExportSettingsState = {
   imageFormat: 'png',
-  imageDpi: 150,
+  imageDpi: 300,
   imageQuality: 85,
 }
 

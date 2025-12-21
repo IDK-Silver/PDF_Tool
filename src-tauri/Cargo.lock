@@ -2181,6 +2181,7 @@ dependencies = [
  "lopdf",
  "once_cell",
  "pdfium-render",
+ "png 0.17.16",
  "reqwest",
  "rusqlite",
  "semver",

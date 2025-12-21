@@ -2539,16 +2539,36 @@ fn render_page_for_document(
         let encoded = encoder.encode(quality);
         buf = encoded.to_vec();
     } else if out_fmt == "png" {
-        use image::ColorType;
-        use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+        // 使用 png crate 直接編碼，以便嵌入 DPI metadata (pHYs chunk)
         let rgba = img.to_rgba8();
+        let mut encoder = png::Encoder::new(Cursor::new(&mut buf), rgba.width(), rgba.height());
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+
+        // 設定壓縮等級
         let comp = if args.quality.unwrap_or(100) <= 50 {
-            CompressionType::Fast
+            png::Compression::Fast
         } else {
-            CompressionType::Default
+            png::Compression::Default
         };
-        let enc = PngEncoder::new_with_quality(Cursor::new(&mut buf), comp, FilterType::NoFilter);
-        enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
+        encoder.set_compression(comp);
+
+        // 嵌入 DPI metadata：pHYs chunk 使用「每公尺像素數」
+        // 轉換公式：pixels_per_meter = dpi * 39.3701 (1 inch = 0.0254 m)
+        if let Some(dpi_val) = args.dpi {
+            let ppm = (dpi_val * 39.3701).round() as u32;
+            encoder.set_pixel_dims(Some(png::PixelDimensions {
+                xppu: ppm,
+                yppu: ppm,
+                unit: png::Unit::Meter,
+            }));
+        }
+
+        let mut writer = encoder
+            .write_header()
+            .map_err(|e| MediaError::new("io_error", format!("編碼 PNG 失敗: {e}")))?;
+        writer
+            .write_image_data(rgba.as_raw())
             .map_err(|e| MediaError::new("io_error", format!("編碼 PNG 失敗: {e}")))?;
     } else if out_fmt == "jpeg" {
         use image::ColorType;
@@ -2558,16 +2578,54 @@ fn render_page_for_document(
         let enc = JpegEncoder::new_with_quality(Cursor::new(&mut buf), args.quality.unwrap_or(82));
         enc.write_image(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
             .map_err(|e| MediaError::new("io_error", format!("編碼 JPEG 失敗: {e}")))?;
+
+        // 嵌入 DPI metadata：修改 JFIF 頭部的密度欄位
+        // JFIF 頭部結構（從 FF D8 開始）：
+        //   [0-1] FF D8 (SOI)
+        //   [2-3] FF E0 (APP0 marker)
+        //   [4-5] 長度
+        //   [6-10] "JFIF\0"
+        //   [11-12] 版本
+        //   [13] 單位 (01 = DPI)
+        //   [14-15] X 密度 (big-endian)
+        //   [16-17] Y 密度 (big-endian)
+        if let Some(dpi_val) = args.dpi {
+            // 確認是 JFIF 格式（檢查 APP0 marker 和 JFIF 標識）
+            if buf.len() >= 18
+                && buf[0..2] == [0xFF, 0xD8]
+                && buf[2..4] == [0xFF, 0xE0]
+                && buf[6..11] == *b"JFIF\0"
+            {
+                let dpi_u16 = (dpi_val.round() as u16).max(1);
+                buf[13] = 0x01; // 單位 = DPI
+                buf[14] = (dpi_u16 >> 8) as u8; // X 密度高位
+                buf[15] = (dpi_u16 & 0xFF) as u8; // X 密度低位
+                buf[16] = (dpi_u16 >> 8) as u8; // Y 密度高位
+                buf[17] = (dpi_u16 & 0xFF) as u8; // Y 密度低位
+            }
+        }
     } else {
-        use image::ColorType;
-        use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+        // Fallback: 使用 png crate 編碼，並嵌入 DPI metadata
         let rgba = img.to_rgba8();
-        let enc = PngEncoder::new_with_quality(
-            Cursor::new(&mut buf),
-            CompressionType::Default,
-            FilterType::NoFilter,
-        );
-        enc.write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
+        let mut encoder = png::Encoder::new(Cursor::new(&mut buf), rgba.width(), rgba.height());
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_compression(png::Compression::Default);
+
+        if let Some(dpi_val) = args.dpi {
+            let ppm = (dpi_val * 39.3701).round() as u32;
+            encoder.set_pixel_dims(Some(png::PixelDimensions {
+                xppu: ppm,
+                yppu: ppm,
+                unit: png::Unit::Meter,
+            }));
+        }
+
+        let mut writer = encoder
+            .write_header()
+            .map_err(|e| MediaError::new("io_error", format!("編碼 PNG 失敗: {e}")))?;
+        writer
+            .write_image_data(rgba.as_raw())
             .map_err(|e| MediaError::new("io_error", format!("編碼 PNG 失敗: {e}")))?;
     }
 
