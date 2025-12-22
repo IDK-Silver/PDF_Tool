@@ -672,6 +672,13 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
   const oldCenter = centerIndex.value
   const oldDirty = media.dirty
   const oldRevision = media.revision
+
+  // [修復] 插入操作期間鎖定佈局，防止 updateVisibleByScroll 在佈局不穩定時運行
+  const root = scrollRootEl.value
+  const savedScrollTop = root?.scrollTop || 0
+  const lockedPage = displayPageIndex.value
+  isLayoutResizing.value = true
+
   try {
     media.pdfPages.splice(insertIndex, 0, null)
     const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
@@ -692,6 +699,19 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
     const tp = res.pages
     for (let i = insertIndex; i < Math.min(tp, insertIndex + 6); i++) pendingIdx.add(i)
     scheduleHiResRerender(0)
+
+    // [修復] 等待佈局穩定後恢復
+    await nextTick()
+    await new Promise<void>(r => requestAnimationFrame(() => r()))
+
+    // 恢復滾動位置，確保用戶視角不變
+    if (root && insertIndex <= lockedPage) {
+      // 如果插入在當前頁面之前，需要調整滾動位置以補償新增頁面的高度
+      const newPageEl = root.querySelector(`[data-pdf-page="${insertIndex}"]`) as HTMLElement | null
+      if (newPageEl) {
+        root.scrollTop = savedScrollTop + newPageEl.offsetHeight + 16 // 16 為頁面間距
+      }
+    }
   } catch (e: any) {
     media.pdfPages = oldPagesArr as any
     media.pageSizesPt = oldSizes as any
@@ -699,6 +719,13 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
     centerIndex.value = oldCenter
     media.setDirtyState(oldDirty, oldRevision)
     alert(e?.message || String(e))
+  } finally {
+    // [修復] 延遲解鎖，確保佈局完全穩定
+    setTimeout(() => {
+      isLayoutResizing.value = false
+      updateVisibleByScroll()
+      centerPageHorizontally(centerIndex.value)
+    }, 100)
   }
 }
 
@@ -735,6 +762,12 @@ async function insertFileAt(pageIndex: number, before: boolean) {
   const oldDirty = media.dirty
   const oldRevision = media.revision
 
+  // [修復] 插入操作期間鎖定佈局，防止 updateVisibleByScroll 在佈局不穩定時運行
+  const root = scrollRootEl.value
+  const savedScrollTop = root?.scrollTop || 0
+  const lockedPage = displayPageIndex.value
+  isLayoutResizing.value = true
+
   let inserted = 0
   let finalPages = d.pages || 0
   let lastMutation: { dirty: boolean; revision: number; pages: number } | null = null
@@ -769,6 +802,11 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       try { await pdfClose(src.docId) } catch { }
     } else {
       inserted = 1
+      // 先轉換圖片為 PDF 並獲取實際尺寸
+      const dir = await tempDir()
+      const tempPath = await join(dir, `insert-${Date.now()}.pdf`)
+      const imgResult = await imageToPdf({ srcPath: path, destPath: tempPath })
+
       media.pdfPages.splice(insertIndex, 0, null)
       const shifted: Record<number, { widthPt: number; heightPt: number }> = {}
       for (const k of Object.keys(oldSizes)) {
@@ -777,7 +815,8 @@ async function insertFileAt(pageIndex: number, before: boolean) {
         if (idx < insertIndex) shifted[idx] = v
         else shifted[idx + inserted] = v
       }
-      shifted[insertIndex] = insertDefaultDimsPt()
+      // 使用圖片的實際尺寸而非預設 A4 尺寸
+      shifted[insertIndex] = { widthPt: imgResult.widthPt, heightPt: imgResult.heightPt }
       media.pageSizesPt = shifted as any
       media.descriptor = { ...d, pages: Math.max(0, (d.pages || 0) + 1) } as any
       if (insertIndex <= oldCenter) centerIndex.value = oldCenter + 1
@@ -785,9 +824,6 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       for (let i = insertIndex; i < insertIndex + Math.min(inserted + 6, (media.descriptor?.pages || 0) - insertIndex); i++) pendingIdx.add(i)
       scheduleHiResRerender(0)
 
-      const dir = await tempDir()
-      const tempPath = await join(dir, `insert-${Date.now()}.pdf`)
-      await imageToPdf({ srcPath: path, destPath: tempPath })
       const src = await pdfOpen(tempPath)
       const res = await pdfCopyPage({ srcDocId: src.docId, srcIndex: 0, destDocId: id, destIndex: insertIndex })
       finalPages = res.pages
@@ -804,6 +840,25 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       if (lastMutation) {
         media.setDirtyState(lastMutation.dirty, lastMutation.revision)
       }
+
+      // [修復] 等待佈局穩定後恢復
+      await nextTick()
+      await new Promise<void>(r => requestAnimationFrame(() => r()))
+
+      // 恢復滾動位置，確保用戶視角不變
+      if (root && insertIndex <= lockedPage) {
+        // 計算新插入頁面的總高度
+        let totalInsertedHeight = 0
+        for (let i = 0; i < inserted; i++) {
+          const newPageEl = root.querySelector(`[data-pdf-page="${insertIndex + i}"]`) as HTMLElement | null
+          if (newPageEl) {
+            totalInsertedHeight += newPageEl.offsetHeight + 16 // 16 為頁面間距
+          }
+        }
+        if (totalInsertedHeight > 0) {
+          root.scrollTop = savedScrollTop + totalInsertedHeight
+        }
+      }
     }
   } catch (e: any) {
     media.pdfPages = oldPagesArr as any
@@ -812,6 +867,13 @@ async function insertFileAt(pageIndex: number, before: boolean) {
     centerIndex.value = oldCenter
     media.setDirtyState(oldDirty, oldRevision)
     alert(e?.message || String(e))
+  } finally {
+    // [修復] 延遲解鎖，確保佈局完全穩定
+    setTimeout(() => {
+      isLayoutResizing.value = false
+      updateVisibleByScroll()
+      centerPageHorizontally(centerIndex.value)
+    }, 100)
   }
 }
 

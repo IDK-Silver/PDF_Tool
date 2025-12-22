@@ -1885,7 +1885,7 @@ enum PdfRequest {
     ImageToPdf {
         src_path: String,
         dest_path: String,
-        reply: mpsc::Sender<Result<String, MediaError>>,
+        reply: mpsc::Sender<Result<ImageToPdfResult, MediaError>>,
     },
     GetPageText {
         doc_id: u64,
@@ -2572,7 +2572,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                     dest_path,
                     reply,
                 }) => {
-                    let res = (|| -> Result<String, MediaError> {
+                    let res = (|| -> Result<ImageToPdfResult, MediaError> {
                         let p = Path::new(&src_path);
                         if !p.exists() {
                             return Err(MediaError::new(
@@ -2590,9 +2590,17 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         })?;
                         let (w_px, h_px) = GenericImageView::dimensions(&dyn_img);
 
-                        // 經驗法則：以 72 DPI 對應 1 px = 1 pt，避免不必要縮放
-                        let width_pt = w_px as f32;
-                        let height_pt = h_px as f32;
+                        // 優先使用圖片內嵌 DPI 計算實體尺寸，缺省則維持 1 px = 1 pt
+                        let dpi = image_dpi_from_bytes(&bytes);
+                        let (width_pt, height_pt) = if let Some(dpi_val) = dpi {
+                            let scale = 72.0 / dpi_val;
+                            (
+                                (w_px as f32 * scale).max(1.0),
+                                (h_px as f32 * scale).max(1.0),
+                            )
+                        } else {
+                            (w_px as f32, h_px as f32)
+                        };
 
                         let mut doc = pdfium.create_new_pdf().map_err(|e| {
                             MediaError::new("io_error", format!("建立 PDF 失敗: {e}"))
@@ -2629,7 +2637,11 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         doc.save_to_file(&dest_path).map_err(|e| {
                             MediaError::new("io_error", format!("寫入 PDF 失敗: {e}"))
                         })?;
-                        Ok(dest_path)
+                        Ok(ImageToPdfResult {
+                            path: dest_path,
+                            width_pt,
+                            height_pt,
+                        })
                     })();
                     let _ = reply.send(res);
                 }
@@ -3399,6 +3411,64 @@ fn render_page_for_document(
     })
 }
 
+fn image_dpi_from_bytes(bytes: &[u8]) -> Option<f32> {
+    const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    if bytes.starts_with(&PNG_SIGNATURE) {
+        return png_dpi_from_bytes(bytes);
+    }
+    if bytes.starts_with(&[0xFF, 0xD8]) {
+        return jpeg_dpi_from_bytes(bytes);
+    }
+    None
+}
+
+fn png_dpi_from_bytes(bytes: &[u8]) -> Option<f32> {
+    let decoder = png::Decoder::new(Cursor::new(bytes));
+    let reader = decoder.read_info().ok()?;
+    let info = reader.info();
+    let dims = info.pixel_dims?;
+    if dims.unit != png::Unit::Meter {
+        return None;
+    }
+    let x = dims.xppu;
+    let y = dims.yppu;
+    let ppm = if x > 0 && y > 0 {
+        (x as f32 + y as f32) / 2.0
+    } else if x > 0 {
+        x as f32
+    } else if y > 0 {
+        y as f32
+    } else {
+        return None;
+    };
+    let dpi = ppm / 39.3701_f32;
+    if dpi.is_finite() && dpi > 0.0 { Some(dpi) } else { None }
+}
+
+fn jpeg_dpi_from_bytes(bytes: &[u8]) -> Option<f32> {
+    if bytes.len() < 18 {
+        return None;
+    }
+    if bytes[0] != 0xFF || bytes[1] != 0xD8 || bytes[2] != 0xFF || bytes[3] != 0xE0 {
+        return None;
+    }
+    if &bytes[6..11] != b"JFIF\0" {
+        return None;
+    }
+    let unit = bytes[13];
+    let x = u16::from_be_bytes([bytes[14], bytes[15]]);
+    let y = u16::from_be_bytes([bytes[16], bytes[17]]);
+    let density = if x > 0 { x } else { y };
+    if density == 0 {
+        return None;
+    }
+    match unit {
+        1 => Some(density as f32),
+        2 => Some(density as f32 * 2.54),
+        _ => None,
+    }
+}
+
 // 通用回傳：僅回報頁數
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -3658,6 +3728,14 @@ pub fn pdf_export_page_pdf(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ImageToPdfResult {
+    pub path: String,
+    pub width_pt: f32,
+    pub height_pt: f32,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImageReadResult {
     pub width: u32,
     pub height: u32,
@@ -3711,9 +3789,9 @@ pub fn image_read(path: String) -> Result<ImageReadResult, MediaError> {
 }
 
 #[tauri::command]
-pub async fn image_to_pdf(src_path: String, dest_path: String) -> Result<String, MediaError> {
+pub async fn image_to_pdf(src_path: String, dest_path: String) -> Result<ImageToPdfResult, MediaError> {
     // 使用 Tokio 阻塞執行緒池，避免阻塞主執行緒
-    tokio::task::spawn_blocking(move || -> Result<String, MediaError> {
+    tokio::task::spawn_blocking(move || -> Result<ImageToPdfResult, MediaError> {
         let (rtx, rrx) = mpsc::channel();
         WORKER_TX
             .lock()

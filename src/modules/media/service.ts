@@ -143,10 +143,9 @@ export async function pdfExportPagePdf(opts: { docId: number, pageIndex: number,
   return invoke<{ path: string }>('pdf_export_page_pdf', { docId, pageIndex, destPath })
 }
 
-export async function imageToPdf(opts: { srcPath: string, destPath: string }): Promise<{ path: string }> {
+export async function imageToPdf(opts: { srcPath: string, destPath: string }): Promise<{ path: string, widthPt: number, heightPt: number }> {
   const { srcPath, destPath } = opts
-  const path = await invoke<string>('image_to_pdf', { srcPath, destPath })
-  return { path }
+  return invoke<{ path: string, widthPt: number, heightPt: number }>('image_to_pdf', { srcPath, destPath })
 }
 
 // ========= Compression Services =========

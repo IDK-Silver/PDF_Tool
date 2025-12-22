@@ -115,10 +115,10 @@ watch(
         // 收到資料後，計算一次樣式並快取起來
         renderedSpans.value = precomputeSpans(result)
         readyEmitted.value = false
-      } else {
-        error.value = '無法取得頁面文字'
       }
+      // 如果 result 為 null，表示頁面沒有文字內容（如純圖片頁面），這是正常情況，不顯示錯誤
     } catch (err) {
+      // 只有真正的 API 錯誤才顯示錯誤訊息
       error.value = err instanceof Error ? err.message : String(err)
     } finally {
       if (token === fetchToken) {
