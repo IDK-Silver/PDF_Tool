@@ -1,5 +1,8 @@
+mod error;
+mod image;
 mod media;
 mod menu;
+mod pdf;
 mod updater;
 
 use std::{
@@ -148,7 +151,7 @@ pub fn run() {
                 .path()
                 .app_cache_dir()
                 .unwrap_or_else(|_| std::env::temp_dir().join("kano_pdf_tool_cache"));
-            crate::media::init_pdf_worker(cache_dir.clone());
+            crate::pdf::init_pdf_worker(cache_dir.clone());
 
             // Initialize updater database
             let data_dir = app
@@ -173,10 +176,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             frontend_ready,
             media::analyze_media,
-            media::image_read,
-            media::compress_image,
-            media::compress_pdf_lossless,
-            media::compress_pdf_smart,
+            image::image_read,
+            image::compress_image,
+            pdf::compress_pdf_lossless,
+            pdf::compress_pdf_smart,
             media::image_to_pdf,
             media::pdf_open,
             media::pdf_close,
