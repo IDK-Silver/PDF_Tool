@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, unref, watchEffect, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, unref, watchEffect, watch, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import type { Ref } from 'vue'
 import MediaToolbar from './parts/MediaToolbar.vue'
 import PdfViewport from './parts/PdfViewport.vue'
 import ImageViewport from './parts/ImageViewport.vue'
+import AnnotationToolbar from './parts/AnnotationToolbar.vue'
 import { useMediaStore } from '@/modules/media/store'
+import { useAnnotationStore } from '@/modules/annotation/store'
+import { embedAllAnnotations } from '@/modules/annotation/service'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
@@ -16,6 +19,7 @@ import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
+const annotationStore = useAnnotationStore()
 
 const saving = ref(false)
 
@@ -116,6 +120,11 @@ watchEffect(() => {
   searchActive.value = !!(vp && unref(vp.searchVisible))
 })
 
+// Reset annotation store when switching files
+watch(() => media.descriptor?.path, () => {
+  annotationStore.reset()
+})
+
 function handleSetFitMode() {
   activeControls.value?.setFitMode()
 }
@@ -210,9 +219,19 @@ onBeforeRouteLeave(async (to) => {
 
 async function onSaveNow() {
   const d = media.descriptor
-  if (!d || d.type !== 'pdf') return
+  const docId = media.docId
+  if (!d || d.type !== 'pdf' || docId == null) return
   try {
     saving.value = true
+
+    // Embed annotations before saving
+    const annotations = annotationStore.getAllAnnotations()
+    if (annotations.length > 0) {
+      await embedAllAnnotations(docId, annotations)
+      // Clear annotations after embedding (they are now part of the PDF)
+      annotationStore.reset()
+    }
+
     await media.saveCurrentIfNeeded()
     const path = media.descriptor?.path
     if (path) {
@@ -283,7 +302,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
+  <div class="h-full flex flex-col relative">
     <div v-if="settings.s.devPerfOverlay"
       class="fixed bottom-2 right-2 z-50 pointer-events-none bg-black/75 text-white text-xs px-2 py-1 rounded shadow">
       <span v-if="isPdf">p {{ currentPage }} / {{ totalPages }} · </span>
@@ -312,6 +331,14 @@ onBeforeUnmount(() => {
       @zoom-out="handleZoomOut"
       @jump-to-page="handleJumpToPage"
     />
+
+    <!-- Annotation Toolbar (floating) -->
+    <div
+      v-if="isPdf"
+      class="absolute top-14 left-1/2 -translate-x-1/2 z-30"
+    >
+      <AnnotationToolbar />
+    </div>
 
     <div class="flex-1 flex min-h-0">
       <div v-if="media.loading" class="p-4">讀取中…</div>

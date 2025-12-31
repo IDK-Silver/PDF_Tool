@@ -122,3 +122,11 @@ pub struct ImageToPdfResult {
     pub width_pt: f32,
     pub height_pt: f32,
 }
+
+/// 添加圖片到頁面的結果
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddImageResult {
+    pub dirty: bool,
+    pub revision: u64,
+}

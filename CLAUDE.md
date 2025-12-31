@@ -1,4 +1,4 @@
-# AGENTS.md
+# CLAUDE.md
 
 本檔定義 LLM Agent 的行為規範與編碼準則。設計、架構、API 相關內容見 `docs/design.md`。
 

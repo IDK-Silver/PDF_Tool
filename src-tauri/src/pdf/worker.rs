@@ -24,9 +24,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::MediaError;
 use crate::image::image_dpi_from_bytes;
 use crate::pdf::{
-    get_pdfium, render_page_for_document, ImageToPdfResult, MutationResult, PageRender,
-    PageTextContent, PdfOpenResult, PdfPageSize, PdfRenderArgs, RotationResult, SaveResult,
-    TextLayerSettings, TextSpan,
+    get_pdfium, render_page_for_document, AddImageResult, ImageToPdfResult, MutationResult,
+    PageRender, PageTextContent, PdfOpenResult, PdfPageSize, PdfRenderArgs, RotationResult,
+    SaveResult, TextLayerSettings, TextSpan,
 };
 
 // ============================================================================
@@ -755,6 +755,17 @@ pub enum PdfRequest {
         page_index: u32,
         settings: TextLayerSettings,
         reply: mpsc::Sender<Result<PageTextContent, MediaError>>,
+    },
+    /// PoC: Add image to existing page
+    AddImageToPage {
+        doc_id: u64,
+        page_index: u32,
+        image_bytes: Vec<u8>,
+        x_pt: f32,
+        y_pt: f32,
+        width_pt: f32,
+        height_pt: f32,
+        reply: mpsc::Sender<Result<AddImageResult, MediaError>>,
     },
 }
 
@@ -1797,6 +1808,74 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         }
 
                         Ok(content)
+                    })();
+                    let _ = reply.send(res);
+                }
+                // PoC: Add image to existing page
+                Ok(PdfRequest::AddImageToPage {
+                    doc_id,
+                    page_index,
+                    image_bytes,
+                    x_pt,
+                    y_pt,
+                    width_pt,
+                    height_pt,
+                    reply,
+                }) => {
+                    let res = (|| -> Result<AddImageResult, MediaError> {
+                        let record = docs.get_mut(&doc_id).ok_or_else(|| {
+                            MediaError::new("not_found", format!("文件 ID 不存在: {}", doc_id))
+                        })?;
+
+                        let page_count = record.doc.pages().len();
+                        if page_index as u16 >= page_count {
+                            return Err(MediaError::new(
+                                "not_found",
+                                format!("頁索引超出範圍: {} >= {}", page_index, page_count),
+                            ));
+                        }
+
+                        // Decode image
+                        let dyn_img = image::load_from_memory(&image_bytes).map_err(|e| {
+                            MediaError::new("decode_error", format!("解碼圖片失敗: {e}"))
+                        })?;
+
+                        // Get mutable page reference
+                        let idx_u16: u16 = page_index.try_into().map_err(|_| {
+                            MediaError::new("invalid_input", format!("頁索引過大: {}", page_index))
+                        })?;
+                        let mut page = record.doc.pages_mut().get(idx_u16).map_err(|_| {
+                            MediaError::new("not_found", format!("頁索引不存在: {}", page_index))
+                        })?;
+
+                        // Create and add image object
+                        {
+                            use pdfium_render::prelude::PdfPoints;
+                            let objects = page.objects_mut();
+                            let _obj = objects
+                                .create_image_object(
+                                    PdfPoints::new(x_pt),
+                                    PdfPoints::new(y_pt),
+                                    &dyn_img,
+                                    Some(PdfPoints::new(width_pt)),
+                                    Some(PdfPoints::new(height_pt)),
+                                )
+                                .map_err(|e| {
+                                    MediaError::new(
+                                        "unsupported",
+                                        format!("建立影像物件失敗: {e}"),
+                                    )
+                                })?;
+                        }
+
+                        // Mark document as dirty
+                        record.dirty = true;
+                        record.revision += 1;
+
+                        Ok(AddImageResult {
+                            dirty: record.dirty,
+                            revision: record.revision,
+                        })
                     })();
                     let _ = reply.send(res);
                 }

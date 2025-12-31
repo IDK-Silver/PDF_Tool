@@ -12,7 +12,9 @@ import { useZoom, type ZoomContext } from '@/modules/media/useZoom'
 import PdfTextLayer from './PdfTextLayer.vue'
 import PdfSearchPanel from './PdfSearchPanel.vue'
 import PdfPageContextMenu from './PdfPageContextMenu.vue'
+import AnnotationLayer from './AnnotationLayer.vue'
 import { usePdfSearch } from './usePdfSearch'
+import { useAnnotationStore } from '@/modules/annotation/store'
 
 import {
   pdfDeletePagesDoc,
@@ -33,6 +35,7 @@ const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
 const exportSettings = useExportSettings()
+const annotationStore = useAnnotationStore()
 
 const {
   viewMode,
@@ -1570,6 +1573,31 @@ function shouldRenderTextLayer(idx: number): boolean {
   return Math.abs(idx - centerIndex.value) <= textLayerRange || idx === displayPageIndex.value
 }
 
+function getAnnotationLayerProps(idx: number) {
+  const sizeInfo = media.pageSizesPt[idx]
+  if (!sizeInfo) return null
+
+  const baseCssWidth = media.baseCssWidthAt100(idx) || sizeInfo.widthPt * (96 / 72)
+  const targetWidth = baseCssWidth * (currentRenderingZoom.value / 100)
+  const displayWidthPx = Math.max(50, targetWidth)
+
+  const aspect = sizeInfo.heightPt / Math.max(sizeInfo.widthPt, 0.001)
+  const displayHeightPx = displayWidthPx * aspect
+
+  return {
+    pageIndex: idx,
+    displayWidth: displayWidthPx,
+    displayHeight: displayHeightPx,
+    pageWidthPt: sizeInfo.widthPt,
+    pageHeightPt: sizeInfo.heightPt,
+  }
+}
+
+function shouldRenderAnnotationLayer(idx: number): boolean {
+  // Render annotation layer if tool is active or there are annotations on this page
+  return annotationStore.activeTool !== null || annotationStore.getPageAnnotations(idx).length > 0
+}
+
 defineExpose({
   viewMode,
   displayZoom,
@@ -1639,6 +1667,12 @@ defineExpose({
                     :ref="(el: any) => drawRawInto(el as HTMLCanvasElement | null, idx)"
                   />
                   <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
+
+                  <!-- Annotation layer (SVG overlay for annotations) -->
+                  <AnnotationLayer
+                    v-if="shouldRenderAnnotationLayer(idx) && getAnnotationLayerProps(idx)"
+                    v-bind="getAnnotationLayerProps(idx)!"
+                  />
 
                   <!-- Text selection layer (只渲染中心附近頁面以優化效能) -->
                   <div

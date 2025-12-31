@@ -8,9 +8,9 @@ pub use crate::error::MediaError;
 
 // Re-export from pdf module
 pub use crate::pdf::{
-    ImageToPdfResult, MutationResult, PageRender, PageTextContent, PdfExportImageResult,
-    PdfExportPdfResult, PdfOpenResult, PdfPageSize, PdfRenderArgs, RotationResult, SaveResult,
-    TextLayerSettings,
+    AddImageResult, ImageToPdfResult, MutationResult, PageRender, PageTextContent,
+    PdfExportImageResult, PdfExportPdfResult, PdfOpenResult, PdfPageSize, PdfRenderArgs,
+    RotationResult, SaveResult, TextLayerSettings,
 };
 use crate::pdf::{PdfRequest, WORKER_TX};
 
@@ -466,6 +466,42 @@ pub async fn image_to_pdf(src_path: String, dest_path: String) -> Result<ImageTo
             .send(PdfRequest::ImageToPdf {
                 src_path,
                 dest_path,
+                reply: rtx,
+            })
+            .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+        rrx.recv()
+            .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+    })
+    .await
+    .map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
+}
+
+/// PoC: Add image to existing PDF page
+#[tauri::command]
+pub async fn pdf_add_image_to_page(
+    doc_id: u64,
+    page_index: u32,
+    image_bytes: Vec<u8>,
+    x_pt: f32,
+    y_pt: f32,
+    width_pt: f32,
+    height_pt: f32,
+) -> Result<AddImageResult, MediaError> {
+    tokio::task::spawn_blocking(move || -> Result<AddImageResult, MediaError> {
+        let (rtx, rrx) = mpsc::channel();
+        WORKER_TX
+            .lock()
+            .unwrap()
+            .as_ref()
+            .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+            .send(PdfRequest::AddImageToPage {
+                doc_id,
+                page_index,
+                image_bytes,
+                x_pt,
+                y_pt,
+                width_pt,
+                height_pt,
                 reply: rtx,
             })
             .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;

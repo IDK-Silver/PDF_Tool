@@ -31,7 +31,15 @@ src/
 src-tauri/
 └── src/
     ├── lib.rs          # Tauri 主入口
-    └── media.rs        # 媒體處理後端
+    ├── media.rs        # 媒體處理命令
+    ├── error.rs        # 錯誤類型
+    ├── image/          # 圖片處理模組
+    └── pdf/            # PDF 處理模組
+        ├── mod.rs
+        ├── worker.rs   # 背景渲染執行緒
+        ├── render.rs   # 頁面渲染
+        ├── compress.rs # 壓縮功能
+        └── types.rs    # 資料結構
 ```
 
 ## 媒體處理模組
@@ -208,10 +216,10 @@ PDF 頁面僅維持高解析度快取（RAW 預設），按需載入並以 LRU �
 
 ## 未來規劃
 
+- [ ] PDF 標註系統（詳見 `docs/annotation-system.md`）
+  - [ ] 插入圖片
+  - [ ] 基本圖形（矩形、圓形、線條）
+  - [ ] 簽名功能（手寫、圖片簽名、簽名管理）
 - [ ] 圖片編輯功能（旋轉、裁切）
 - [ ] 圖片批次處理
-- [ ] 圖片轉 PDF
 - [ ] 更多匯出選項
-##### `imageToPdf({ srcPath, destPath }): Promise<{ path: string }>`
-
-將圖片轉為 PDF 並回傳輸出路徑；ImageView 右鍵選單提供快捷操作。
