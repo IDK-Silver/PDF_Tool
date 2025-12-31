@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, unref, watchEffect, watch, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, unref, watchEffect, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import type { Ref } from 'vue'
 import MediaToolbar from './parts/MediaToolbar.vue'
 import PdfViewport from './parts/PdfViewport.vue'
 import ImageViewport from './parts/ImageViewport.vue'
-import AnnotationToolbar from './parts/AnnotationToolbar.vue'
+// import AnnotationToolbar from './parts/AnnotationToolbar.vue'
 import { useMediaStore } from '@/modules/media/store'
-import { useAnnotationStore } from '@/modules/annotation/store'
-import { embedAllAnnotations } from '@/modules/annotation/service'
+// import { useAnnotationStore } from '@/modules/annotation/store'
+// import { embedAllAnnotations } from '@/modules/annotation/service'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
@@ -19,7 +19,7 @@ import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
-const annotationStore = useAnnotationStore()
+// const annotationStore = useAnnotationStore()
 
 const saving = ref(false)
 
@@ -120,10 +120,10 @@ watchEffect(() => {
   searchActive.value = !!(vp && unref(vp.searchVisible))
 })
 
-// Reset annotation store when switching files
-watch(() => media.descriptor?.path, () => {
-  annotationStore.reset()
-})
+// Reset annotation store when switching files - temporarily disabled
+// watch(() => media.descriptor?.path, () => {
+//   annotationStore.reset()
+// })
 
 function handleSetFitMode() {
   activeControls.value?.setFitMode()
@@ -224,13 +224,13 @@ async function onSaveNow() {
   try {
     saving.value = true
 
-    // Embed annotations before saving
-    const annotations = annotationStore.getAllAnnotations()
-    if (annotations.length > 0) {
-      await embedAllAnnotations(docId, annotations)
-      // Clear annotations after embedding (they are now part of the PDF)
-      annotationStore.reset()
-    }
+    // Embed annotations before saving - temporarily disabled
+    // const annotations = annotationStore.getAllAnnotations()
+    // if (annotations.length > 0) {
+    //   await embedAllAnnotations(docId, annotations)
+    //   // Clear annotations after embedding (they are now part of the PDF)
+    //   annotationStore.reset()
+    // }
 
     await media.saveCurrentIfNeeded()
     const path = media.descriptor?.path
@@ -332,13 +332,13 @@ onBeforeUnmount(() => {
       @jump-to-page="handleJumpToPage"
     />
 
-    <!-- Annotation Toolbar (floating) -->
-    <div
+    <!-- Annotation Toolbar (floating) - temporarily disabled -->
+    <!-- <div
       v-if="isPdf"
       class="absolute top-14 left-1/2 -translate-x-1/2 z-30"
     >
       <AnnotationToolbar />
-    </div>
+    </div> -->
 
     <div class="flex-1 flex min-h-0">
       <div v-if="media.loading" class="p-4">讀取中…</div>
