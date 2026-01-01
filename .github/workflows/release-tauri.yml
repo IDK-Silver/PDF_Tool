@@ -332,7 +332,7 @@ jobs:
           tagName: "v${{ needs.prepare-release.outputs.version }}"
           releaseName: "v${{ needs.prepare-release.outputs.version }} - ${{ needs.prepare-release.outputs.release_title }}"
           releaseBody: ${{ needs.prepare-release.outputs.changelog }}
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.os == 'macos-latest' && '--target universal-apple-darwin' || '' }}
 
