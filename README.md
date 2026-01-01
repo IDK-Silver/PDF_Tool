@@ -1,100 +1,90 @@
 # Kano PDF Tool
 
-一個功能強大的跨平台 PDF 編輯與閱讀工具。
+<p align="center">English | <a href="docs/README.zh-TW.md">繁體中文</a></p>
 
-![Kano PDF Tool](docs/asset/image/app_cover.jpg)
+A powerful cross-platform PDF editing and reading tool.
 
-## 支持這個專案
+| Light Theme | Dark Theme |
+|:-----------:|:----------:|
+| ![Light Theme](docs/asset/image/app_light_theme.jpg) | ![Dark Theme](docs/asset/image/app_dark_theme.jpg) |
 
-如果這個專案對你有幫助，歡迎透過以下方式支持 ☕
+## Features
+
+| PDF Editing | PDF Reading | Image Processing |
+|:-----------:|:-----------:|:----------------:|
+| Delete / Add Pages | High-Quality Rendering | Multi-Format Support |
+| Export Single Page as PDF / Image | Text Selection & Search | Image Compression |
+| PDF Compression | Dark Mode | Image Viewer |
+
+## Support This Project
+
+If you find this project helpful, consider supporting it ☕
 
 ### Buy Me a Coffee
 
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" width="150">](https://www.buymeacoffee.com/yuuf.25)
 
-或掃描 QR Code：
+Or scan the QR Code:
 
 <img src="docs/asset/image/buymeacoffee-qr-code.png" alt="Buy me a coffee QR Code" width="200" />
 
-## 主要功能
+## Installation
 
-### PDF 編輯
-- **頁面管理**：刪除頁面、新增空白頁
-- **單頁匯出**：支援將單一頁面匯出為 PDF 或圖片格式
-- **文件壓縮**：內建 PDF 壓縮功能，減少檔案大小
+### Download
 
-### PDF 閱讀
-- **高品質渲染**：基於 PDFium 引擎，提供精確的 PDF 渲染
-- **文字選擇與搜尋**：支援全文搜尋並高亮顯示搜尋結果
-- **暗色模式**：內建暗色模式支援，並可選擇 PDF 內容顏色反轉功能
+| Platform | Version | Link |
+|----------|---------|------|
+| macOS | Universal Binary<br/>(Intel & Apple Silicon) | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.3/Kano.PDF.Tool_3.10.3_universal.dmg) |
+| Windows | x64 | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.3/Kano.PDF.Tool_3.10.3_x64-setup.exe) |
+| Linux | - | Build from source (see Development section) |
 
-### 圖片處理
-- **多格式支援**：支援 PNG、JPG 等常見圖片格式
-- **圖片壓縮**：提供圖片壓縮功能
-- **圖片查看**：內建圖片瀏覽器
+> **macOS Note**: The Universal Binary includes both Intel (x86_64) and Apple Silicon (ARM64) architectures. The app is signed and notarized by Apple.
 
-### 檔案管理
-- **側邊欄檔案列表**：方便管理和切換多個文件
-- **檔案關聯**：支援 PDF 和圖片檔案的系統關聯，可直接開啟檔案
-
-
-## 安裝與使用
-
-### 下載安裝包
-
-| 平台 | 版本 | 連結 |
-|------|------|------|
-| macOS | Universal Binary<br/>（支援 Intel 與 Apple Silicon） | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.3/Kano.PDF.Tool_3.10.3_universal.dmg) |
-| Windows | x64 | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.3/Kano.PDF.Tool_3.10.3_x64-setup.exe) |
-| Linux | - | 請參考下方的開發環境設定自行編譯 |
-
-> **macOS 說明**：Universal Binary 版本包含 Intel (x86_64) 和 Apple Silicon (ARM64) 兩種架構，可自動適配您的 Mac 機型。應用程式已通過 Apple 開發者簽名及公證 (Notarization)，可直接安裝使用。
-
-> **自動更新**：應用程式內建自動更新功能，當有新版本時會提示您下載安裝。
+> **Auto Update**: The app includes built-in auto-update functionality.
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=IDK-Silver/PDF_Tool&type=Date)](https://star-history.com/#IDK-Silver/PDF_Tool&Date)
 
-## 貢獻
+## Contributing
 
-歡迎提交 Issue 和 Pull Request 來幫助改進這個專案。
+Issues and Pull Requests are welcome!
 
-## 開發環境設定
+## Development
 
-### 環境需求
+### Requirements
 - Node.js 18+
 - Rust 1.70+
-- 對應平台的 Tauri 依賴項
+- Platform-specific Tauri dependencies
 
-### 安裝步驟
+### Setup
 
-1. 克隆專案
+1. Clone the repository
     ```bash
     git clone https://github.com/IDK-Silver/PDF_Tool.git
     cd PDF_Tool
     ```
 
-2. 安裝依賴
+2. Install dependencies
     ```bash
     npm install
     ```
 
-3. 下載 PDFium 函式庫
+3. Fetch PDFium library
     ```bash
     npm run pdfium:fetch
     ```
 
-4. 啟動開發伺服器
+4. Start development server
     ```bash
     npm run tauri dev
     ```
 
-5. 建構應用程式
+5. Build the application
     ```bash
     npm run tauri build
     ```
 
-## 授權
+## License
 
-本專案採用 MIT 授權條款。
+This project is licensed under the MIT License.
