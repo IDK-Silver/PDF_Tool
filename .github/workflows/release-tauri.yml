@@ -456,20 +456,23 @@ jobs:
           sleep 10
 
           # Get release info (use gh release view which works with drafts)
-          RELEASE=$(gh release view "v${VERSION}" --repo ${{ github.repository }} --json assets,body,publishedAt)
+          RELEASE=$(gh release view "v${VERSION}" --repo ${{ github.repository }} --json assets,body,publishedAt,createdAt)
           NOTES=$(echo "$RELEASE" | jq -r '.body // ""')
           PUB_DATE=$(echo "$RELEASE" | jq -r '.publishedAt // empty')
+          if [ -z "$PUB_DATE" ] || [ "$PUB_DATE" = "null" ]; then
+            PUB_DATE=$(echo "$RELEASE" | jq -r '.createdAt // empty')
+          fi
 
           # Find signature files and download URLs
           ASSETS=$(echo "$RELEASE" | jq -r '.assets')
 
-          # macOS Universal (gh uses 'url' not 'browser_download_url')
-          MAC_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz")) | .url')
-          MAC_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz.sig")) | .url')
+          # macOS Universal
+          MAC_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz")) | .browserDownloadUrl')
+          MAC_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz.sig")) | .browserDownloadUrl')
 
           # Windows x64
-          WIN_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.nsis.zip")) | .url')
-          WIN_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.nsis.zip.sig")) | .url')
+          WIN_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.exe")) | .browserDownloadUrl')
+          WIN_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.exe.sig")) | .browserDownloadUrl')
 
           # Download signatures
           MAC_SIG_CONTENT=""
@@ -511,6 +514,23 @@ jobs:
           EOF
 
           cat latest.json
+
+          # Validate latest.json fields are present and non-empty
+          validate_field() {
+            local key="$1"
+            local val
+            val=$(jq -r "$key // empty" latest.json)
+            if [ -z "$val" ] || [ "$val" = "null" ] || [ "$val" = "Not Found" ]; then
+              echo "Invalid latest.json: $key is empty or missing"
+              exit 1
+            fi
+          }
+
+          validate_field '.pub_date'
+          validate_field '.platforms["darwin-universal"].url'
+          validate_field '.platforms["darwin-universal"].signature'
+          validate_field '.platforms["windows-x86_64"].url'
+          validate_field '.platforms["windows-x86_64"].signature'
 
       - name: Upload latest.json to release
         env:
