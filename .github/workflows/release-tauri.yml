@@ -382,6 +382,26 @@ jobs:
             exit 1
           fi
 
+          # Generate entitlements with application identifier from profile
+          PROFILE_PATH="$HOME/Library/MobileDevice/Provisioning Profiles/appstore.provisionprofile"
+          PROFILE_PLIST="$RUNNER_TEMP/appstore_profile.plist"
+          ENTITLEMENTS_PATH="$RUNNER_TEMP/entitlements.appstore.generated.plist"
+
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          APP_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.application-identifier" "$PROFILE_PLIST")
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:com.apple.developer.team-identifier" "$PROFILE_PLIST")
+
+          if [ -z "$APP_ID" ] || [ -z "$TEAM_ID" ]; then
+            echo "Error: failed to read identifiers from provisioning profile"
+            exit 1
+          fi
+
+          cp src-tauri/macos/entitlements.appstore.plist "$ENTITLEMENTS_PATH"
+          /usr/libexec/PlistBuddy -c "Set :com.apple.application-identifier $APP_ID" "$ENTITLEMENTS_PATH" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Add :com.apple.application-identifier string $APP_ID" "$ENTITLEMENTS_PATH"
+          /usr/libexec/PlistBuddy -c "Set :com.apple.developer.team-identifier $TEAM_ID" "$ENTITLEMENTS_PATH" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Add :com.apple.developer.team-identifier string $TEAM_ID" "$ENTITLEMENTS_PATH"
+
           # Re-sign bundled PDFium dylibs with App Store identity
           for arch in aarch64-apple-darwin x86_64-apple-darwin; do
             DYLIB="$APP_PATH/Contents/Resources/resources/pdfium/${arch}/libpdfium.dylib"
@@ -395,7 +415,7 @@ jobs:
 
           # Re-sign the app with App Store certificate and entitlements
           codesign --deep --force --options runtime \
-            --entitlements src-tauri/macos/entitlements.appstore.plist \
+            --entitlements "$ENTITLEMENTS_PATH" \
             --sign "3rd Party Mac Developer Application: Yu Feng Huang (S9782747Y9)" \
             "$APP_PATH"
 
