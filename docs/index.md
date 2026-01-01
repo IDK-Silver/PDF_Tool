@@ -3,6 +3,8 @@ layout: default
 title: Kano PDF Tool
 ---
 
+<p class="lang-switch">English | <a href="zh-TW">繁體中文</a></p>
+
 <table class="screenshot-table">
   <tr>
     <td><strong>Light Theme</strong></td>
