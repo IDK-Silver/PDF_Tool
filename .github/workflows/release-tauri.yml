@@ -459,9 +459,21 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i of $MAX_RETRIES: Fetching release assets..."
 
-            # Get release info (use API to access browser_download_url)
+            # Draft releases can't be found via /releases/tags endpoint
+            # Use /releases endpoint and filter by tag_name instead
             RELEASE=$(gh api -H "Accept: application/vnd.github+json" \
-              "/repos/${{ github.repository }}/releases/tags/v${VERSION}")
+              "/repos/${{ github.repository }}/releases" \
+              --jq ".[] | select(.tag_name == \"v${VERSION}\")" | head -1)
+
+            if [ -z "$RELEASE" ]; then
+              echo "Release v${VERSION} not found yet..."
+              if [ $i -eq $MAX_RETRIES ]; then
+                echo "Failed to find release after $MAX_RETRIES attempts"
+                exit 1
+              fi
+              sleep $RETRY_DELAY
+              continue
+            fi
 
             # Find signature files and download URLs
             ASSETS=$(echo "$RELEASE" | jq -r '.assets')
