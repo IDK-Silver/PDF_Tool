@@ -3,7 +3,7 @@ layout: default
 title: Support - Kano PDF Tool
 ---
 
-<p class="lang-switch">English | <a href="zh-TW">繁體中文</a></p>
+<p class="lang-switch"><span class="current">English</span> | <a href="zh-TW">繁體中文</a></p>
 
 ## Contact
 

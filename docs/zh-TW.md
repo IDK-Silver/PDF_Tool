@@ -5,7 +5,7 @@ description: 一個功能強大的跨平台 PDF 編輯與閱讀工具
 lang: zh-TW
 ---
 
-<p class="lang-switch"><a href=".">English</a> | 繁體中文</p>
+<p class="lang-switch"><a href=".">English</a> | <span class="current">繁體中文</span></p>
 
 <table class="screenshot-table">
   <tr>

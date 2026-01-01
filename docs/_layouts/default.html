@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ page.title | default: site.title }}</title>
+  <link rel="icon" type="image/png" href="/asset/image/favicon.png">
+  <link rel="alternate icon" type="image/x-icon" href="/asset/image/favicon.ico">
   <style>
     * {
       box-sizing: border-box;
@@ -139,6 +141,14 @@
     }
     .lang-switch a {
       color: #666;
+      text-decoration: none;
+    }
+    .lang-switch a:hover {
+      text-decoration: underline;
+    }
+    .lang-switch .current {
+      text-decoration: underline;
+      font-weight: 600;
     }
     .center {
       text-align: center;
