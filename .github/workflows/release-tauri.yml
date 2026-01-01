@@ -346,8 +346,11 @@ jobs:
           # Switch to App Store entitlements
           cp src-tauri/macos/entitlements.appstore.plist src-tauri/macos/entitlements.plist
 
-          # Update tauri.conf.json to use App Store signing identity
+          # Update tauri.conf.json for App Store:
+          # 1. Use App Store signing identity
+          # 2. Disable updater artifacts (App Store doesn't support self-update)
           sed -i '' 's/Developer ID Application: Yu Feng Huang (S9782747Y9)/3rd Party Mac Developer Application: Yu Feng Huang (S9782747Y9)/g' src-tauri/tauri.conf.json
+          sed -i '' 's/"createUpdaterArtifacts": true/"createUpdaterArtifacts": false/g' src-tauri/tauri.conf.json
 
           # Clean previous build artifacts
           rm -rf src-tauri/target/universal-apple-darwin/release/bundle
