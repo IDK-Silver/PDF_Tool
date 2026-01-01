@@ -54,8 +54,10 @@
     ],
     "macOS": {
       "entitlements": "macos/entitlements.plist",
-      "signingIdentity": "Developer ID Application: Yu Feng Huang (S9782747Y9)"
+      "signingIdentity": "Developer ID Application: Yu Feng Huang (S9782747Y9)",
+      "minimumSystemVersion": "10.13"
     },
+    "category": "public.app-category.productivity",
     "fileAssociations": [
       {
         "ext": ["pdf"],

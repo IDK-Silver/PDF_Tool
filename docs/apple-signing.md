@@ -1,6 +1,13 @@
 # macOS App 簽名與公證指南
 
-本文件說明如何設定 Apple Developer 證書來簽名和公證 macOS 應用程式。
+本文件說明如何設定 Apple Developer 證書來簽名和公證 macOS 應用程式，包含 GitHub 直接下載版本和 App Store 版本。
+
+## 版本差異
+
+| 版本 | 憑證類型 | 自動更新 | 分發方式 |
+|------|---------|---------|---------|
+| GitHub 版本 | Developer ID Application | ✅ 支援 | GitHub Release |
+| App Store 版本 | 3rd Party Mac Developer | ❌ 不支援 | Mac App Store |
 
 ## 前置需求
 
@@ -52,7 +59,64 @@ security find-identity -v -p codesigning
 
 應顯示：`"Developer ID Application: 你的名字 (TEAM_ID)"`
 
-## 二、設定 Tauri 簽名
+## 二、建立 App Store 證書（選用）
+
+若要上架 Mac App Store，需要額外建立以下證書。
+
+### 1. 產生 CSR
+
+```bash
+# Application 憑證用
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout ~/Desktop/appstore_app.key \
+  -out ~/Desktop/appstore_app.csr \
+  -subj "/emailAddress=你的email/CN=你的名字/C=TW"
+
+# Installer 憑證用
+openssl req -new -newkey rsa:2048 -nodes \
+  -keyout ~/Desktop/appstore_installer.key \
+  -out ~/Desktop/appstore_installer.csr \
+  -subj "/emailAddress=你的email/CN=你的名字/C=TW"
+```
+
+### 2. 在 Apple Developer Portal 建立證書
+
+1. 登入 [Apple Developer Portal](https://developer.apple.com/account/resources/certificates/list)
+2. 建立 **Mac App Distribution**（或 3rd Party Mac Developer Application）
+3. 建立 **Mac Installer Distribution**（或 3rd Party Mac Developer Installer）
+4. 分別上傳對應的 CSR 並下載 `.cer` 檔案
+
+### 3. 轉換為 .p12
+
+```bash
+# 需要加 -legacy 參數確保相容性
+openssl x509 -in ~/Desktop/appstore_app.cer -inform DER -out ~/Desktop/appstore_app.pem
+openssl pkcs12 -export \
+  -out ~/Desktop/appstore_app.p12 \
+  -inkey ~/Desktop/appstore_app.key \
+  -in ~/Desktop/appstore_app.pem \
+  -name "3rd Party Mac Developer Application: 你的名字" \
+  -passout pass:你的密碼 \
+  -legacy
+
+openssl x509 -in ~/Desktop/appstore_installer.cer -inform DER -out ~/Desktop/appstore_installer.pem
+openssl pkcs12 -export \
+  -out ~/Desktop/appstore_installer.p12 \
+  -inkey ~/Desktop/appstore_installer.key \
+  -in ~/Desktop/appstore_installer.pem \
+  -name "3rd Party Mac Developer Installer: 你的名字" \
+  -passout pass:你的密碼 \
+  -legacy
+```
+
+### 4. 建立 Provisioning Profile
+
+1. 到 [Identifiers](https://developer.apple.com/account/resources/identifiers/list) 建立 App ID
+2. Bundle ID 必須與 `tauri.conf.json` 的 `identifier` 一致
+3. 到 [Profiles](https://developer.apple.com/account/resources/profiles/list) 建立 **Mac App Store Connect** profile
+4. 下載 `.provisionprofile` 檔案
+
+## 三、設定 Tauri 簽名
 
 在 `src-tauri/tauri.conf.json` 的 `bundle.macOS` 加入：
 
@@ -132,20 +196,50 @@ base64 -i ~/Desktop/certificate.p12 | pbcopy
 
 在 repo 的 Settings → Secrets and variables → Actions 新增：
 
+**GitHub 版本必要：**
+
 | Secret 名稱 | 說明 |
 |------------|------|
-| `APPLE_CERTIFICATE` | .p12 檔案的 base64 編碼 |
+| `APPLE_CERTIFICATE` | Developer ID .p12 的 base64 編碼 |
 | `APPLE_CERTIFICATE_PASSWORD` | 匯出 .p12 時設定的密碼 |
 | `APPLE_ID` | Apple ID email |
 | `APPLE_TEAM_ID` | Team ID（10 字元） |
 | `APPLE_PASSWORD` | App 專用密碼 |
+| `TAURI_SIGNING_PRIVATE_KEY` | Tauri updater 私鑰 |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Tauri updater 私鑰密碼 |
+
+**App Store 版本必要（選用）：**
+
+| Secret 名稱 | 說明 |
+|------------|------|
+| `APPSTORE_APP_CERTIFICATE` | App Store Application .p12 的 base64 編碼 |
+| `APPSTORE_INSTALLER_CERTIFICATE` | App Store Installer .p12 的 base64 編碼 |
+| `APPSTORE_CERTIFICATE_PASSWORD` | App Store 憑證密碼 |
+| `APPSTORE_PROVISIONING_PROFILE` | Provisioning Profile 的 base64 編碼 |
+
+**產生 base64 編碼：**
+
+```bash
+base64 -i ~/Desktop/certificate.p12 | pbcopy
+```
 
 ### 3. Workflow 設定
 
-參考 `.github/workflows/release-tauri.yml` 中的：
-- `Import Apple certificate` step：匯入證書到 runner
-- `Sign PDFium libraries` step：簽名外部 dylib
-- `Build & Release with Tauri` step：設定公證環境變數
+參考 `.github/workflows/release-tauri.yml`：
+
+**GitHub 版本建置：**
+- `Import Apple certificates`：匯入所有證書到 runner
+- `Sign PDFium libraries`：簽名外部 dylib
+- `Build & Release with Tauri`：建置並上傳到 GitHub Release（draft）
+- `Publish release`：所有平台建置完成後正式發布
+
+**App Store 版本建置：**
+- `Prepare App Store build`：切換 entitlements 和簽名身份
+- `Build App Store version`：用 `--no-default-features --features app-store` 建置
+- `Sign and package for App Store`：重新簽名並打包為 .pkg
+- `Upload App Store artifacts`：上傳為 GitHub Artifact（保留 90 天）
+
+App Store 版本可從 Actions → 對應 workflow run → Artifacts 下載。
 
 ## 六、常見問題
 
