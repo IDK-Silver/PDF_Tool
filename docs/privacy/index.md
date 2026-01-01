@@ -1,10 +1,9 @@
 ---
+layout: default
 title: Privacy Policy - Kano PDF Tool
 ---
 
-# Privacy Policy
-
-[English](.) | [繁體中文](zh-TW)
+<p class="lang-switch">English | <a href="zh-TW">繁體中文</a></p>
 
 **Last updated: January 1, 2026**
 

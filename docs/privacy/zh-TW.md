@@ -1,10 +1,9 @@
 ---
+layout: default
 title: 隱私權政策 - Kano PDF Tool
 ---
 
-# 隱私權政策
-
-[English](.) | [繁體中文](zh-TW)
+<p class="lang-switch"><a href=".">English</a> | 繁體中文</p>
 
 **最後更新日期：2026 年 1 月 1 日**
 

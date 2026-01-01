@@ -1,3 +1,4 @@
 title: Kano PDF Tool
 description: A powerful cross-platform PDF editing and reading tool
-theme: jekyll-theme-minimal
+baseurl: ""
+url: "https://kano-pdf-tool.yuufeng.com"
