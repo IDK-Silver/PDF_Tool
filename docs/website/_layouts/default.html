@@ -167,9 +167,15 @@
     <h1>Kano PDF Tool</h1>
     <p>{{ page.description | default: site.description }}</p>
     <nav>
-      <a href="{{ site.baseurl }}/">Home</a>
-      <a href="{{ site.baseurl }}/support/">Support</a>
-      <a href="{{ site.baseurl }}/privacy/">Privacy</a>
+      {% if page.lang == 'zh-TW' %}
+        <a href="{{ site.baseurl }}/zh-TW/">Home</a>
+        <a href="{{ site.baseurl }}/support/zh-TW/">Support</a>
+        <a href="{{ site.baseurl }}/privacy/zh-TW/">Privacy</a>
+      {% else %}
+        <a href="{{ site.baseurl }}/">Home</a>
+        <a href="{{ site.baseurl }}/support/">Support</a>
+        <a href="{{ site.baseurl }}/privacy/">Privacy</a>
+      {% endif %}
       <a href="https://github.com/IDK-Silver/PDF_Tool">GitHub</a>
     </nav>
   </header>

@@ -230,8 +230,8 @@ base64 -i ~/Desktop/certificate.p12 | pbcopy
 **GitHub 版本建置：**
 - `Import Apple certificates`：匯入所有證書到 runner
 - `Sign PDFium libraries`：簽名外部 dylib
-- `Build & Release with Tauri`：建置並上傳到 GitHub Release（draft）
-- `Publish release`：所有平台建置完成後正式發布
+- `Build & Release with Tauri`：建置並上傳到 GitHub Release（非 Draft）
+- `Publish release`：確保 Release 為已發布狀態
 
 **App Store 版本建置：**
 - `Prepare App Store build`：切換 entitlements 和簽名身份
