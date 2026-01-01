@@ -415,21 +415,21 @@ jobs:
           # Wait a bit for release assets to be available
           sleep 10
 
-          # Get release info
-          RELEASE=$(gh api repos/${{ github.repository }}/releases/tags/v${VERSION})
+          # Get release info (use gh release view which works with drafts)
+          RELEASE=$(gh release view "v${VERSION}" --repo ${{ github.repository }} --json assets,body,publishedAt)
           NOTES=$(echo "$RELEASE" | jq -r '.body // ""')
-          PUB_DATE=$(echo "$RELEASE" | jq -r '.published_at')
+          PUB_DATE=$(echo "$RELEASE" | jq -r '.publishedAt // empty')
 
           # Find signature files and download URLs
           ASSETS=$(echo "$RELEASE" | jq -r '.assets')
 
-          # macOS Universal
-          MAC_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz")) | .browser_download_url')
-          MAC_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz.sig")) | .browser_download_url')
+          # macOS Universal (gh uses 'url' not 'browser_download_url')
+          MAC_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz")) | .url')
+          MAC_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz.sig")) | .url')
 
           # Windows x64
-          WIN_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.nsis.zip")) | .browser_download_url')
-          WIN_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.nsis.zip.sig")) | .browser_download_url')
+          WIN_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.nsis.zip")) | .url')
+          WIN_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.nsis.zip.sig")) | .url')
 
           # Download signatures
           MAC_SIG_CONTENT=""
