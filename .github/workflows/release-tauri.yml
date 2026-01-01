@@ -285,13 +285,12 @@ jobs:
           # Allow codesign to access the keys
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # Install intermediate certificate
+          # Install intermediate certificates (ignore if already exists)
           curl -o $RUNNER_TEMP/DeveloperIDG2CA.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-          security import $RUNNER_TEMP/DeveloperIDG2CA.cer -k "$KEYCHAIN_PATH"
+          security import $RUNNER_TEMP/DeveloperIDG2CA.cer -k "$KEYCHAIN_PATH" || true
 
-          # Install App Store intermediate certificate
           curl -o $RUNNER_TEMP/AppleWWDRCAG3.cer https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
-          security import $RUNNER_TEMP/AppleWWDRCAG3.cer -k "$KEYCHAIN_PATH"
+          security import $RUNNER_TEMP/AppleWWDRCAG3.cer -k "$KEYCHAIN_PATH" || true
 
           # Install provisioning profile
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
