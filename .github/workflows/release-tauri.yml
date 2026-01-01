@@ -452,27 +452,58 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
-          # Wait a bit for release assets to be available
-          sleep 10
+          # Wait for release assets to be available (retry logic)
+          MAX_RETRIES=12
+          RETRY_DELAY=15
 
-          # Get release info (use gh release view which works with drafts)
-          RELEASE=$(gh release view "v${VERSION}" --repo ${{ github.repository }} --json assets,body,publishedAt,createdAt)
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i of $MAX_RETRIES: Fetching release assets..."
+
+            # Get release info (use API to access browser_download_url)
+            RELEASE=$(gh api -H "Accept: application/vnd.github+json" \
+              "/repos/${{ github.repository }}/releases/tags/v${VERSION}")
+
+            # Find signature files and download URLs
+            ASSETS=$(echo "$RELEASE" | jq -r '.assets')
+
+            # macOS Universal
+            MAC_URL=$(echo "$ASSETS" | jq -r '[.[] | select(.name | endswith("_universal.app.tar.gz"))] | first | .browser_download_url // empty')
+            MAC_SIG=$(echo "$ASSETS" | jq -r '[.[] | select(.name | endswith("_universal.app.tar.gz.sig"))] | first | .browser_download_url // empty')
+
+            # Windows x64
+            WIN_URL=$(echo "$ASSETS" | jq -r '[.[] | select(.name | endswith("_x64-setup.exe"))] | first | .browser_download_url // empty')
+            WIN_SIG=$(echo "$ASSETS" | jq -r '[.[] | select(.name | endswith("_x64-setup.exe.sig"))] | first | .browser_download_url // empty')
+
+            # Check if we have all required assets
+            if [ -n "$MAC_URL" ] && [ "$MAC_URL" != "null" ] && \
+               [ -n "$WIN_URL" ] && [ "$WIN_URL" != "null" ] && \
+               [ -n "$MAC_SIG" ] && [ "$MAC_SIG" != "null" ] && \
+               [ -n "$WIN_SIG" ] && [ "$WIN_SIG" != "null" ]; then
+              echo "All assets found!"
+              break
+            fi
+
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "Failed to find all release assets after $MAX_RETRIES attempts"
+              echo "MAC_URL: $MAC_URL"
+              echo "MAC_SIG: $MAC_SIG"
+              echo "WIN_URL: $WIN_URL"
+              echo "WIN_SIG: $WIN_SIG"
+              echo ""
+              echo "Available assets:"
+              echo "$ASSETS" | jq -r '.[].name'
+              exit 1
+            fi
+
+            echo "Assets not ready yet, waiting ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
+
           NOTES=$(echo "$RELEASE" | jq -r '.body // ""')
-          PUB_DATE=$(echo "$RELEASE" | jq -r '.publishedAt // empty')
+          PUB_DATE=$(echo "$RELEASE" | jq -r '.published_at // empty')
           if [ -z "$PUB_DATE" ] || [ "$PUB_DATE" = "null" ]; then
-            PUB_DATE=$(echo "$RELEASE" | jq -r '.createdAt // empty')
+            PUB_DATE=$(echo "$RELEASE" | jq -r '.created_at // empty')
           fi
-
-          # Find signature files and download URLs
-          ASSETS=$(echo "$RELEASE" | jq -r '.assets')
-
-          # macOS Universal
-          MAC_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz")) | .browserDownloadUrl')
-          MAC_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz.sig")) | .browserDownloadUrl')
-
-          # Windows x64
-          WIN_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.exe")) | .browserDownloadUrl')
-          WIN_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.exe.sig")) | .browserDownloadUrl')
 
           # Download signatures
           MAC_SIG_CONTENT=""
