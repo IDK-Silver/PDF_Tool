@@ -373,6 +373,26 @@ jobs:
 
           echo "Found app at: $APP_PATH"
 
+          # Embed provisioning profile for App Store distribution
+          if [ -f "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.provisionprofile" ]; then
+            cp "$HOME/Library/MobileDevice/Provisioning Profiles/appstore.provisionprofile" \
+              "$APP_PATH/Contents/embedded.provisionprofile"
+          else
+            echo "Error: provisioning profile not found"
+            exit 1
+          fi
+
+          # Re-sign bundled PDFium dylibs with App Store identity
+          for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+            DYLIB="$APP_PATH/Contents/Resources/resources/pdfium/${arch}/libpdfium.dylib"
+            if [ -f "$DYLIB" ]; then
+              codesign --force --options runtime --timestamp \
+                --sign "3rd Party Mac Developer Application: Yu Feng Huang (S9782747Y9)" \
+                "$DYLIB"
+              echo "Signed $DYLIB"
+            fi
+          done
+
           # Re-sign the app with App Store certificate and entitlements
           codesign --deep --force --options runtime \
             --entitlements src-tauri/macos/entitlements.appstore.plist \
