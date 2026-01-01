@@ -1,6 +1,6 @@
 # Kano PDF Tool
 
-<p align="center"><a href="../README.md">English</a> | 繁體中文</p>
+<p align="center"><a href="../../README.md">English</a> | 繁體中文</p>
 
 一個功能強大的跨平台 PDF 編輯與閱讀工具。
 
