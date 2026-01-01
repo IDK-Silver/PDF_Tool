@@ -14,8 +14,8 @@ permalink: /zh-TW/
     <td><strong>深色主題</strong></td>
   </tr>
   <tr>
-    <td><img src="asset/image/app_light_theme.jpg" alt="淺色主題"></td>
-    <td><img src="asset/image/app_dark_theme.jpg" alt="深色主題"></td>
+    <td><img src="/asset/image/app_light_theme.jpg" alt="淺色主題"></td>
+    <td><img src="/asset/image/app_dark_theme.jpg" alt="深色主題"></td>
   </tr>
 </table>
 

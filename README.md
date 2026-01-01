@@ -6,7 +6,7 @@ A powerful cross-platform PDF editing and reading tool.
 
 | Light Theme | Dark Theme |
 |:-----------:|:----------:|
-| ![Light Theme](docs/asset/image/app_light_theme.jpg) | ![Dark Theme](docs/asset/image/app_dark_theme.jpg) |
+| ![Light Theme](docs/website/asset/image/app_light_theme.jpg) | ![Dark Theme](docs/website/asset/image/app_dark_theme.jpg) |
 
 ## Features
 
@@ -26,7 +26,7 @@ If you find this project helpful, consider supporting it ☕
 
 Or scan the QR Code:
 
-<img src="docs/asset/image/buymeacoffee-qr-code.png" alt="Buy me a coffee QR Code" width="200" />
+<img src="docs/website/asset/image/buymeacoffee-qr-code.png" alt="Buy me a coffee QR Code" width="200" />
 
 ## Installation
 
