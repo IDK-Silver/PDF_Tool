@@ -6,7 +6,7 @@
 
 | Light Theme | Dark Theme |
 |:-----------:|:----------:|
-| ![Light Theme](asset/image/app_light_theme.jpg) | ![Dark Theme](asset/image/app_dark_theme.jpg) |
+| ![Light Theme](../asset/image/app_light_theme.jpg) | ![Dark Theme](../asset/image/app_dark_theme.jpg) |
 
 ## 主要功能
 
@@ -26,7 +26,7 @@
 
 或掃描 QR Code：
 
-<img src="asset/image/buymeacoffee-qr-code.png" alt="Buy me a coffee QR Code" width="200" />
+<img src="../asset/image/buymeacoffee-qr-code.png" alt="Buy me a coffee QR Code" width="200" />
 
 ## 安裝與使用
 
