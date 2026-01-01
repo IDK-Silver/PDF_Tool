@@ -12,7 +12,6 @@ marked.setOptions({
 const updater = useUpdaterStore()
 const visible = computed(() => updater.state.dialogVisible)
 const result = computed(() => updater.state.result)
-const checking = computed(() => updater.state.checking)
 
 const hasUpdate = computed(() => result.value?.hasUpdate ?? false)
 const currentVersion = computed(() => result.value?.currentVersion ?? '')
@@ -24,9 +23,15 @@ const changelogHtml = computed(() => {
 })
 
 function onBackdropClick(e: MouseEvent) {
-  if (e.target === e.currentTarget) {
+  if (e.target === e.currentTarget && !updater.isDownloading) {
     updater.closeDialog()
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 </script>
 
@@ -45,9 +50,13 @@ function onBackdropClick(e: MouseEvent) {
           <!-- Header -->
           <div class="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 class="text-base font-medium">
-              {{ hasUpdate ? '發現新版本' : '檢查更新' }}
+              <template v-if="updater.isDownloading">正在下載更新</template>
+              <template v-else-if="updater.isReadyToRestart">更新已準備就緒</template>
+              <template v-else-if="hasUpdate">發現新版本</template>
+              <template v-else>檢查更新</template>
             </h2>
             <button
+              v-if="!updater.isDownloading"
               @click="updater.closeDialog"
               class="w-7 h-7 flex items-center justify-center rounded hover:bg-[hsl(var(--selection))] transition"
               aria-label="關閉"
@@ -59,9 +68,48 @@ function onBackdropClick(e: MouseEvent) {
           <!-- Content -->
           <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
             <!-- Loading state -->
-            <div v-if="checking" class="flex items-center justify-center py-8">
+            <div v-if="updater.isChecking" class="flex items-center justify-center py-8">
               <div class="animate-spin w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full"></div>
               <span class="ml-3 text-sm text-[hsl(var(--muted-foreground))]">正在檢查更新...</span>
+            </div>
+
+            <!-- Downloading state -->
+            <div v-else-if="updater.isDownloading" class="py-4 space-y-4">
+              <div class="text-center text-sm text-[hsl(var(--muted-foreground))]">
+                正在下載 v{{ latestVersion }}...
+              </div>
+
+              <!-- Progress bar -->
+              <div class="space-y-2">
+                <div class="h-2 bg-[hsl(var(--muted))] rounded-full overflow-hidden">
+                  <div
+                    class="h-full bg-[hsl(var(--primary))] transition-all duration-300"
+                    :style="{ width: `${updater.downloadPercent ?? 0}%` }"
+                  ></div>
+                </div>
+                <div class="flex justify-between text-xs text-[hsl(var(--muted-foreground))]">
+                  <span v-if="updater.state.downloadProgress?.downloaded">
+                    {{ formatBytes(updater.state.downloadProgress.downloaded) }}
+                  </span>
+                  <span v-if="updater.downloadPercent !== null">{{ updater.downloadPercent }}%</span>
+                  <span v-if="updater.state.downloadProgress?.total">
+                    {{ formatBytes(updater.state.downloadProgress.total) }}
+                  </span>
+                </div>
+              </div>
+
+              <p class="text-xs text-center text-[hsl(var(--muted-foreground))]">
+                請勿關閉應用程式
+              </p>
+            </div>
+
+            <!-- Ready to restart -->
+            <div v-else-if="updater.isReadyToRestart" class="text-center py-6">
+              <div class="text-4xl mb-3">&#10003;</div>
+              <p class="font-medium">更新已下載完成</p>
+              <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                請重新啟動應用程式以完成更新
+              </p>
             </div>
 
             <!-- No update available -->
@@ -99,27 +147,34 @@ function onBackdropClick(e: MouseEvent) {
 
           <!-- Actions -->
           <div class="px-5 py-4 border-t border-border flex flex-wrap gap-2 justify-end">
-            <template v-if="hasUpdate && !checking">
+            <!-- Update available actions -->
+            <template v-if="hasUpdate && !updater.isChecking && !updater.isDownloading && !updater.isReadyToRestart">
               <button
-                @click="updater.skip"
+                @click="updater.closeDialog"
                 class="px-3 py-1.5 text-sm rounded border border-border bg-card hover:bg-[hsl(var(--selection))] transition-colors"
               >
-                跳過此版本
-              </button>
-              <button
-                @click="updater.later(24)"
-                class="px-3 py-1.5 text-sm rounded border border-border bg-card hover:bg-[hsl(var(--selection))] transition-colors"
-              >
-                稍後提醒
+                稍後再說
               </button>
               <button
                 @click="updater.downloadNow"
                 class="px-3 py-1.5 text-sm rounded bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90 transition-opacity"
               >
-                前往下載
+                立即更新
               </button>
             </template>
-            <template v-else-if="!checking">
+
+            <!-- Ready to restart action -->
+            <template v-else-if="updater.isReadyToRestart">
+              <button
+                @click="updater.closeDialog"
+                class="px-3 py-1.5 text-sm rounded border border-border bg-card hover:bg-[hsl(var(--selection))] transition-colors"
+              >
+                稍後重啟
+              </button>
+            </template>
+
+            <!-- No update / checking done -->
+            <template v-else-if="!updater.isChecking && !updater.isDownloading">
               <button
                 @click="updater.closeDialog"
                 class="px-3 py-1.5 text-sm rounded border border-border bg-card hover:bg-[hsl(var(--selection))] transition-colors"

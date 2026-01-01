@@ -18,14 +18,25 @@ export interface UpdateCheckResult {
   currentVersion: string
   latestVersion: string | null
   releaseInfo: ReleaseInfo | null
-  isSkipped: boolean
-  isRemindLater: boolean
   error: string | null
 }
 
+export interface DownloadProgress {
+  downloaded: number
+  total: number | null
+}
+
+export interface UpdateResult {
+  success: boolean
+  error: string | null
+}
+
+export type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'installing' | 'ready-to-restart'
+
 export interface UpdateState {
-  checking: boolean
+  status: UpdateStatus
   error: string | null
   result: UpdateCheckResult | null
+  downloadProgress: DownloadProgress | null
   dialogVisible: boolean
 }

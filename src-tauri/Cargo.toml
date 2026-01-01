@@ -7,6 +7,11 @@ edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["self-update"]
+self-update = ["dep:tauri-plugin-updater"]
+app-store = []
+
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
@@ -41,3 +46,4 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 sha2 = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 semver = "1.0"
+tauri-plugin-updater = { version = "2", optional = true }

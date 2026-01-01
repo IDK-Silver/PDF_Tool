@@ -141,7 +141,13 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_fs::init());
+
+    // Conditionally add updater plugin (disabled for App Store builds)
+    #[cfg(feature = "self-update")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    let builder = builder
         .menu(|app| crate::menu::build_menu(app))
         .on_menu_event(|app, event| {
             crate::menu::handle_menu_event(app, &event);
@@ -152,24 +158,6 @@ pub fn run() {
                 .app_cache_dir()
                 .unwrap_or_else(|_| std::env::temp_dir().join("kano_pdf_tool_cache"));
             crate::pdf::init_pdf_worker(cache_dir.clone());
-
-            // Initialize updater database
-            let data_dir = app
-                .path()
-                .app_data_dir()
-                .unwrap_or_else(|_| cache_dir.clone());
-            crate::updater::init_update_db(data_dir);
-
-            // Background update check (delayed 3 seconds)
-            let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                let result = crate::updater::check_for_update_internal(&app_handle, false).await;
-                if result.has_update && !result.is_skipped && !result.is_remind_later {
-                    info!("[updater] Update available, emitting event");
-                    let _ = app_handle.emit("update-available", &result);
-                }
-            });
 
             Ok(())
         })
@@ -200,10 +188,10 @@ pub fn run() {
             media::pdf_export_page_pdf,
             media::pdf_rotate_page_relative,
             updater::check_for_update,
-            updater::skip_version,
-            updater::remind_later,
+            updater::download_and_install_update,
             updater::open_release_page,
             updater::get_platform,
+            updater::is_self_update_enabled,
         ]);
 
     let app = builder

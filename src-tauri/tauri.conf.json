@@ -3,6 +3,14 @@
   "productName": "Kano PDF Tool",
   "version": "3.9.3",
   "identifier": "com.yufeng.kano-pdf-tool",
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/IDK-Silver/PDF_Tool/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0N0Q0ODZFNDBFMkY2MzEKUldReDl1SkFia2g5dEZDZ21oR0dyK0pzMUd4TGY3SUlsdHUzNEtHNm54Yis4NWJMdWdOZEFqTmYK"
+    }
+  },
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -33,6 +41,7 @@
   "bundle": {
     "active": true,
     "targets": ["dmg", "nsis"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -44,7 +53,8 @@
       "resources/pdfium/*/*"
     ],
     "macOS": {
-      "entitlements": "macos/entitlements.plist"
+      "entitlements": "macos/entitlements.plist",
+      "signingIdentity": "Developer ID Application: Yu Feng Huang (S9782747Y9)"
     },
     "fileAssociations": [
       {

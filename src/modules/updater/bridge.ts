@@ -1,6 +1,6 @@
 import { listen } from '@tauri-apps/api/event'
 import { useUpdaterStore } from './store'
-import type { UpdateCheckResult } from './types'
+import type { DownloadProgress } from './types'
 
 export async function initUpdaterBridge(): Promise<() => void> {
   const updater = useUpdaterStore()
@@ -10,9 +10,9 @@ export async function initUpdaterBridge(): Promise<() => void> {
     await updater.check(true) // force = true
   })
 
-  // Listen for background update check result
-  const unlisten2 = await listen<UpdateCheckResult>('update-available', (event) => {
-    updater.showUpdateAvailable(event.payload)
+  // Listen for download progress updates
+  const unlisten2 = await listen<DownloadProgress>('update-download-progress', (event) => {
+    updater.updateDownloadProgress(event.payload)
   })
 
   return () => {

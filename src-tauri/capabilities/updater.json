@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "updater-capability",
+  "description": "Capability for self-update feature (GitHub builds only)",
+  "windows": ["main"],
+  "permissions": [
+    "updater:default"
+  ]
+}

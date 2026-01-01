@@ -249,15 +249,86 @@ jobs:
           rustup target add x86_64-apple-darwin
           rustup target add aarch64-apple-darwin || true
 
+      - name: Import Apple certificates
+        if: matrix.os == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPSTORE_APP_CERTIFICATE: ${{ secrets.APPSTORE_APP_CERTIFICATE }}
+          APPSTORE_INSTALLER_CERTIFICATE: ${{ secrets.APPSTORE_INSTALLER_CERTIFICATE }}
+          APPSTORE_CERTIFICATE_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATE_PASSWORD }}
+          APPSTORE_PROVISIONING_PROFILE: ${{ secrets.APPSTORE_PROVISIONING_PROFILE }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import Developer ID certificate (for GitHub release)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          security import $RUNNER_TEMP/certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          # Import App Store certificates
+          echo "$APPSTORE_APP_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/appstore_app.p12
+          security import $RUNNER_TEMP/appstore_app.p12 -P "$APPSTORE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          echo "$APPSTORE_INSTALLER_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/appstore_installer.p12
+          security import $RUNNER_TEMP/appstore_installer.p12 -P "$APPSTORE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          # Allow codesign to access the keys
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Install intermediate certificate
+          curl -o $RUNNER_TEMP/DeveloperIDG2CA.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import $RUNNER_TEMP/DeveloperIDG2CA.cer -k "$KEYCHAIN_PATH"
+
+          # Install App Store intermediate certificate
+          curl -o $RUNNER_TEMP/AppleWWDRCAG3.cer https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+          security import $RUNNER_TEMP/AppleWWDRCAG3.cer -k "$KEYCHAIN_PATH"
+
+          # Install provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$APPSTORE_PROVISIONING_PROFILE" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/appstore.provisionprofile
+
+      - name: Sign PDFium libraries (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # Sign both architectures of libpdfium.dylib
+          for arch in aarch64-apple-darwin x86_64-apple-darwin; do
+            DYLIB="src-tauri/resources/pdfium/${arch}/libpdfium.dylib"
+            if [ -f "$DYLIB" ]; then
+              codesign --force --options runtime --timestamp \
+                --sign "Developer ID Application: Yu Feng Huang (S9782747Y9)" \
+                "$DYLIB"
+              echo "Signed $DYLIB"
+            fi
+          done
+
       - name: Install Windows dependencies
         if: matrix.os == 'windows-latest'
         run: |
           choco install -y nsis
 
-      - name: Build & Release with Tauri
+      - name: Build & Release with Tauri (GitHub version)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Apple signing & notarization (macOS only)
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # Tauri updater signing
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: "v${{ needs.prepare-release.outputs.version }}"
           releaseName: "v${{ needs.prepare-release.outputs.version }} - ${{ needs.prepare-release.outputs.release_title }}"
@@ -266,10 +337,150 @@ jobs:
           prerelease: false
           args: ${{ matrix.os == 'macos-latest' && '--target universal-apple-darwin' || '' }}
 
+      # Build App Store version (macOS only, no auto-update)
+      - name: Prepare App Store build
+        if: matrix.os == 'macos-latest'
+        run: |
+          # Remove updater capability for App Store build
+          rm -f src-tauri/capabilities/updater.json
+
+          # Switch to App Store entitlements
+          cp src-tauri/macos/entitlements.appstore.plist src-tauri/macos/entitlements.plist
+
+          # Update tauri.conf.json to use App Store signing identity
+          sed -i '' 's/Developer ID Application: Yu Feng Huang (S9782747Y9)/3rd Party Mac Developer Application: Yu Feng Huang (S9782747Y9)/g' src-tauri/tauri.conf.json
+
+          # Clean previous build artifacts
+          rm -rf src-tauri/target/universal-apple-darwin/release/bundle
+
+      - name: Build App Store version
+        if: matrix.os == 'macos-latest'
+        run: |
+          npm run tauri build -- --target universal-apple-darwin --no-default-features --features app-store
+
+      - name: Sign and package for App Store
+        if: matrix.os == 'macos-latest'
+        run: |
+          VERSION=${{ needs.prepare-release.outputs.version }}
+          APP_PATH=$(find src-tauri/target/universal-apple-darwin/release/bundle -name "*.app" -type d | head -1)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: .app not found"
+            exit 1
+          fi
+
+          echo "Found app at: $APP_PATH"
+
+          # Re-sign the app with App Store certificate and entitlements
+          codesign --deep --force --options runtime \
+            --entitlements src-tauri/macos/entitlements.appstore.plist \
+            --sign "3rd Party Mac Developer Application: Yu Feng Huang (S9782747Y9)" \
+            "$APP_PATH"
+
+          # Create .pkg for App Store submission
+          mkdir -p appstore-artifacts
+          productbuild --component "$APP_PATH" /Applications \
+            --sign "3rd Party Mac Developer Installer: Yu Feng Huang (S9782747Y9)" \
+            "appstore-artifacts/Kano.PDF.Tool_${VERSION}_appstore.pkg"
+
+          # Also create a zip of the .app for testing
+          cd "$(dirname "$APP_PATH")"
+          zip -r "$GITHUB_WORKSPACE/appstore-artifacts/Kano.PDF.Tool_${VERSION}_appstore.app.zip" "$(basename "$APP_PATH")"
+          cd "$GITHUB_WORKSPACE"
+
+          ls -la appstore-artifacts/
+
+      - name: Upload App Store artifacts
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: appstore-macos-universal
+          path: appstore-artifacts/*
+          retention-days: 90
+
+  generate-updater-json:
+    name: Generate updater manifest
+    runs-on: ubuntu-latest
+    needs: [prepare-release, build]
+    if: ${{ needs.build.result == 'success' }}
+
+    steps:
+      - name: Generate latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          # Wait a bit for release assets to be available
+          sleep 10
+
+          # Get release info
+          RELEASE=$(gh api repos/${{ github.repository }}/releases/tags/v${VERSION})
+          NOTES=$(echo "$RELEASE" | jq -r '.body // ""')
+          PUB_DATE=$(echo "$RELEASE" | jq -r '.published_at')
+
+          # Find signature files and download URLs
+          ASSETS=$(echo "$RELEASE" | jq -r '.assets')
+
+          # macOS Universal
+          MAC_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz")) | .browser_download_url')
+          MAC_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_universal.app.tar.gz.sig")) | .browser_download_url')
+
+          # Windows x64
+          WIN_URL=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.nsis.zip")) | .browser_download_url')
+          WIN_SIG=$(echo "$ASSETS" | jq -r '.[] | select(.name | endswith("_x64-setup.nsis.zip.sig")) | .browser_download_url')
+
+          # Download signatures
+          MAC_SIG_CONTENT=""
+          WIN_SIG_CONTENT=""
+
+          if [ -n "$MAC_SIG" ] && [ "$MAC_SIG" != "null" ]; then
+            MAC_SIG_CONTENT=$(curl -sL "$MAC_SIG")
+          fi
+
+          if [ -n "$WIN_SIG" ] && [ "$WIN_SIG" != "null" ]; then
+            WIN_SIG_CONTENT=$(curl -sL "$WIN_SIG")
+          fi
+
+          # Generate latest.json
+          cat > latest.json << EOF
+          {
+            "version": "${VERSION}",
+            "notes": $(echo "$NOTES" | jq -Rs .),
+            "pub_date": "${PUB_DATE}",
+            "platforms": {
+              "darwin-universal": {
+                "signature": "${MAC_SIG_CONTENT}",
+                "url": "${MAC_URL}"
+              },
+              "darwin-x86_64": {
+                "signature": "${MAC_SIG_CONTENT}",
+                "url": "${MAC_URL}"
+              },
+              "darwin-aarch64": {
+                "signature": "${MAC_SIG_CONTENT}",
+                "url": "${MAC_URL}"
+              },
+              "windows-x86_64": {
+                "signature": "${WIN_SIG_CONTENT}",
+                "url": "${WIN_URL}"
+              }
+            }
+          }
+          EOF
+
+          cat latest.json
+
+      - name: Upload latest.json to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          gh release upload "v${VERSION}" latest.json --clobber --repo ${{ github.repository }}
+
   update-readme:
     name: Update README download links
     runs-on: ubuntu-latest
-    needs: [prepare-release, build]
+    needs: [prepare-release, build, generate-updater-json]
     if: ${{ needs.build.result == 'success' }}
 
     steps:
