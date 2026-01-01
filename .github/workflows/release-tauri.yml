@@ -602,16 +602,25 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update README download links
+      - name: Update download links
         run: |
           VERSION=${{ needs.prepare-release.outputs.version }}
 
-          # 更新 macOS 下載連結（Universal Binary）
-          # tag 帶 v 前綴，但檔名不帶 v
-          sed -E -i "s#(releases/download/)v?[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_universal\.dmg)#\1v${VERSION}\2${VERSION}\3#g" README.md
+          FILES=(
+            "README.md"
+            "docs/readme/zh-TW.md"
+            "docs/website/index.md"
+            "docs/website/zh-TW.md"
+          )
 
-          # 更新 Windows 下載連結
-          sed -E -i "s#(releases/download/)v?[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_x64-setup\.exe)#\1v${VERSION}\2${VERSION}\3#g" README.md
+          for file in "${FILES[@]}"; do
+            # Update macOS download link (Universal Binary)
+            # Tag has v prefix, filename does not.
+            sed -E -i "s#(releases/download/)v?[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_universal\.dmg)#\1v${VERSION}\2${VERSION}\3#g" "$file"
+
+            # Update Windows download link
+            sed -E -i "s#(releases/download/)v?[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_x64-setup\.exe)#\1v${VERSION}\2${VERSION}\3#g" "$file"
+          done
 
         shell: bash
 
@@ -624,7 +633,7 @@ jobs:
 
           # 如果有修改才 commit
           if ! git diff --quiet; then
-            git commit -am "chore: update README download links for v${VERSION}"
+            git commit -am "chore: update download links for v${VERSION}"
             git push
           else
             echo "No README changes"
