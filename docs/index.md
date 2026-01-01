@@ -33,5 +33,5 @@ title: Kano PDF Tool
 
 <p class="center" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">
   macOS: Universal Binary (Intel & Apple Silicon) · Signed & Notarized<br>
-  Windows: x64 · Portable & Installer available
+  Windows: x64 · Installer available
 </p>

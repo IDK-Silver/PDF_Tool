@@ -35,5 +35,5 @@ lang: zh-TW
 
 <p class="center" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">
   macOS：Universal Binary（Intel 與 Apple Silicon）· 已簽名與公證<br>
-  Windows：x64 · 提供安裝檔與免安裝版
+  Windows：x64 · 提供安裝檔
 </p>
