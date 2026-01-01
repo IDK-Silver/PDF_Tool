@@ -355,7 +355,7 @@ jobs:
       - name: Build App Store version
         if: matrix.os == 'macos-latest'
         run: |
-          npm run tauri build -- --target universal-apple-darwin --no-default-features --features app-store
+          npx tauri build --target universal-apple-darwin --features app-store -- --no-default-features
 
       - name: Sign and package for App Store
         if: matrix.os == 'macos-latest'
