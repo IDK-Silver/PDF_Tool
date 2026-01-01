@@ -332,7 +332,7 @@ jobs:
           tagName: "v${{ needs.prepare-release.outputs.version }}"
           releaseName: "v${{ needs.prepare-release.outputs.version }} - ${{ needs.prepare-release.outputs.release_title }}"
           releaseBody: ${{ needs.prepare-release.outputs.changelog }}
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.os == 'macos-latest' && '--target universal-apple-darwin' || '' }}
 
@@ -475,6 +475,14 @@ jobs:
           VERSION: ${{ needs.prepare-release.outputs.version }}
         run: |
           gh release upload "v${VERSION}" latest.json --clobber --repo ${{ github.repository }}
+
+      - name: Publish release (remove draft status)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          gh release edit "v${VERSION}" --draft=false --repo ${{ github.repository }}
+          echo "Release v${VERSION} published!"
 
   update-readme:
     name: Update README download links
