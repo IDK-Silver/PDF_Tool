@@ -48,13 +48,9 @@
 | Windows | x64 | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.0/Kano.PDF.Tool_3.10.0_x64-setup.exe) |
 | Linux | - | 請參考下方的開發環境設定自行編譯 |
 
-> **macOS 說明**：Universal Binary 版本包含 Intel (x86_64) 和 Apple Silicon (ARM64) 兩種架構，可自動適配您的 Mac 機型。
->
-> 由於作者沒有錢錢購買 Apple 開發者帳號進行簽名，若遇到「應用程式已損毀」或無法開啟的情況，請在終端機執行以下指令修復：
-> ```bash
-> sudo xattr -cr /Applications/Kano\ PDF\ Tool.app/
-> ```
->
+> **macOS 說明**：Universal Binary 版本包含 Intel (x86_64) 和 Apple Silicon (ARM64) 兩種架構，可自動適配您的 Mac 機型。應用程式已通過 Apple 開發者簽名及公證 (Notarization)，可直接安裝使用。
+
+> **自動更新**：應用程式內建自動更新功能，當有新版本時會提示您下載安裝。
 
 ## Star History
 
@@ -101,4 +97,4 @@
 
 ## 授權
 
-本專案採用 GPL-3.0 授權條款。
+本專案採用 MIT 授權條款。
