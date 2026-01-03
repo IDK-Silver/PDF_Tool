@@ -34,8 +34,8 @@
 
 | 平台 | 版本 | 連結 |
 |------|------|------|
-| macOS | Universal Binary<br/>（支援 Intel 與 Apple Silicon） | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.4/Kano.PDF.Tool_3.10.4_universal.dmg) |
-| Windows | x64 | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.4/Kano.PDF.Tool_3.10.4_x64-setup.exe) |
+| macOS | Universal Binary<br/>（支援 Intel 與 Apple Silicon） | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.5/Kano.PDF.Tool_3.10.5_universal.dmg) |
+| Windows | x64 | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.5/Kano.PDF.Tool_3.10.5_x64-setup.exe) |
 | Linux | - | 請參考下方的開發環境設定自行編譯 |
 
 > **macOS 說明**：Universal Binary 版本包含 Intel (x86_64) 和 Apple Silicon (ARM64) 兩種架構，可自動適配您的 Mac 機型。應用程式已通過 Apple 開發者簽名及公證 (Notarization)，可直接安裝使用。
