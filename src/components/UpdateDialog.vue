@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import { useUpdaterStore } from '@/modules/updater/store'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
+
+const { t } = useI18n()
 
 marked.setOptions({
   breaks: true,
@@ -50,16 +53,16 @@ function formatBytes(bytes: number): string {
           <!-- Header -->
           <div class="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 class="text-base font-medium">
-              <template v-if="updater.isDownloading">正在下載更新</template>
-              <template v-else-if="updater.isReadyToRestart">更新已準備就緒</template>
-              <template v-else-if="hasUpdate">發現新版本</template>
-              <template v-else>檢查更新</template>
+              <template v-if="updater.isDownloading">{{ t('update.downloading') }}</template>
+              <template v-else-if="updater.isReadyToRestart">{{ t('update.ready') }}</template>
+              <template v-else-if="hasUpdate">{{ t('update.newVersion') }}</template>
+              <template v-else>{{ t('update.checkUpdate') }}</template>
             </h2>
             <button
               v-if="!updater.isDownloading"
               @click="updater.closeDialog"
               class="w-7 h-7 flex items-center justify-center rounded hover:bg-[hsl(var(--selection))] transition"
-              aria-label="關閉"
+              :aria-label="t('update.close')"
             >
               <XMarkIcon class="w-5 h-5" />
             </button>
@@ -70,13 +73,13 @@ function formatBytes(bytes: number): string {
             <!-- Loading state -->
             <div v-if="updater.isChecking" class="flex items-center justify-center py-8">
               <div class="animate-spin w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full"></div>
-              <span class="ml-3 text-sm text-[hsl(var(--muted-foreground))]">正在檢查更新...</span>
+              <span class="ml-3 text-sm text-[hsl(var(--muted-foreground))]">{{ t('update.checking') }}</span>
             </div>
 
             <!-- Downloading state -->
             <div v-else-if="updater.isDownloading" class="py-4 space-y-4">
               <div class="text-center text-sm text-[hsl(var(--muted-foreground))]">
-                正在下載 v{{ latestVersion }}...
+                {{ t('update.downloadingVersion', { version: latestVersion }) }}
               </div>
 
               <!-- Progress bar -->
@@ -99,25 +102,25 @@ function formatBytes(bytes: number): string {
               </div>
 
               <p class="text-xs text-center text-[hsl(var(--muted-foreground))]">
-                請勿關閉應用程式
+                {{ t('update.doNotClose') }}
               </p>
             </div>
 
             <!-- Ready to restart -->
             <div v-else-if="updater.isReadyToRestart" class="text-center py-6">
               <div class="text-4xl mb-3">&#10003;</div>
-              <p class="font-medium">更新已下載完成</p>
+              <p class="font-medium">{{ t('update.downloadComplete') }}</p>
               <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-                請重新啟動應用程式以完成更新
+                {{ t('update.restartToComplete') }}
               </p>
             </div>
 
             <!-- No update available -->
             <div v-else-if="!hasUpdate" class="text-center py-6">
               <div class="text-4xl mb-3">&#10003;</div>
-              <p class="font-medium">目前已是最新版本</p>
+              <p class="font-medium">{{ t('update.upToDate') }}</p>
               <p class="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-                版本 {{ currentVersion }}
+                {{ t('update.version', { version: currentVersion }) }}
               </p>
             </div>
 
@@ -125,18 +128,18 @@ function formatBytes(bytes: number): string {
             <template v-else>
               <div class="space-y-2">
                 <div class="flex items-baseline gap-2">
-                  <span class="text-sm text-[hsl(var(--muted-foreground))]">最新版本：</span>
+                  <span class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('update.latestVersion') }}</span>
                   <span class="font-medium text-[hsl(var(--primary))]">v{{ latestVersion }}</span>
                 </div>
                 <div class="flex items-baseline gap-2">
-                  <span class="text-sm text-[hsl(var(--muted-foreground))]">目前版本：</span>
+                  <span class="text-sm text-[hsl(var(--muted-foreground))]">{{ t('update.currentVersion') }}</span>
                   <span>v{{ currentVersion }}</span>
                 </div>
               </div>
 
               <!-- Changelog -->
               <div v-if="changelog" class="space-y-2">
-                <h3 class="text-sm font-medium">更新內容</h3>
+                <h3 class="text-sm font-medium">{{ t('update.changelog') }}</h3>
                 <div
                   class="changelog-content rounded-md border border-border bg-[hsl(var(--card))] p-3 max-h-48 overflow-y-auto text-sm"
                   v-html="changelogHtml"
@@ -153,13 +156,13 @@ function formatBytes(bytes: number): string {
                 @click="updater.closeDialog"
                 class="px-3 py-1.5 text-sm rounded border border-border bg-card hover:bg-[hsl(var(--selection))] transition-colors"
               >
-                稍後再說
+                {{ t('update.later') }}
               </button>
               <button
                 @click="updater.downloadNow"
                 class="px-3 py-1.5 text-sm rounded bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90 transition-opacity"
               >
-                立即更新
+                {{ t('update.updateNow') }}
               </button>
             </template>
 
@@ -169,7 +172,7 @@ function formatBytes(bytes: number): string {
                 @click="updater.closeDialog"
                 class="px-3 py-1.5 text-sm rounded border border-border bg-card hover:bg-[hsl(var(--selection))] transition-colors"
               >
-                稍後重啟
+                {{ t('update.restartLater') }}
               </button>
             </template>
 
@@ -179,7 +182,7 @@ function formatBytes(bytes: number): string {
                 @click="updater.closeDialog"
                 class="px-3 py-1.5 text-sm rounded border border-border bg-card hover:bg-[hsl(var(--selection))] transition-colors"
               >
-                關閉
+                {{ t('update.close') }}
               </button>
             </template>
           </div>

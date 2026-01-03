@@ -17,6 +17,25 @@
   "dragDrop": {
     "hint": "Drop PDF or images here"
   },
+  "fileList": {
+    "noFiles": "No files",
+    "dropHint": "Click + or drag files here"
+  },
+  "mediaView": {
+    "selectFileHint": "Select a PDF or image file from the left panel to start viewing"
+  },
+  "contextMenu": {
+    "deletePage": "Delete this page",
+    "insertBlankPage": "Insert blank page ({position})",
+    "insertFile": "Insert file ({position})",
+    "rotate": "Rotate {angle}",
+    "export": "Export",
+    "positionBefore": "before",
+    "positionAfter": "after",
+    "jpegImage": "JPEG image",
+    "pngImage": "PNG image",
+    "singlePagePdf": "Single page PDF"
+  },
   "toolbar": {
     "save": "Save",
     "discard": "Discard changes",

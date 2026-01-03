@@ -24,12 +24,16 @@ export function useGlobalFileDrop() {
 
   let unlisten: UnlistenFn | null = null
   let listenersAttached = false
+  let hasValidFiles = false
 
   function preventDefault(e: DragEvent) {
     const types = e.dataTransfer?.types
     if (types && Array.from(types).includes('Files')) {
       e.preventDefault()
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+      // Only show copy cursor if dragging supported file types
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = hasValidFiles ? 'copy' : 'none'
+      }
     }
   }
 
@@ -37,11 +41,13 @@ export function useGlobalFileDrop() {
     switch (event.type) {
       case 'enter': {
         const allowed = filterSupported(event.paths)
-        isDragging.value = allowed.length > 0
+        hasValidFiles = allowed.length > 0
+        isDragging.value = hasValidFiles
         break
       }
       case 'drop': {
         isDragging.value = false
+        hasValidFiles = false
         const allowed = filterSupported(event.paths)
         if (!allowed.length) return
         filelist.addPaths(allowed)
@@ -56,6 +62,7 @@ export function useGlobalFileDrop() {
       }
       case 'leave': {
         isDragging.value = false
+        hasValidFiles = false
         break
       }
       case 'over':

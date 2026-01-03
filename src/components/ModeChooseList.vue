@@ -3,14 +3,14 @@
 import { computed } from 'vue';
 import { useRoute, useRouter, isNavigationFailure } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { EyeIcon, ArchiveBoxIcon } from '@heroicons/vue/24/outline';
+import { DocumentMagnifyingGlassIcon, ArchiveBoxIcon } from '@heroicons/vue/24/outline';
 
 const { t } = useI18n();
 
 type Mode = 'media_view' | 'compress' | 'pdf_editor';
 
 const modes = computed(() => [
-	{ key: 'media_view' as Mode, label: t('nav.view'), icon: EyeIcon },
+	{ key: 'media_view' as Mode, label: t('nav.view'), icon: DocumentMagnifyingGlassIcon },
 	{ key: 'compress' as Mode, label: t('nav.compress'), icon: ArchiveBoxIcon },
 ]);
 

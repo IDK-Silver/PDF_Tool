@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, unref, watchEffect, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import type { Ref } from 'vue'
 import MediaToolbar from './parts/MediaToolbar.vue'
@@ -16,6 +17,7 @@ import { openInFileManager } from '@/modules/media/openInFileManager'
 import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 // save handled inside media store via saveCurrentIfNeeded
 
+const { t } = useI18n()
 const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
@@ -350,7 +352,7 @@ onBeforeUnmount(() => {
       <PdfViewport v-else-if="isPdf" ref="pdfViewportRef" />
       <div v-else class="h-full w-full flex items-center justify-center">
         <div class="text-center text-[hsl(var(--muted-foreground))]">
-          <p class="text-sm">請在左側選擇 PDF 或圖片檔案以開始檢視</p>
+          <p class="text-sm">{{ t('mediaView.selectFileHint') }}</p>
         </div>
       </div>
     </div>

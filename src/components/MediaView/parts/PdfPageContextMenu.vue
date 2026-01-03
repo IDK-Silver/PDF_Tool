@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useExportSettings } from '@/modules/export/settings'
 
+const { t } = useI18n()
 const exportSettings = useExportSettings()
 
 const props = defineProps<{
@@ -28,11 +30,15 @@ const exportMenu = ref<{ open: boolean; x: number; y: number }>({ open: false, x
 let exportCloseTimer: number | null = null
 
 const insertPositionLabel = computed(() =>
-  (props.menu.aboveHalf !== props.shiftDown) ? '之前' : '之後'
+  (props.menu.aboveHalf !== props.shiftDown)
+    ? t('contextMenu.positionBefore')
+    : t('contextMenu.positionAfter')
 )
 
 const imageFormatLabel = computed(() =>
-  exportSettings.s.imageFormat === 'jpeg' ? 'JPEG 圖片' : 'PNG 圖片'
+  exportSettings.s.imageFormat === 'jpeg'
+    ? t('contextMenu.jpegImage')
+    : t('contextMenu.pngImage')
 )
 
 function scheduleExportClose(delay = 150) {
@@ -95,17 +101,17 @@ onBeforeUnmount(() => {
       :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
     >
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="emit('delete', menu.pageIndex)">
-        刪除此頁
+        {{ t('contextMenu.deletePage') }}
       </button>
       <div class="border-t border-border my-1"></div>
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="emit('insert-blank', menu.pageIndex)">
-        插入空白頁（{{ insertPositionLabel }}）
+        {{ t('contextMenu.insertBlankPage', { position: insertPositionLabel }) }}
       </button>
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="emit('insert-file', menu.pageIndex)">
-        插入檔案（{{ insertPositionLabel }}）
+        {{ t('contextMenu.insertFile', { position: insertPositionLabel }) }}
       </button>
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="emit('rotate', menu.pageIndex)">
-        旋轉 {{ shiftDown ? '-90°' : '+90°' }}
+        {{ t('contextMenu.rotate', { angle: shiftDown ? '-90°' : '+90°' }) }}
       </button>
       <div class="border-t border-border my-1"></div>
       <button
@@ -113,7 +119,7 @@ onBeforeUnmount(() => {
         @pointerenter="openExportMenu"
         @pointerleave="() => scheduleExportClose(180)"
       >
-        <span class="overflow-hidden text-ellipsis">匯出</span>
+        <span class="overflow-hidden text-ellipsis">{{ t('contextMenu.export') }}</span>
         <span class="opacity-60 flex-shrink-0">▸</span>
       </button>
     </div>
@@ -131,7 +137,7 @@ onBeforeUnmount(() => {
         {{ imageFormatLabel }}
       </button>
       <button class="block w-full text-left px-3 py-2 hover:bg-hover whitespace-nowrap overflow-hidden text-ellipsis" @click="handleExportPdf">
-        單頁 PDF
+        {{ t('contextMenu.singlePagePdf') }}
       </button>
     </div>
   </teleport>

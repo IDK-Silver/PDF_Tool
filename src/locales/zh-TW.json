@@ -17,6 +17,25 @@
   "dragDrop": {
     "hint": "將 PDF 或圖片拖曳到這裡"
   },
+  "fileList": {
+    "noFiles": "無檔案",
+    "dropHint": "點擊 + 或拖曳檔案至此"
+  },
+  "mediaView": {
+    "selectFileHint": "請在左側選擇 PDF 或圖片檔案以開始檢視"
+  },
+  "contextMenu": {
+    "deletePage": "刪除此頁",
+    "insertBlankPage": "插入空白頁（{position}）",
+    "insertFile": "插入檔案（{position}）",
+    "rotate": "旋轉 {angle}",
+    "export": "匯出",
+    "positionBefore": "之前",
+    "positionAfter": "之後",
+    "jpegImage": "JPEG 圖片",
+    "pngImage": "PNG 圖片",
+    "singlePagePdf": "單頁 PDF"
+  },
   "toolbar": {
     "save": "儲存",
     "discard": "捨棄變更",
