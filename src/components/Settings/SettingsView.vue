@@ -107,14 +107,14 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
       
 
       <section id="high-res-rendering" class="space-y-3">
-        <h2 class="font-medium text-base">高清渲染</h2>
+        <h2 class="font-medium text-base">高畫質渲染</h2>
         <div class="rounded-md border p-4 space-y-3">
           <p class="text-xs text-[hsl(var(--muted-foreground))]">
-            停止捲動後會載入高清頁面，用於最終檢視與輸出。
+            停止捲動後會載入高畫質頁面，用於最終檢視與輸出。
           </p>
 
           <div>
-            <label class="block mb-1">高清輸出格式</label>
+            <label class="block mb-1">高畫質輸出格式</label>
             <select v-model="s.renderFormat" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
               <option value="raw">Raw（預設，最快速）</option>
               <option value="webp">WebP（高壓縮比）</option>
@@ -138,13 +138,13 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="block mb-1">高清 DPI 上限</label>
+              <label class="block mb-1">高畫質 DPI 上限</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.highResDpiCap"
                 @input="s.highResDpiCap = number($event, s.highResDpiCap)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制高清渲染 DPI，避免卡頓。預設 144。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制高畫質渲染 DPI，避免卡頓。預設 144。</p>
             </div>
             <div>
               <label class="block mb-1">DPR 上限</label>
@@ -182,10 +182,10 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.zoomRerenderDelayMs"
                 @input="s.zoomRerenderDelayMs = number($event, s.zoomRerenderDelayMs)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放操作後觸發高清重渲染的延遲。預設 150 ms。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放操作後觸發高畫質重渲染的延遲。預設 150 ms。</p>
             </div>
             <div>
-              <label class="block mb-1">高清重渲染預設延遲（ms）</label>
+              <label class="block mb-1">高畫質重渲染預設延遲（ms）</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.hiResRerenderDelayMs"
@@ -220,7 +220,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制同時間的渲染頁數。預設 4。</p>
             </div>
             <div>
-              <label class="block mb-1">高清預載範圍</label>
+              <label class="block mb-1">高畫質預載範圍</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.highResOverscan"
@@ -279,7 +279,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
           </div>
           <div class="pt-2 border-t">
             <p class="text-xs text-[hsl(var(--muted-foreground))]">
-              💡 提示：此設定使用指數縮放，無論當前縮放級別為何，縮放的視覺感受都會保持一致。如果覺得縮放太快，減小此值；太慢則增大此值。
+  提示：此設定使用指數縮放，無論當前縮放級別為何，縮放的視覺感受都會保持一致。如果覺得縮放太快，減小此值；太慢則增大此值。
             </p>
           </div>
         </div>
@@ -366,7 +366,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3" :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
             <div>
-              <label class="block mb-1">全局水平偏移（像素）</label>
+              <label class="block mb-1">全域水平偏移（像素）</label>
               <input
                 type="number"
                 step="0.1"
@@ -377,7 +377,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">水平微調。若選取框偏右，請設為負值。預設 0。</p>
             </div>
             <div>
-              <label class="block mb-1">全局垂直偏移（像素）</label>
+              <label class="block mb-1">全域垂直偏移（像素）</label>
               <input
                 type="number"
                 step="0.1"
@@ -402,7 +402,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">重疊多少才調整（負值）。預設 0（完全重疊才調整）。</p>
             </div>
             <div>
-              <label class="block mb-1">最小字符間距（像素）</label>
+              <label class="block mb-1">最小字元間距（像素）</label>
               <input
                 type="number"
                 step="0.1"
@@ -440,7 +440,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
           </div>
           <div class="pt-2 border-t">
             <p class="text-xs text-[hsl(var(--muted-foreground))]">
-              💡 提示：調整這些值可以修正文字選擇層的定位問題。如果文字偏左，增加全局偏移；如果某些字符重疊，調整間距參數。
+  提示：調整這些值可以修正文字選擇層的定位問題。如果文字偏左，增加全域偏移；如果某些字元重疊，調整間距參數。
             </p>
           </div>
         </div>
