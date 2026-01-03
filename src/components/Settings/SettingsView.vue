@@ -8,6 +8,7 @@ import ExportSettings from './parts/ExportSettings.vue'
 import InsertDefaults from './parts/InsertDefaults.vue'
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
 import { useCompressSettings } from '@/modules/compress/settings'
+import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -22,8 +23,9 @@ const number = (e: Event, fallback: number) => {
 }
 const clampZoomMax = (v: number) => Math.min(800, Math.max(50, Math.round(v)))
 
-function resetToDefaults() {
-  if (confirm(t('settings.resetConfirm'))) {
+async function resetToDefaults() {
+  const confirmed = await confirmDialog(t('settings.resetConfirm'))
+  if (confirmed) {
     settings.reset()
   }
 }
