@@ -1,9 +1,11 @@
+#[cfg(not(feature = "app-store"))]
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "self-update")]
 use tauri_plugin_updater::UpdaterExt;
 
+#[cfg(not(feature = "app-store"))]
 const GITHUB_API_URL: &str = "https://api.github.com/repos/IDK-Silver/PDF_Tool/releases/latest";
 
 // ============================================================================
@@ -89,6 +91,7 @@ impl Default for UpdateCheckResult {
     }
 }
 
+#[cfg(feature = "self-update")]
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadProgress {
@@ -105,8 +108,10 @@ pub struct UpdateResult {
 
 // ============================================================================
 // Version Comparison
+// Only compiled for non-App Store builds
 // ============================================================================
 
+#[cfg(not(feature = "app-store"))]
 fn is_newer_version(current: &str, latest: &str) -> bool {
     let current_clean = current.trim_start_matches('v');
     let latest_clean = latest.trim_start_matches('v');
@@ -128,8 +133,10 @@ fn is_newer_version(current: &str, latest: &str) -> bool {
 
 // ============================================================================
 // HTTP Request (for version check via GitHub API)
+// Only compiled for non-App Store builds
 // ============================================================================
 
+#[cfg(not(feature = "app-store"))]
 async fn fetch_latest_release() -> Result<ReleaseInfo, String> {
     let client = reqwest::Client::builder()
         .user_agent(format!("Kano-PDF-Tool/{}", env!("CARGO_PKG_VERSION")))
@@ -161,6 +168,8 @@ async fn fetch_latest_release() -> Result<ReleaseInfo, String> {
 // ============================================================================
 
 /// Check for updates (does NOT download, just checks version)
+/// Only available in non-App Store builds
+#[cfg(not(feature = "app-store"))]
 #[tauri::command]
 pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateCheckResult, String> {
     let current_version = app.package_info().version.to_string();
@@ -190,6 +199,19 @@ pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateCheckResult
         latest_version: Some(latest_version),
         release_info: Some(release_info),
         error: None,
+    })
+}
+
+/// Stub for App Store builds (update check disabled)
+#[cfg(feature = "app-store")]
+#[tauri::command]
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateCheckResult, String> {
+    Ok(UpdateCheckResult {
+        has_update: false,
+        current_version: app.package_info().version.to_string(),
+        latest_version: None,
+        release_info: None,
+        error: Some("Update check is not available in App Store builds".to_string()),
     })
 }
 
@@ -320,4 +342,10 @@ pub fn get_platform() -> String {
 #[tauri::command]
 pub fn is_self_update_enabled() -> bool {
     cfg!(feature = "self-update")
+}
+
+/// Check if this is an App Store build
+#[tauri::command]
+pub fn is_app_store_build() -> bool {
+    cfg!(feature = "app-store")
 }

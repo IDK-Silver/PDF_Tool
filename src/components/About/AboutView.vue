@@ -2,18 +2,24 @@
 import { ref, onMounted } from 'vue'
 import { getVersion, getName } from '@tauri-apps/api/app'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import { isAppStoreBuild } from '@/modules/updater/service'
 import qrCodeImage from '@/assets/donate/buymeacoffee/buymeacoffee-qr-code.png'
 import buttonImage from '@/assets/donate/buymeacoffee/buymeacoffee-button.png'
 import appIcon from '@/assets/app-icon.png'
 
 const appName = ref('Kano PDF Tool')
 const version = ref('')
+const isAppStore = ref(false)
 
 onMounted(async () => {
   const hasTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
   if (!hasTauri) return
 
-  const [nameResult, versionResult] = await Promise.allSettled([getName(), getVersion()])
+  const [nameResult, versionResult, appStoreResult] = await Promise.allSettled([
+    getName(),
+    getVersion(),
+    isAppStoreBuild(),
+  ])
 
   if (nameResult.status === 'fulfilled' && nameResult.value) {
     appName.value = nameResult.value
@@ -21,6 +27,10 @@ onMounted(async () => {
 
   if (versionResult.status === 'fulfilled' && versionResult.value) {
     version.value = versionResult.value
+  }
+
+  if (appStoreResult.status === 'fulfilled') {
+    isAppStore.value = appStoreResult.value
   }
 
   if (nameResult.status === 'rejected' || versionResult.status === 'rejected') {
@@ -118,13 +128,13 @@ async function openLink(url: string) {
         <div class="rounded-lg p-5 bg-[hsl(var(--muted))]">
           <h3 class="font-semibold mb-2">授權與來源</h3>
           <ul class="text-sm text-[hsl(var(--muted-foreground))] space-y-1">
-            <li>授權：GPL-3.0</li>
+            <li>授權：MIT</li>
             <li>原始碼：GitHub - IDK-Silver/PDF_Tool</li>
             <li>回饋：歡迎提交 Issue / PR</li>
           </ul>
         </div>
 
-        <div class="rounded-lg p-5 bg-[hsl(var(--muted))]">
+        <div v-if="!isAppStore" class="rounded-lg p-5 bg-[hsl(var(--muted))]">
           <h3 class="font-semibold mb-2">聯絡與更新</h3>
           <p class="text-sm text-[hsl(var(--muted-foreground))]">
             追蹤 GitHub 專案以取得更新通知。若有建議或錯誤回報，請直接開 Issue，讓 {{ appName }} 變得更好。

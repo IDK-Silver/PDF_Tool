@@ -22,7 +22,8 @@ const ACTUAL_SIZE_ID: &str = "actual-size";
 const TOGGLE_SIDEBAR_ID: &str = "toggle-sidebar";
 const TOGGLE_DEVTOOLS_ID: &str = "toggle-devtools";
 
-// App menu IDs
+// App menu IDs (non-App Store only)
+#[cfg(not(feature = "app-store"))]
 const CHECK_UPDATE_ID: &str = "check-update";
 
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -92,7 +93,8 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // About menu item
     let about_item = MenuItem::with_id(app, ABOUT_MENU_ID, "About", true, None::<&str>)?;
 
-    // Check for updates menu item
+    // Check for updates menu item (non-App Store only)
+    #[cfg(not(feature = "app-store"))]
     let check_update_item = MenuItem::with_id(
         app,
         CHECK_UPDATE_ID,
@@ -154,6 +156,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     #[cfg(target_os = "macos")]
     {
+        #[cfg(not(feature = "app-store"))]
         let app_menu = Submenu::with_items(
             app,
             "Kano PDF Tool",
@@ -165,11 +168,25 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                 &PredefinedMenuItem::quit(app, None)?,
             ],
         )?;
+
+        #[cfg(feature = "app-store")]
+        let app_menu = Submenu::with_items(
+            app,
+            "Kano PDF Tool",
+            true,
+            &[
+                &about_item,
+                &PredefinedMenuItem::separator(app)?,
+                &PredefinedMenuItem::quit(app, None)?,
+            ],
+        )?;
+
         Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu])
     }
 
     #[cfg(not(target_os = "macos"))]
     {
+        #[cfg(not(feature = "app-store"))]
         let help_menu = Submenu::with_items(
             app,
             "Help",
@@ -180,6 +197,15 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                 &about_item,
             ],
         )?;
+
+        #[cfg(feature = "app-store")]
+        let help_menu = Submenu::with_items(
+            app,
+            "Help",
+            true,
+            &[&about_item],
+        )?;
+
         Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu, &help_menu])
     }
 }
@@ -226,6 +252,7 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent) {
         TOGGLE_DEVTOOLS_ID => {
             toggle_devtools_for_active_window(app);
         }
+        #[cfg(not(feature = "app-store"))]
         CHECK_UPDATE_ID => {
             let _ = app.emit("menu:check-update", ());
         }

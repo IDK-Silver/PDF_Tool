@@ -20,3 +20,7 @@ export async function getPlatform(): Promise<string> {
 export async function isSelfUpdateEnabled(): Promise<boolean> {
   return invoke<boolean>('is_self_update_enabled')
 }
+
+export async function isAppStoreBuild(): Promise<boolean> {
+  return invoke<boolean>('is_app_store_build')
+}

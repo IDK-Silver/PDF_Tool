@@ -192,6 +192,7 @@ pub fn run() {
             updater::open_release_page,
             updater::get_platform,
             updater::is_self_update_enabled,
+            updater::is_app_store_build,
         ]);
 
     let app = builder

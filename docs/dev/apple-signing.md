@@ -241,7 +241,47 @@ base64 -i ~/Desktop/certificate.p12 | pbcopy
 
 App Store 版本可從 Actions → 對應 workflow run → Artifacts 下載。
 
-## 六、常見問題
+## 六、本地開發與測試
+
+### Feature Flags
+
+專案使用 Cargo features 區分版本：
+
+| Feature | 說明 |
+|---------|------|
+| `self-update`（預設） | 啟用自動更新功能（GitHub 版本） |
+| `app-store` | App Store 版本，禁用所有更新相關功能 |
+
+### 本地測試 App Store 版本
+
+App Store 版本需要移除 `updater.json` capability 檔案，因為 `tauri-plugin-updater` 不會被編譯：
+
+```bash
+# 1. 暫時移除 updater capability
+mv src-tauri/capabilities/updater.json src-tauri/capabilities/updater.json.bak
+
+# 2. 啟動 App Store 版本開發模式
+npm run tauri dev -- -- --no-default-features --features app-store
+
+# 3. 測試完畢後還原
+mv src-tauri/capabilities/updater.json.bak src-tauri/capabilities/updater.json
+```
+
+**驗證項目：**
+- 選單中沒有「Check for Updates...」項目
+- 應用程式正常運作
+
+### 為何需要移除 updater.json？
+
+Tauri 的 capabilities 是靜態 JSON 檔案，無法條件編譯。當 `app-store` feature 啟用時：
+
+1. `tauri-plugin-updater` 不會被編譯（optional dependency）
+2. `updater:default` 權限不存在
+3. Build script 讀取 `updater.json` 時找不到權限 → 編譯失敗
+
+CI workflow 已自動處理此問題（`.github/workflows/release-tauri.yml:344`）。
+
+## 七、常見問題
 
 ### 證書顯示「不受信任」
 
@@ -269,7 +309,7 @@ xcrun notarytool log <submission-id> \
   --password "你的app專用密碼"
 ```
 
-## 七、重要檔案位置
+## 八、重要檔案位置
 
 | 檔案 | 用途 |
 |------|------|
@@ -277,7 +317,7 @@ xcrun notarytool log <submission-id> \
 | `developerID_application.cer` | Apple 簽發的證書 |
 | `certificate.p12` | 包含私鑰和證書的匯出檔（給 CI 用） |
 
-## 八、證書有效期
+## 九、證書有效期
 
 - Developer ID Application 證書有效期：5 年
 - 到期前需重新建立並更新 GitHub Secrets
