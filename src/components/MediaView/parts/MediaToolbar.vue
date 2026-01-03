@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, MagnifyingGlassIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, MagnifyingGlassMinusIcon, ArrowsPointingOutIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
 
 const props = defineProps({
@@ -88,9 +88,9 @@ function handlePageMouseDown(e: MouseEvent) {
 
 <template>
   <div class="sticky top-0 z-20 bg-background/90 backdrop-blur border-b shrink-0">
-    <div class="px-4 py-2 flex items-center justify-between gap-4">
+    <div class="px-4 py-2 flex items-center justify-between gap-4 relative">
       <!-- 左側：檔案操作 -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 z-10">
         <!-- 展開側欄（僅在側欄收合時顯示） -->
         <button v-if="ui.sidebarCollapsed" @click="ui.setSidebarCollapsed(false)"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors hover:bg-hover" title="展開側欄">
@@ -116,9 +116,9 @@ function handlePageMouseDown(e: MouseEvent) {
 
       </div>
 
-      <!-- 中間：頁碼導覽 -->
-      <div class="flex items-center gap-3">
-        <div class="flex items-center text-sm tabular-nums text-[hsl(var(--muted-foreground))]">
+      <!-- 中間：頁碼導覽 (絕對置中) -->
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div class="flex items-center text-sm tabular-nums text-[hsl(var(--muted-foreground))] pointer-events-auto">
           <template v-if="props.isPdf && props.totalPages > 0">
             <input :value="pageText" :size="Math.max(1, String(pageText || '').length)"
               @input="(e: any) => pageText = e.target.value"
@@ -139,38 +139,39 @@ function handlePageMouseDown(e: MouseEvent) {
         </div>
       </div>
 
-      <!-- 右側：檢視控制 -->
-      <div class="flex items-center gap-3">
-        <!-- 顯示模式 -->
-        <div class="flex items-center gap-1 bg-card rounded border border-border p-0.5">
-          <button @click="emit('set-fit-mode')"
-            class="text-xs rounded px-2 h-7 flex items-center justify-center transition-colors whitespace-nowrap"
-            :class="props.viewMode === 'fit' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-hover'">
-            符合寬度
-          </button>
-          <button @click="emit('reset-zoom')"
-            class="text-xs rounded px-2 h-7 flex items-center justify-center transition-colors whitespace-nowrap"
-            :class="props.viewMode === 'actual' ? 'bg-[hsl(var(--accent))] shadow-sm' : 'hover:bg-hover'">
-            實際大小
-          </button>
-        </div>
-
-        <!-- 縮放控制 -->
-        <div class="flex items-center gap-1 bg-card rounded border border-border px-1">
-          <button @click="emit('zoom-out')" :disabled="!props.canZoomOut"
-            class="w-7 h-7 text-sm rounded transition-colors flex items-center justify-center"
-            :class="props.canZoomOut ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
-            :title="props.canZoomOut ? '縮小' : '已達最小縮放'">
-            −
-          </button>
-          <div class="w-[52px] text-center text-xs tabular-nums px-1">{{ props.displayZoom }}%</div>
-          <button @click="emit('zoom-in')" :disabled="!props.canZoomIn"
-            class="w-7 h-7 text-sm rounded transition-colors flex items-center justify-center"
-            :class="props.canZoomIn ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
-            :title="props.canZoomIn ? '放大' : '已達最大縮放'">
-            +
-          </button>
-        </div>
+      <!-- 右側：縮放控制 -->
+      <div class="flex items-center gap-1 z-10">
+        <!-- 縮小 -->
+        <button @click="emit('zoom-out')" :disabled="!props.canZoomOut"
+          class="w-8 h-8 rounded transition-colors flex items-center justify-center"
+          :class="props.canZoomOut ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
+          :title="props.canZoomOut ? '縮小' : '已達最小縮放'">
+          <MagnifyingGlassMinusIcon class="w-4 h-4" />
+        </button>
+        <!-- 實際大小 (放大鏡 + 1) -->
+        <button @click="emit('reset-zoom')"
+          :disabled="props.viewMode === 'actual' && props.displayZoom === 100"
+          class="w-8 h-8 rounded transition-colors flex items-center justify-center relative"
+          :class="props.viewMode === 'actual' && props.displayZoom === 100 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-hover'"
+          title="實際大小">
+          <MagnifyingGlassIcon class="w-4 h-4" />
+          <span class="absolute text-[7px] font-bold" style="top: 10px; left: 13px;">1</span>
+        </button>
+        <!-- 符合寬度 -->
+        <button @click="emit('set-fit-mode')"
+          :disabled="props.viewMode === 'fit'"
+          class="w-8 h-8 rounded transition-colors flex items-center justify-center"
+          :class="props.viewMode === 'fit' ? 'opacity-40 cursor-not-allowed' : 'hover:bg-hover'"
+          title="符合寬度">
+          <ArrowsPointingOutIcon class="w-4 h-4" />
+        </button>
+        <!-- 放大 -->
+        <button @click="emit('zoom-in')" :disabled="!props.canZoomIn"
+          class="w-8 h-8 rounded transition-colors flex items-center justify-center"
+          :class="props.canZoomIn ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
+          :title="props.canZoomIn ? '放大' : '已達最大縮放'">
+          <MagnifyingGlassPlusIcon class="w-4 h-4" />
+        </button>
       </div>
     </div>
   </div>
