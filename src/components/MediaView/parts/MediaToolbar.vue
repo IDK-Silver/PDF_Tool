@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, MagnifyingGlassMinusIcon, ArrowsPointingOutIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
+
+const { t } = useI18n()
 
 const props = defineProps({
   saving: { type: Boolean, default: false },
@@ -93,24 +96,24 @@ function handlePageMouseDown(e: MouseEvent) {
       <div class="flex items-center gap-3 z-10">
         <!-- 展開側欄（僅在側欄收合時顯示） -->
         <button v-if="ui.sidebarCollapsed" @click="ui.setSidebarCollapsed(false)"
-          class="rounded w-8 h-8 flex items-center justify-center transition-colors hover:bg-hover" title="展開側欄">
+          class="rounded w-8 h-8 flex items-center justify-center transition-colors hover:bg-hover" :title="t('sidebar.expand')">
           <ChevronDoubleRightIcon class="w-4 h-4" />
         </button>
         <button @click="shiftDown ? emit('discard') : emit('save')" :disabled="props.saving || !props.canSave"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"
           :class="props.canSave ? (shiftDown ? 'bg-red-500 text-white hover:bg-red-700' : 'bg-blue-400 text-white hover:bg-blue-700') : 'bg-card text-muted-foreground opacity-60 cursor-not-allowed'"
-          :title="shiftDown ? '捨棄變更' : '儲存'">
+          :title="shiftDown ? t('toolbar.discard') : t('toolbar.save')">
           <component :is="shiftDown ? XMarkIcon : ArchiveBoxIcon" class="w-4 h-4" />
         </button>
         <button v-if="props.isPdf" data-search-trigger @click="emit('toggle-search', $event)"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"
           :class="props.searchActive ? 'bg-blue-400 text-white hover:bg-blue-700' : 'hover:bg-hover text-[hsl(var(--foreground))]'"
-          title="搜尋 (Ctrl/Cmd + F)">
+          :title="t('toolbar.search')">
           <MagnifyingGlassIcon class="w-4 h-4" />
         </button>
         <button @click="emit('reveal')" :disabled="!props.canReveal"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"
-          :class="props.canReveal ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'" title="在檔案管理器顯示">
+          :class="props.canReveal ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'" :title="t('toolbar.revealInFinder')">
           <FolderOpenIcon class="w-4 h-4" />
         </button>
 
@@ -129,7 +132,7 @@ function handlePageMouseDown(e: MouseEvent) {
               @keydown.esc.prevent="cancelPageInput($event.target as HTMLInputElement)" type="text" inputmode="numeric"
               pattern="[0-9]*"
               class="text-center text-[hsl(var(--foreground))] bg-transparent border-0 px-0 focus:outline-none w-auto"
-              title="輸入頁碼後按 Enter 跳轉" />
+              :title="t('toolbar.pageInputHint')" />
             <span class="mx-1">/</span>
             <span>{{ props.totalPages }}</span>
           </template>
@@ -145,7 +148,7 @@ function handlePageMouseDown(e: MouseEvent) {
         <button @click="emit('zoom-out')" :disabled="!props.canZoomOut"
           class="w-8 h-8 rounded transition-colors flex items-center justify-center"
           :class="props.canZoomOut ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
-          :title="props.canZoomOut ? '縮小' : '已達最小縮放'">
+          :title="props.canZoomOut ? t('toolbar.zoomOut') : t('toolbar.zoomOutDisabled')">
           <MagnifyingGlassMinusIcon class="w-4 h-4" />
         </button>
         <!-- 實際大小 (放大鏡 + 1) -->
@@ -153,7 +156,7 @@ function handlePageMouseDown(e: MouseEvent) {
           :disabled="props.viewMode === 'actual' && props.displayZoom === 100"
           class="w-8 h-8 rounded transition-colors flex items-center justify-center relative"
           :class="props.viewMode === 'actual' && props.displayZoom === 100 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-hover'"
-          title="實際大小">
+          :title="t('toolbar.actualSize')">
           <MagnifyingGlassIcon class="w-4 h-4" />
           <span class="absolute text-[7px] font-bold" style="top: 10px; left: 13px;">1</span>
         </button>
@@ -162,14 +165,14 @@ function handlePageMouseDown(e: MouseEvent) {
           :disabled="props.viewMode === 'fit'"
           class="w-8 h-8 rounded transition-colors flex items-center justify-center"
           :class="props.viewMode === 'fit' ? 'opacity-40 cursor-not-allowed' : 'hover:bg-hover'"
-          title="符合寬度">
+          :title="t('toolbar.fitWidth')">
           <ArrowsPointingOutIcon class="w-4 h-4" />
         </button>
         <!-- 放大 -->
         <button @click="emit('zoom-in')" :disabled="!props.canZoomIn"
           class="w-8 h-8 rounded transition-colors flex items-center justify-center"
           :class="props.canZoomIn ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
-          :title="props.canZoomIn ? '放大' : '已達最大縮放'">
+          :title="props.canZoomIn ? t('toolbar.zoomIn') : t('toolbar.zoomInDisabled')">
           <MagnifyingGlassPlusIcon class="w-4 h-4" />
         </button>
       </div>

@@ -1,8 +1,11 @@
 // 精簡版 Settings（v2）- 移除過度設計的參數
 
 export interface SettingsState {
+  // === 語言 ===
+  language: 'system' | 'zh-TW' | 'en'
+
   // === 外觀 ===
-  theme: 'light' | 'dark'
+  theme: 'system' | 'light' | 'dark'
   invertColorsInDarkMode: boolean  // 暗色模式下反轉 PDF/圖片顏色
 
   // === 檔案操作 ===
@@ -58,8 +61,11 @@ export interface SettingsState {
 }
 
 export const defaultSettings: SettingsState = {
+  // 語言
+  language: 'system',
+
   // 外觀
-  theme: 'light',
+  theme: 'system',
   invertColorsInDarkMode: true,
 
   // 檔案操作

@@ -139,7 +139,7 @@ onBeforeUnmount(() => {
       class="pointer-events-none fixed inset-0 z-[200] bg-black/40 flex items-center justify-center"
     >
       <div class="border-2 border-dashed border-[hsl(var(--primary))] bg-[hsl(var(--background))] px-8 py-6 rounded shadow text-lg text-[hsl(var(--foreground))]">
-        將 PDF 或圖片拖曳到這裡
+        {{ $t('dragDrop.hint') }}
       </div>
     </div>
     <UpdateDialog />

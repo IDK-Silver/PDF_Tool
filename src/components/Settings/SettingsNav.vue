@@ -25,17 +25,18 @@ function go(hash: string) {
 
 <template>
   <nav class="p-3 text-sm space-y-2">
-    <div class="text-xs text-[hsl(var(--muted-foreground))] mb-2">設定導覽</div>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#appearance" @click.prevent="go('#appearance')">外觀</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#high-res-rendering" @click.prevent="go('#high-res-rendering')">高畫質渲染</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#performance" @click.prevent="go('#performance')">效能控制</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#zoom-interaction" @click.prevent="go('#zoom-interaction')">縮放互動</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#fileops" @click.prevent="go('#fileops')">檔案操作</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#compression-save" @click.prevent="go('#compression-save')">壓縮存檔</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#insert-defaults" @click.prevent="go('#insert-defaults')">插入預設</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#text-layer" @click.prevent="go('#text-layer')">文字層</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#export" @click.prevent="go('#export')">匯出設定</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#encoding" @click.prevent="go('#encoding')">編碼品質</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#debug" @click.prevent="go('#debug')">除錯與輔助</a>
+    <div class="text-xs text-[hsl(var(--muted-foreground))] mb-2">{{ $t('settings.nav.title') }}</div>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#language" @click.prevent="go('#language')">{{ $t('settings.nav.language') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#appearance" @click.prevent="go('#appearance')">{{ $t('settings.nav.appearance') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#high-res-rendering" @click.prevent="go('#high-res-rendering')">{{ $t('settings.nav.highResRendering') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#performance" @click.prevent="go('#performance')">{{ $t('settings.nav.performance') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#zoom-interaction" @click.prevent="go('#zoom-interaction')">{{ $t('settings.nav.zoomInteraction') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#fileops" @click.prevent="go('#fileops')">{{ $t('settings.nav.fileOps') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#compression-save" @click.prevent="go('#compression-save')">{{ $t('settings.nav.compressionSave') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#insert-defaults" @click.prevent="go('#insert-defaults')">{{ $t('settings.nav.insertDefaults') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#text-layer" @click.prevent="go('#text-layer')">{{ $t('settings.nav.textLayer') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#export" @click.prevent="go('#export')">{{ $t('settings.nav.export') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#encoding" @click.prevent="go('#encoding')">{{ $t('settings.nav.encoding') }}</a>
+    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#debug" @click.prevent="go('#debug')">{{ $t('settings.nav.debug') }}</a>
   </nav>
 </template>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useCompressionStore } from '@/modules/compress/store'
 import CompressionToolbar from './parts/CompressionToolbar.vue'
 import PdfCompressPane from './parts/PdfCompressPane.vue'
@@ -9,6 +10,7 @@ import { formatFileSize } from '@/modules/media/fileSize'
 import { openInFileManager } from '@/modules/media/openInFileManager'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
 
+const { t } = useI18n()
 const compression = useCompressionStore()
 const media = useMediaStore()
 
@@ -79,27 +81,33 @@ async function onReveal() {
   if (!p) return
   try { await openInFileManager(p) } catch (err) {
     console.error('openInFileManager failed', err)
-    alert('無法在檔案管理器顯示該檔案')
+    alert(t('compression.revealError'))
   }
 }
+
+const modeLabel = computed(() => {
+  if (isPdf.value) return t('compression.pdfMode')
+  if (isImage.value) return t('compression.imageMode')
+  return ''
+})
 </script>
 
 <template>
   <div class="h-full flex flex-col">
 
-    <!-- 工具列：永遠顯示，置頂吸附與半透明背景，與檢視模式一致 -->
+    <!-- Toolbar: always visible, sticky with blur background -->
     <CompressionToolbar
       :running="compression.running"
       :selected-name="fileName"
       :file-size-text="hasValidFile ? fileSizeText : undefined"
-      :mode-label="isPdf ? 'PDF 壓縮' : (isImage ? '圖片壓縮' : '')"
+      :mode-label="modeLabel"
       :hide-actions="isFileMissing"
       :can-reveal="canReveal"
       @reveal="onReveal"
       @start="onStart" @cancel="onCancel"
     />
 
-    <!-- 內容區：根據檔案類型顯示對應面板 -->
+    <!-- Content area: show corresponding pane based on file type -->
     <div class="flex-1 min-h-0 overflow-auto p-4">
       <PdfCompressPane v-if="isPdf" />
       <ImageCompressPane v-else-if="isImage" />
@@ -108,7 +116,7 @@ async function onReveal() {
       </div>
       <div v-else class="h-full flex items-center justify-center">
         <div class="text-center text-[hsl(var(--muted-foreground))]">
-          <p class="text-sm">請在左側選擇 PDF 或圖片檔案以開始壓縮</p>
+          <p class="text-sm">{{ $t('compression.selectFileHint') }}</p>
         </div>
       </div>
     </div>

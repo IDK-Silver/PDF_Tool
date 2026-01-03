@@ -3,11 +3,13 @@ import { useSettingsStore } from '@/modules/settings/store'
 import { useUiStore } from '@/modules/ui/store'
 import { onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import ExportSettings from './parts/ExportSettings.vue'
 import InsertDefaults from './parts/InsertDefaults.vue'
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
 import { useCompressSettings } from '@/modules/compress/settings'
 
+const { t } = useI18n()
 const settings = useSettingsStore()
 const s = settings.s
 const ui = useUiStore()
@@ -21,7 +23,7 @@ const number = (e: Event, fallback: number) => {
 const clampZoomMax = (v: number) => Math.min(800, Math.max(50, Math.round(v)))
 
 function resetToDefaults() {
-  if (confirm('確定要回復預設設定？此動作會覆蓋目前所有設定。')) {
+  if (confirm(t('settings.resetConfirm'))) {
     settings.reset()
   }
 }
@@ -59,45 +61,75 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               v-if="ui.sidebarCollapsed"
               @click="ui.setSidebarCollapsed(false)"
               class="inline-flex items-center justify-center w-8 h-8 rounded hover:bg-[hsl(var(--selection))] transition"
-              title="展開左側欄"
-              aria-label="展開左側欄"
+              :title="$t('settings.expandSidebar')"
+              :aria-label="$t('settings.expandSidebar')"
             >
               <ChevronDoubleRightIcon class="w-5 h-5" />
             </button>
-            <h1 class="text-lg font-medium">設定</h1>
+            <h1 class="text-lg font-medium">{{ $t('settings.title') }}</h1>
           </div>
-          <button @click="resetToDefaults" class="px-2 py-1 text-sm rounded border border-border bg-card hover:bg-hover transition-colors">回復預設</button>
+          <button @click="resetToDefaults" class="px-2 py-1 text-sm rounded border border-border bg-card hover:bg-hover transition-colors">{{ $t('settings.resetDefaults') }}</button>
         </div>
-        <p class="text-xs text-[hsl(var(--muted-foreground))]">調整渲染體驗與效能參數。右側主視圖會即時套用。</p>
+        <p class="text-xs text-[hsl(var(--muted-foreground))]">{{ $t('settings.subtitle') }}</p>
       </header>
 
-      <section id="appearance" class="space-y-3">
-        <h2 class="font-medium text-base">外觀</h2>
+      <section id="language" class="space-y-3">
+        <h2 class="font-medium text-base">{{ $t('settings.language.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
-            <label class="block mb-2">主題模式</label>
+            <label class="block mb-2">{{ $t('settings.language.select') }}</label>
             <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
               <label class="flex items-center gap-2">
-                <input type="radio" value="light" v-model="s.theme" />
-                <span>亮色（預設）</span>
+                <input type="radio" value="system" v-model="s.language" />
+                <span>{{ $t('settings.language.system') }}</span>
               </label>
               <label class="flex items-center gap-2">
-                <input type="radio" value="dark" v-model="s.theme" />
-                <span>暗色</span>
+                <input type="radio" value="zh-TW" v-model="s.language" />
+                <span>繁體中文</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="radio" value="en" v-model="s.language" />
+                <span>English</span>
               </label>
             </div>
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              切換介面的配色主題，即時生效。
+              {{ $t('settings.language.description') }}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="appearance" class="space-y-3">
+        <h2 class="font-medium text-base">{{ $t('settings.appearance.title') }}</h2>
+        <div class="rounded-md border p-4 space-y-3">
+          <div>
+            <label class="block mb-2">{{ $t('settings.appearance.themeMode') }}</label>
+            <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
+              <label class="flex items-center gap-2">
+                <input type="radio" value="system" v-model="s.theme" />
+                <span>{{ $t('settings.appearance.system') }}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="radio" value="light" v-model="s.theme" />
+                <span>{{ $t('settings.appearance.light') }}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="radio" value="dark" v-model="s.theme" />
+                <span>{{ $t('settings.appearance.dark') }}</span>
+              </label>
+            </div>
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              {{ $t('settings.appearance.themeDescription') }}
             </p>
           </div>
 
-          <div class="flex items-start gap-2" :class="{ 'opacity-50': s.theme !== 'dark' }">
-            <input type="checkbox" id="invertColorsInDarkMode" v-model="s.invertColorsInDarkMode" :disabled="s.theme !== 'dark'" class="mt-1 w-4 h-4" />
+          <div class="flex items-start gap-2" :class="{ 'opacity-50': settings.actualTheme !== 'dark' }">
+            <input type="checkbox" id="invertColorsInDarkMode" v-model="s.invertColorsInDarkMode" :disabled="settings.actualTheme !== 'dark'" class="mt-1 w-4 h-4" />
             <label for="invertColorsInDarkMode" class="flex-1">
-              <span class="font-medium">暗色模式反轉文件顏色</span>
+              <span class="font-medium">{{ $t('settings.appearance.invertColors') }}</span>
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                在暗色模式下反轉 PDF/圖片的顏色，讓白底黑字的文件變成黑底白字，更適合夜間閱讀。
-                <span v-if="s.theme !== 'dark'" class="block mt-1">需先啟用暗色模式。</span>
+                {{ $t('settings.appearance.invertColorsDescription') }}
+                <span v-if="settings.actualTheme !== 'dark'" class="block mt-1">{{ $t('settings.appearance.invertColorsDisabled') }}</span>
               </p>
             </label>
           </div>
@@ -107,129 +139,129 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
       
 
       <section id="high-res-rendering" class="space-y-3">
-        <h2 class="font-medium text-base">高畫質渲染</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.highRes.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <p class="text-xs text-[hsl(var(--muted-foreground))]">
-            停止捲動後會載入高畫質頁面，用於最終檢視與輸出。
+            {{ $t('settings.highRes.description') }}
           </p>
 
           <div>
-            <label class="block mb-1">高畫質輸出格式</label>
+            <label class="block mb-1">{{ $t('settings.highRes.outputFormat') }}</label>
             <select v-model="s.renderFormat" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
-              <option value="raw">Raw（預設，最快速）</option>
-              <option value="webp">WebP（高壓縮比）</option>
-              <option value="png">PNG（無損）</option>
-              <option value="jpeg">JPEG（相容性佳）</option>
+              <option value="raw">{{ $t('settings.highRes.formatRaw') }}</option>
+              <option value="webp">{{ $t('settings.highRes.formatWebP') }}</option>
+              <option value="png">{{ $t('settings.highRes.formatPNG') }}</option>
+              <option value="jpeg">{{ $t('settings.highRes.formatJPEG') }}</option>
             </select>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">格式完全依設定選擇，無大頁面強制降級。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.formatDescription') }}</p>
           </div>
 
           <div v-if="s.renderFormat === 'raw'">
-            <label class="block mb-1">Raw 快取上限（頁）</label>
+            <label class="block mb-1">{{ $t('settings.highRes.rawCacheLimit') }}</label>
             <input
               class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
               :value="s.rawHighResCacheSize"
               @input="s.rawHighResCacheSize = number($event, s.rawHighResCacheSize)"
             />
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              Raw 影像佔用記憶體，建議維持 10–15 頁（約 30–120 MB）。
+              {{ $t('settings.highRes.rawCacheDescription') }}
             </p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="block mb-1">高畫質 DPI 上限</label>
+              <label class="block mb-1">{{ $t('settings.highRes.dpiCap') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.highResDpiCap"
                 @input="s.highResDpiCap = number($event, s.highResDpiCap)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制高畫質渲染 DPI，避免卡頓。預設 144。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.dpiCapDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">DPR 上限</label>
+              <label class="block mb-1">{{ $t('settings.highRes.dprCap') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.dprCap"
                 @input="s.dprCap = number($event, s.dprCap)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">控制裝置像素比對輸出寬度的放大。預設 1.5。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.dprCapDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">最大輸出寬度（px）</label>
+              <label class="block mb-1">{{ $t('settings.highRes.maxOutputWidth') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.maxOutputWidth"
                 @input="s.maxOutputWidth = number($event, s.maxOutputWidth)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">避免超寬容器時輸出位圖過大。預設 1200。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.maxOutputWidthDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">實際大小 DPI 上限</label>
+              <label class="block mb-1">{{ $t('settings.highRes.actualSizeDpiCap') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.actualModeDpiCap"
                 @input="s.actualModeDpiCap = number($event, s.actualModeDpiCap)"
               />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                防止高倍縮放時 DPI 過大。預設 144。
+                {{ $t('settings.highRes.actualSizeDpiCapDescription') }}
               </p>
             </div>
             <div>
-              <label class="block mb-1">縮放重渲染延遲（ms）</label>
+              <label class="block mb-1">{{ $t('settings.highRes.zoomRerenderDelay') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.zoomRerenderDelayMs"
                 @input="s.zoomRerenderDelayMs = number($event, s.zoomRerenderDelayMs)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">縮放操作後觸發高畫質重渲染的延遲。預設 150 ms。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.zoomRerenderDelayDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">高畫質重渲染預設延遲（ms）</label>
+              <label class="block mb-1">{{ $t('settings.highRes.hiResRerenderDelay') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.hiResRerenderDelayMs"
                 @input="s.hiResRerenderDelayMs = number($event, s.hiResRerenderDelayMs)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">未指定延遲時使用的預設值。預設 300 ms。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.hiResRerenderDelayDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">捲動結束延遲（ms）</label>
+              <label class="block mb-1">{{ $t('settings.highRes.scrollEndDelay') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.scrollEndDebounceMs"
                 @input="s.scrollEndDebounceMs = number($event, s.scrollEndDebounceMs)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">辨識「捲動結束」後再批次渲染的延遲。預設 500 ms。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.scrollEndDelayDescription') }}</p>
             </div>
           </div>
         </div>
       </section>
 
       <section id="performance" class="space-y-3">
-        <h2 class="font-medium text-base">效能控制</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.performance.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="block mb-1">最大並行渲染</label>
+              <label class="block mb-1">{{ $t('settings.performance.maxConcurrentRenders') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.maxConcurrentRenders"
                 @input="s.maxConcurrentRenders = number($event, s.maxConcurrentRenders)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">限制同時間的渲染頁數。預設 4。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.performance.maxConcurrentRendersDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">高畫質預載範圍</label>
+              <label class="block mb-1">{{ $t('settings.performance.highResOverscan') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.highResOverscan"
                 @input="s.highResOverscan = number($event, s.highResOverscan)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">向可見區域上下預載的頁數。預設 4。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.performance.highResOverscanDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">DOM 結構保留範圍</label>
+              <label class="block mb-1">{{ $t('settings.performance.structureOverscan') }}</label>
               <input
                 type="number"
                 min="1"
@@ -238,17 +270,17 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.structureOverscan"
                 @input="s.structureOverscan = number($event, s.structureOverscan)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">視野外 ± N 頁仍保留 DOM 結構，超出範圍只渲染占位。預設 10。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.performance.structureOverscanDescription') }}</p>
             </div>
           </div>
         </div>
       </section>
 
       <section id="zoom-interaction" class="space-y-3">
-        <h2 class="font-medium text-base">縮放互動</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.zoom.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
-            <label class="block mb-1">最大縮放（%）</label>
+            <label class="block mb-1">{{ $t('settings.zoom.maxZoom') }}</label>
             <input
               type="number"
               step="10"
@@ -259,11 +291,11 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               @input="s.zoomMaxPercent = clampZoomMax(number($event, s.zoomMaxPercent))"
             />
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              套用於 PDF 與圖片的實際大小模式。預設 400%，可調範圍 50–800%。
+              {{ $t('settings.zoom.maxZoomDescription') }}
             </p>
           </div>
           <div>
-            <label class="block mb-1">滾輪縮放敏感度</label>
+            <label class="block mb-1">{{ $t('settings.zoom.sensitivity') }}</label>
             <input
               type="number"
               step="0.0001"
@@ -274,83 +306,83 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               @input="s.zoomSensitivity = number($event, s.zoomSensitivity)"
             />
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              控制滾輪縮放的速度。較小值（0.001）= 較慢，較大值（0.0025）= 較快。預設 0.0015。
+              {{ $t('settings.zoom.sensitivityDescription') }}
             </p>
           </div>
           <div class="pt-2 border-t">
             <p class="text-xs text-[hsl(var(--muted-foreground))]">
-  提示：此設定使用指數縮放，無論當前縮放級別為何，縮放的視覺感受都會保持一致。如果覺得縮放太快，減小此值；太慢則增大此值。
+              {{ $t('settings.zoom.sensitivityTip') }}
             </p>
           </div>
         </div>
       </section>
 
       <section id="fileops" class="space-y-3">
-        <h2 class="font-medium text-base">檔案操作</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.fileOps.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
-            <label class="block mb-2">編輯存檔行為（檢視/編輯頁）</label>
+            <label class="block mb-2">{{ $t('settings.fileOps.editSaveBehavior') }}</label>
             <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
               <label class="flex items-center gap-2">
                 <input type="radio" value="saveAsNew" v-model="s.deleteBehavior" />
-                <span>另存新檔</span>
+                <span>{{ $t('settings.fileOps.saveAsNew') }}</span>
               </label>
               <label class="flex items-center gap-2">
                 <input type="radio" value="overwrite" v-model="s.deleteBehavior" />
-                <span>覆蓋原檔</span>
+                <span>{{ $t('settings.fileOps.overwrite') }}</span>
               </label>
             </div>
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              用於編輯動作（例如移除頁面）後的儲存策略；建議使用「另存新檔」以降低風險。
+              {{ $t('settings.fileOps.editSaveDescription') }}
             </p>
           </div>
         </div>
       </section>
 
       <section id="compression-save" class="space-y-3">
-        <h2 class="font-medium text-base">壓縮存檔行為</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.compressionSave.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
-            <label class="block mb-2">壓縮執行時的輸出策略</label>
+            <label class="block mb-2">{{ $t('settings.compressionSave.outputStrategy') }}</label>
             <div class="flex flex-col gap-2 md:flex-row md:items-center md:gap-6">
               <label class="flex items-center gap-2">
                 <input type="radio" value="saveAsNew" v-model="compressSettings.s.saveBehavior" />
-                <span>另存新檔</span>
+                <span>{{ $t('settings.fileOps.saveAsNew') }}</span>
               </label>
               <label class="flex items-center gap-2">
                 <input type="radio" value="overwrite" v-model="compressSettings.s.saveBehavior" />
-                <span>覆蓋原檔</span>
+                <span>{{ $t('settings.fileOps.overwrite') }}</span>
               </label>
             </div>
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              影響壓縮頁面「開始壓縮」的預設行為；可於壓縮工具列快速切換。
+              {{ $t('settings.compressionSave.description') }}
             </p>
           </div>
         </div>
       </section>
 
       <section id="insert-defaults" class="space-y-3">
-        <h2 class="font-medium text-base">插入空白頁預設</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.insertDefaults.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <InsertDefaults />
         </div>
       </section>
 
       <section id="text-layer" class="space-y-3">
-        <h2 class="font-medium text-base">文字層</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.textLayer.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div class="flex items-start gap-2">
             <input type="checkbox" id="enableTextExtraction" v-model="s.enableTextExtraction" class="mt-1 w-4 h-4" />
             <label for="enableTextExtraction" class="flex-1">
-              <span class="font-medium">啟用文字讀取</span>
+              <span class="font-medium">{{ $t('settings.textLayer.enableTextExtraction') }}</span>
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                讀取 PDF 內的文字資訊，支援文字選取、複製與搜尋。關閉可略微提升渲染效能。
+                {{ $t('settings.textLayer.enableTextExtractionDescription') }}
               </p>
             </label>
           </div>
 
           <div :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
-            <label class="block mb-1">文字層渲染範圍</label>
+            <label class="block mb-1">{{ $t('settings.textLayer.range') }}</label>
             <input
               type="number"
               min="0"
@@ -360,13 +392,13 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
               @input="s.textLayerRange = number($event, s.textLayerRange)"
             />
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              中心頁面 ± N 頁會渲染文字層。較大值允許更遠頁面的文字選取，但會增加 DOM 節點。預設 1。
+              {{ $t('settings.textLayer.rangeDescription') }}
             </p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3" :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
             <div>
-              <label class="block mb-1">全域水平偏移（像素）</label>
+              <label class="block mb-1">{{ $t('settings.textLayer.globalOffsetX') }}</label>
               <input
                 type="number"
                 step="0.1"
@@ -374,10 +406,10 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.textLayerGlobalOffsetX"
                 @input="s.textLayerGlobalOffsetX = number($event, s.textLayerGlobalOffsetX)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">水平微調。若選取框偏右，請設為負值。預設 0。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.textLayer.globalOffsetXDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">全域垂直偏移（像素）</label>
+              <label class="block mb-1">{{ $t('settings.textLayer.globalOffsetY') }}</label>
               <input
                 type="number"
                 step="0.1"
@@ -385,13 +417,13 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.textLayerGlobalOffsetY"
                 @input="s.textLayerGlobalOffsetY = number($event, s.textLayerGlobalOffsetY)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">垂直微調。若選取框偏下，請設為正值。預設 0。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.textLayer.globalOffsetYDescription') }}</p>
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3" :class="{ 'opacity-50 pointer-events-none': !s.enableTextExtraction }">
             <div>
-              <label class="block mb-1">重疊檢測閾值</label>
+              <label class="block mb-1">{{ $t('settings.textLayer.overlapThreshold') }}</label>
               <input
                 type="number"
                 step="0.1"
@@ -399,10 +431,10 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.textLayerOverlapThreshold"
                 @input="s.textLayerOverlapThreshold = number($event, s.textLayerOverlapThreshold)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">重疊多少才調整（負值）。預設 0（完全重疊才調整）。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.textLayer.overlapThresholdDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">最小字元間距（像素）</label>
+              <label class="block mb-1">{{ $t('settings.textLayer.minSpacing') }}</label>
               <input
                 type="number"
                 step="0.1"
@@ -411,10 +443,10 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.textLayerMinSpacing"
                 @input="s.textLayerMinSpacing = number($event, s.textLayerMinSpacing)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">重疊時的最小間距。預設 1.0。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.textLayer.minSpacingDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">小間距檢測閾值（像素）</label>
+              <label class="block mb-1">{{ $t('settings.textLayer.smallGapThreshold') }}</label>
               <input
                 type="number"
                 step="0.1"
@@ -423,10 +455,10 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.textLayerSmallGapThreshold"
                 @input="s.textLayerSmallGapThreshold = number($event, s.textLayerSmallGapThreshold)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">小於此值視為間距太小。預設 0.5。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.textLayer.smallGapThresholdDescription') }}</p>
             </div>
             <div>
-              <label class="block mb-1">小間距調整值（像素）</label>
+              <label class="block mb-1">{{ $t('settings.textLayer.smallGapSpacing') }}</label>
               <input
                 type="number"
                 step="0.1"
@@ -435,48 +467,48 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 :value="s.textLayerSmallGapSpacing"
                 @input="s.textLayerSmallGapSpacing = number($event, s.textLayerSmallGapSpacing)"
               />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">小間距時調整到此值。預設 0.5。</p>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.textLayer.smallGapSpacingDescription') }}</p>
             </div>
           </div>
           <div class="pt-2 border-t">
             <p class="text-xs text-[hsl(var(--muted-foreground))]">
-  提示：調整這些值可以修正文字選擇層的定位問題。如果文字偏左，增加全域偏移；如果某些字元重疊，調整間距參數。
+              {{ $t('settings.textLayer.tip') }}
             </p>
           </div>
         </div>
       </section>
 
       <section id="export" class="space-y-3">
-        <h2 class="font-medium text-base">匯出設定</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.export.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <ExportSettings />
         </div>
       </section>
 
       <section id="encoding" class="space-y-3">
-        <h2 class="font-medium text-base">編碼品質</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.encoding.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label class="block mb-1">JPEG 品質（1–100）</label>
+              <label class="block mb-1">{{ $t('settings.encoding.jpegQuality') }}</label>
               <input
                 class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
                 :value="s.jpegQuality"
                 @input="s.jpegQuality = number($event, s.jpegQuality)"
               />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                數值越高越清晰，檔案也會變大。建議 80–85。
+                {{ $t('settings.encoding.jpegQualityDescription') }}
               </p>
             </div>
             <div>
-              <label class="block mb-1">PNG 壓縮等級</label>
+              <label class="block mb-1">{{ $t('settings.encoding.pngCompression') }}</label>
               <select v-model="s.pngCompression" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
-                <option value="fast">快速（檔案較大）</option>
-                <option value="balanced">平衡</option>
-                <option value="best">最佳（檔案最小，較慢）</option>
+                <option value="fast">{{ $t('settings.encoding.pngFast') }}</option>
+                <option value="balanced">{{ $t('settings.encoding.pngBalanced') }}</option>
+                <option value="best">{{ $t('settings.encoding.pngBest') }}</option>
               </select>
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                在速度與檔案大小之間取得平衡。
+                {{ $t('settings.encoding.pngCompressionDescription') }}
               </p>
             </div>
           </div>
@@ -484,14 +516,14 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
       </section>
 
       <section id="debug" class="space-y-3">
-        <h2 class="font-medium text-base">除錯與輔助</h2>
+        <h2 class="font-medium text-base">{{ $t('settings.debug.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <label class="flex items-center gap-2">
             <input type="checkbox" v-model="s.devPerfOverlay" />
-            <span>顯示效能浮層（右下角 inflight/queued）</span>
+            <span>{{ $t('settings.debug.perfOverlay') }}</span>
           </label>
           <p class="text-xs text-[hsl(var(--muted-foreground))]">
-            提供當前渲染佇列與進行中數量，方便調整參數。
+            {{ $t('settings.debug.perfOverlayDescription') }}
           </p>
         </div>
       </section>

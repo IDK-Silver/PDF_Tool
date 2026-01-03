@@ -3,6 +3,8 @@ use tauri::{
     menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu},
 };
 
+use crate::menu_i18n::get_menu_strings;
+
 const ABOUT_WINDOW_LABEL: &str = "about-window";
 const ABOUT_MENU_ID: &str = "about-custom";
 
@@ -27,16 +29,22 @@ const TOGGLE_DEVTOOLS_ID: &str = "toggle-devtools";
 const CHECK_UPDATE_ID: &str = "check-update";
 
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    build_menu_with_lang(app, "en")
+}
+
+pub fn build_menu_with_lang<R: Runtime>(app: &AppHandle<R>, lang: &str) -> tauri::Result<Menu<R>> {
+    let strings = get_menu_strings(lang);
+
     // File menu items
-    let open_file_item = MenuItem::with_id(app, OPEN_FILE_ID, "Open", true, Some("CmdOrCtrl+O"))?;
+    let open_file_item = MenuItem::with_id(app, OPEN_FILE_ID, strings.open, true, Some("CmdOrCtrl+O"))?;
     let remove_file_item =
-        MenuItem::with_id(app, REMOVE_FILE_ID, "Close File", true, Some("CmdOrCtrl+W"))?;
+        MenuItem::with_id(app, REMOVE_FILE_ID, strings.close_file, true, Some("CmdOrCtrl+W"))?;
 
     #[cfg(target_os = "macos")]
     let open_in_fm_item = MenuItem::with_id(
         app,
         OPEN_IN_FILE_MANAGER_ID,
-        "Reveal in Finder",
+        strings.reveal_in_finder,
         true,
         Some("CmdOrCtrl+Shift+R"),
     )?;
@@ -45,7 +53,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let open_in_fm_item = MenuItem::with_id(
         app,
         OPEN_IN_FILE_MANAGER_ID,
-        "Show in Folder",
+        strings.show_in_folder,
         true,
         Some("CmdOrCtrl+Shift+R"),
     )?;
@@ -54,51 +62,51 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let open_in_fm_item = MenuItem::with_id(
         app,
         OPEN_IN_FILE_MANAGER_ID,
-        "Show in File Manager",
+        strings.show_in_file_manager,
         true,
         Some("CmdOrCtrl+Shift+R"),
     )?;
 
     // Edit menu items
-    let find_item = MenuItem::with_id(app, FIND_ID, "Find", true, Some("CmdOrCtrl+F"))?;
+    let find_item = MenuItem::with_id(app, FIND_ID, strings.find, true, Some("CmdOrCtrl+F"))?;
 
     // View menu items
-    let zoom_in_item = MenuItem::with_id(app, ZOOM_IN_ID, "Zoom In", true, Some("CmdOrCtrl+Plus"))?;
+    let zoom_in_item = MenuItem::with_id(app, ZOOM_IN_ID, strings.zoom_in, true, Some("CmdOrCtrl+Plus"))?;
     let zoom_out_item =
-        MenuItem::with_id(app, ZOOM_OUT_ID, "Zoom Out", true, Some("CmdOrCtrl+Minus"))?;
+        MenuItem::with_id(app, ZOOM_OUT_ID, strings.zoom_out, true, Some("CmdOrCtrl+Minus"))?;
     let fit_mode_item =
-        MenuItem::with_id(app, FIT_MODE_ID, "Fit to Window", true, Some("CmdOrCtrl+0"))?;
+        MenuItem::with_id(app, FIT_MODE_ID, strings.fit_to_window, true, Some("CmdOrCtrl+0"))?;
     let actual_size_item = MenuItem::with_id(
         app,
         ACTUAL_SIZE_ID,
-        "Actual Size",
+        strings.actual_size,
         true,
         Some("CmdOrCtrl+1"),
     )?;
     let toggle_sidebar_item = MenuItem::with_id(
         app,
         TOGGLE_SIDEBAR_ID,
-        "Toggle Sidebar",
+        strings.toggle_sidebar,
         true,
         Some("CmdOrCtrl+B"),
     )?;
     let toggle_devtools_item = MenuItem::with_id(
         app,
         TOGGLE_DEVTOOLS_ID,
-        "Toggle Developer Tools",
+        strings.toggle_devtools,
         true,
         Some("CmdOrCtrl+Alt+I"),
     )?;
 
     // About menu item
-    let about_item = MenuItem::with_id(app, ABOUT_MENU_ID, "About", true, None::<&str>)?;
+    let about_item = MenuItem::with_id(app, ABOUT_MENU_ID, strings.about, true, None::<&str>)?;
 
     // Check for updates menu item (non-App Store only)
     #[cfg(not(feature = "app-store"))]
     let check_update_item = MenuItem::with_id(
         app,
         CHECK_UPDATE_ID,
-        "Check for Updates...",
+        strings.check_updates,
         true,
         None::<&str>,
     )?;
@@ -106,7 +114,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // Build File menu
     let file_menu = Submenu::with_items(
         app,
-        "File",
+        strings.file,
         true,
         &[
             &open_file_item,
@@ -122,7 +130,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // Build Edit menu with system items for macOS clipboard support
     let edit_menu = Submenu::with_items(
         app,
-        "Edit",
+        strings.edit,
         true,
         &[
             &PredefinedMenuItem::undo(app, None)?,
@@ -140,7 +148,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // Build View menu
     let view_menu = Submenu::with_items(
         app,
-        "View",
+        strings.view,
         true,
         &[
             &zoom_in_item,
@@ -189,7 +197,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         #[cfg(not(feature = "app-store"))]
         let help_menu = Submenu::with_items(
             app,
-            "Help",
+            strings.help,
             true,
             &[
                 &check_update_item,
@@ -201,7 +209,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         #[cfg(feature = "app-store")]
         let help_menu = Submenu::with_items(
             app,
-            "Help",
+            strings.help,
             true,
             &[&about_item],
         )?;

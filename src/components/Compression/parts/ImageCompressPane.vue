@@ -62,117 +62,110 @@ const strip = computed({
 
 <template>
   <section class="max-w-4xl mx-auto h-full flex flex-col">
-    <!-- 說明 -->
-    <!-- <div class="mb-6 p-4 rounded-lg bg-[hsl(var(--muted))]/30 border border-[hsl(var(--border))]">
-      <p class="text-sm text-[hsl(var(--foreground))]">
-        設定圖片壓縮參數：調整尺寸、重新編碼與移除中繼資料。後端壓縮流程尚未接線。
-      </p>
-    </div> -->
-
-    <!-- 可滾動的表單區 -->
+    <!-- Scrollable form area -->
     <div class="flex-1 overflow-y-auto pr-2">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- 左欄：格式與品質 -->
+        <!-- Left column: Format & Quality -->
         <div class="space-y-4 p-4 rounded-lg border border-[hsl(var(--border))]">
-          <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">格式與品質</h3>
-          
-          <!-- 格式選擇 -->
+          <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">{{ $t('compression.image.formatAndQuality') }}</h3>
+
+          <!-- Format selection -->
           <div class="space-y-2">
-            <label class="block text-sm font-medium">輸出格式</label>
-            <select 
-              v-model="format" 
+            <label class="block text-sm font-medium">{{ $t('compression.image.outputFormat') }}</label>
+            <select
+              v-model="format"
               class="w-full border border-[hsl(var(--border))] rounded-md px-3 py-2 text-sm bg-[hsl(var(--background))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
             >
-              <option value="preserve">保留原格式</option>
-              <option value="jpeg">JPEG</option>
-              <option value="webp">WebP</option>
-              <option value="png">PNG</option>
+              <option value="preserve">{{ $t('compression.image.formatPreserve') }}</option>
+              <option value="jpeg">{{ $t('compression.image.formatJpeg') }}</option>
+              <option value="webp">{{ $t('compression.image.formatWebp') }}</option>
+              <option value="png">{{ $t('compression.image.formatPng') }}</option>
             </select>
           </div>
 
-          <!-- 品質滑桿 -->
+          <!-- Quality slider -->
           <div class="space-y-2">
             <div class="flex justify-between items-center">
-              <label class="text-sm font-medium">壓縮品質</label>
+              <label class="text-sm font-medium">{{ $t('compression.image.quality') }}</label>
               <span class="text-sm font-mono text-[hsl(var(--muted-foreground))]">{{ quality }}</span>
             </div>
-            <input 
-              type="range" 
-              min="50" 
-              max="95" 
-              step="1" 
-              v-model.number="quality" 
+            <input
+              type="range"
+              min="50"
+              max="95"
+              step="1"
+              v-model.number="quality"
               class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-[hsl(var(--muted))]"
             />
             <div class="flex justify-between text-xs text-[hsl(var(--muted-foreground))]">
-              <span>較小檔案</span>
-              <span>較高品質</span>
+              <span>{{ $t('compression.image.smallerFile') }}</span>
+              <span>{{ $t('compression.image.higherQuality') }}</span>
             </div>
           </div>
         </div>
 
-        <!-- 右欄：尺寸調整 -->
+        <!-- Right column: Size adjustment -->
         <div class="space-y-4 p-4 rounded-lg border border-[hsl(var(--border))]">
-          <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">尺寸調整</h3>
-          
-          <!-- 原始尺寸顯示 -->
+          <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">{{ $t('compression.image.sizeAdjustment') }}</h3>
+
+          <!-- Original size display -->
           <div v-if="hasValidImage" class="p-3 rounded-md bg-[hsl(var(--muted))]/30">
-            <div class="text-xs text-[hsl(var(--muted-foreground))] mb-1">原始尺寸</div>
+            <div class="text-xs text-[hsl(var(--muted-foreground))] mb-1">{{ $t('compression.image.originalSize') }}</div>
             <div class="font-mono text-sm">
               {{ originalWidth }} × {{ originalHeight }} px
             </div>
           </div>
           <div v-else class="p-3 rounded-md bg-[hsl(var(--muted))]/30">
-            <div class="text-xs text-[hsl(var(--muted-foreground))]">載入中...</div>
+            <div class="text-xs text-[hsl(var(--muted-foreground))]">{{ $t('compression.image.loading') }}</div>
           </div>
 
-          <!-- 縮放比例滑桿 -->
+          <!-- Scale slider -->
           <div class="space-y-2">
             <div class="flex justify-between items-center">
-              <label class="text-sm font-medium">縮放比例</label>
+              <label class="text-sm font-medium">{{ $t('compression.image.scalePercent') }}</label>
               <span class="text-sm font-mono text-[hsl(var(--muted-foreground))]">{{ scalePercent }}%</span>
             </div>
-            <input 
-              type="range" 
-              min="10" 
-              max="100" 
-              step="5" 
+            <input
+              type="range"
+              min="10"
+              max="100"
+              step="5"
               v-model.number="scalePercent"
               :disabled="!hasValidImage"
               class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-[hsl(var(--muted))] disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <div class="flex justify-between text-xs text-[hsl(var(--muted-foreground))]">
               <span>10%</span>
-              <span>100%（原始大小）</span>
+              <span>{{ $t('compression.image.originalScale') }}</span>
             </div>
           </div>
 
-          <!-- 輸出尺寸顯示 -->
+          <!-- Output size display -->
           <div v-if="hasValidImage" class="p-3 rounded-md bg-[hsl(var(--accent))]/10 border border-[hsl(var(--accent))]/30">
-            <div class="text-xs text-[hsl(var(--muted-foreground))] mb-1">輸出尺寸</div>
+            <div class="text-xs text-[hsl(var(--muted-foreground))] mb-1">{{ $t('compression.image.outputSize') }}</div>
             <div class="font-mono text-sm font-medium text-[hsl(var(--accent-foreground))]">
               {{ outputWidth }} × {{ outputHeight }} px
             </div>
             <div class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              比例已鎖定，自動等比縮放
+              {{ $t('compression.image.aspectRatioLocked') }}
             </div>
           </div>
         </div>
 
-        <!-- 中繼資料（跨欄） -->
+        <!-- Metadata (full width) -->
         <div class="lg:col-span-2 space-y-4 p-4 rounded-lg border border-[hsl(var(--border))]">
-          <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">進階選項</h3>
-          
+          <h3 class="text-base font-semibold border-b border-[hsl(var(--border))] pb-2">{{ $t('compression.image.advancedOptions') }}</h3>
+
           <label class="flex items-start gap-3 cursor-pointer group">
-            <input 
-              type="checkbox" 
-              v-model="strip" 
+            <input
+              type="checkbox"
+              v-model="strip"
               class="mt-0.5 w-4 h-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-2 focus:ring-[hsl(var(--ring))]"
             />
             <div class="flex-1">
-              <span class="text-sm font-medium group-hover:text-[hsl(var(--primary))]">移除中繼資料</span>
+              <span class="text-sm font-medium group-hover:text-[hsl(var(--primary))]">{{ $t('compression.image.stripMetadata') }}</span>
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                移除 EXIF、GPS、相機資訊等中繼資料，減少檔案大小並保護隱私
+                {{ $t('compression.image.stripMetadataDesc') }}
               </p>
             </div>
           </label>

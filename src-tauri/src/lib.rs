@@ -2,6 +2,7 @@ mod error;
 mod image;
 mod media;
 mod menu;
+mod menu_i18n;
 mod pdf;
 mod updater;
 
@@ -86,6 +87,16 @@ fn frontend_ready(app: tauri::AppHandle) -> Vec<String> {
     Vec::new()
 }
 
+#[tauri::command]
+fn set_app_language(app: tauri::AppHandle, language: String) -> Result<(), String> {
+    info!("set_app_language called with: {}", language);
+    let menu = crate::menu::build_menu_with_lang(&app, &language)
+        .map_err(|e| format!("Failed to build menu: {}", e))?;
+    app.set_menu(menu)
+        .map_err(|e| format!("Failed to set menu: {}", e))?;
+    Ok(())
+}
+
 fn collect_startup_args() -> Vec<PathBuf> {
     std::env::args_os()
         .skip(1)
@@ -163,6 +174,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             frontend_ready,
+            set_app_language,
             media::analyze_media,
             image::image_read,
             image::compress_image,

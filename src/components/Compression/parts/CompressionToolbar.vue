@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ChevronDoubleRightIcon, FolderOpenIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   running: boolean
@@ -29,13 +32,13 @@ function onCancel() { emit('cancel') }
       <div class="flex items-center gap-2 min-w-0 flex-1">
       <button v-if="ui.sidebarCollapsed" @click="ui.setSidebarCollapsed(false)"
         class="rounded w-7 h-7 flex items-center justify-center transition-colors hover:bg-hover"
-        title="展開側欄">
+        :title="t('sidebar.expand')">
         <ChevronDoubleRightIcon class="w-4 h-4" />
       </button>
       <button @click="emit('reveal')" :disabled="!canReveal"
         class="rounded w-7 h-7 flex items-center justify-center transition-colors"
         :class="canReveal ? 'hover:bg-hover' : 'opacity-40 cursor-not-allowed'"
-        :title="canReveal ? '在檔案管理器顯示' : ''" aria-label="在檔案管理器顯示">
+        :title="canReveal ? t('toolbar.revealInFinder') : ''" :aria-label="t('toolbar.revealInFinder')">
         <FolderOpenIcon class="w-4 h-4" />
       </button>
     </div>
@@ -43,11 +46,11 @@ function onCancel() { emit('cancel') }
     <!-- 中：模式與檔案大小（有值才顯示） -->
     <div class="flex items-center gap-4 text-xs text-[hsl(var(--muted-foreground))] flex-shrink-0 whitespace-nowrap">
       <div v-if="modeLabel" class="text-sm">
-        <span class="mr-2">模式：</span>
+        <span class="mr-2">{{ t('compression.mode') }}</span>
         <span class="px-2 py-0.5 rounded bg-[hsl(var(--selection))]">{{ modeLabel }}</span>
       </div>
       <div v-if="fileSizeText" class="flex items-center gap-1">
-        <span class="text-[hsl(var(--foreground))] font-medium">檔案大小：</span>
+        <span class="text-[hsl(var(--foreground))] font-medium">{{ t('compression.fileSize') }}</span>
         <span class="font-mono">{{ fileSizeText }}</span>
       </div>
     </div>
@@ -56,17 +59,17 @@ function onCancel() { emit('cancel') }
     <div v-if="!props.hideActions" class="flex-shrink-0 flex items-center gap-2">
       <button
         class="px-3 py-1 rounded transition-colors disabled:opacity-50 whitespace-nowrap"
-        :class="props.running 
-          ? 'bg-orange-500 text-white' 
+        :class="props.running
+          ? 'bg-orange-500 text-white'
           : 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'"
         :disabled="!canStart && !props.running"
         @click="onStart"
-      >{{ props.running ? '壓縮中...' : '開始壓縮' }}</button>
+      >{{ props.running ? t('compression.running') : t('compression.start') }}</button>
       <button
         class="px-3 py-1 rounded border border-[hsl(var(--border))] transition-colors disabled:opacity-50 whitespace-nowrap"
         :disabled="!running"
         @click="onCancel"
-      >取消</button>
+      >{{ t('compression.cancel') }}</button>
     </div>
     </div>
   </div>

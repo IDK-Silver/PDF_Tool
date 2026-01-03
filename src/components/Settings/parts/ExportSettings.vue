@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useExportSettings } from '@/modules/export/settings'
+
 const exp = useExportSettings()
 const s = exp.s
 
@@ -12,22 +13,22 @@ const number = (e: Event, fallback: number) => {
 <template>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
     <div>
-      <label class="block mb-1">匯出圖片格式</label>
+      <label class="block mb-1">{{ $t('settings.export.imageFormat') }}</label>
       <select v-model="s.imageFormat" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
-        <option value="png">PNG（無損）</option>
-        <option value="jpeg">JPEG（有損）</option>
+        <option value="png">{{ $t('settings.export.formatPNG') }}</option>
+        <option value="jpeg">{{ $t('settings.export.formatJPEG') }}</option>
       </select>
-      <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">決定匯出之圖片檔格式。</p>
+      <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.export.formatDescription') }}</p>
     </div>
     <div>
-      <label class="block mb-1">匯出解析度（DPI）</label>
+      <label class="block mb-1">{{ $t('settings.export.dpi') }}</label>
       <input class="w-full border border-border rounded px-2 py-1 bg-input text-foreground" :value="s.imageDpi" @input="s.imageDpi = number($event, s.imageDpi)" />
-      <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">72 = 1 倍，建議 150 或 300。</p>
+      <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.export.dpiDescription') }}</p>
     </div>
     <div>
-      <label class="block mb-1">JPEG 品質（1–100）</label>
+      <label class="block mb-1">{{ $t('settings.export.jpegQuality') }}</label>
       <input class="w-full border border-border rounded px-2 py-1 bg-input text-foreground" :disabled="s.imageFormat !== 'jpeg'" :value="s.imageQuality" @input="s.imageQuality = number($event, s.imageQuality)" />
-      <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">僅 JPEG 有效；值越高越清晰，檔案越大。</p>
+      <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.export.jpegQualityDescription') }}</p>
     </div>
   </div>
 </template>

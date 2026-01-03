@@ -27,7 +27,7 @@ function onCollapse() { ui.toggleSidebar() }
         @click="onCollapse"
         aria-label="Toggle sidebar"
         class="icon-btn w-[32px] h-[32px] inline-flex items-center justify-center rounded-[6px] bg-transparent text-[hsl(var(--foreground))]"
-        title="收合側欄"
+        :title="$t('sidebar.collapse')"
       >
         <ChevronDoubleLeftIcon />
       </button>
