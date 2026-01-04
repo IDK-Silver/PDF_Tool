@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ page.lang | default: 'en' }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -176,9 +176,9 @@
     <p>{{ page.description | default: site.description }}</p>
     <nav>
       {% if page.lang == 'zh-TW' %}
-        <a href="{{ site.baseurl }}/zh-TW/">Home</a>
-        <a href="{{ site.baseurl }}/support/zh-TW/">Support</a>
-        <a href="{{ site.baseurl }}/privacy/zh-TW/">Privacy</a>
+        <a href="{{ site.baseurl }}/zh-TW/">首頁</a>
+        <a href="{{ site.baseurl }}/support/zh-TW/">支援</a>
+        <a href="{{ site.baseurl }}/privacy/zh-TW/">隱私</a>
       {% else %}
         <a href="{{ site.baseurl }}/">Home</a>
         <a href="{{ site.baseurl }}/support/">Support</a>
