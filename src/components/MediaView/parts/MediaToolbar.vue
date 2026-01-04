@@ -2,8 +2,9 @@
 import type { PropType } from 'vue'
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, MagnifyingGlassMinusIcon, ArrowsPointingOutIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { ArchiveBoxIcon, ChevronDoubleRightIcon, FolderOpenIcon, MagnifyingGlassIcon, MagnifyingGlassPlusIcon, MagnifyingGlassMinusIcon, ArrowsPointingOutIcon, XMarkIcon, PencilIcon } from '@heroicons/vue/24/outline'
 import { useUiStore } from '@/modules/ui/store'
+import { useAnnotationStore } from '@/modules/annotation/store'
 
 const { t } = useI18n()
 
@@ -34,6 +35,18 @@ const emit = defineEmits<{
 }>()
 
 const ui = useUiStore()
+const annotation = useAnnotationStore()
+
+// Toggle annotation toolbar
+function toggleAnnotationToolbar() {
+  if (annotation.activeTool !== null) {
+    annotation.setActiveTool(null)
+    annotation.clearSelection()
+    annotation.setPendingObject(null)
+  } else {
+    annotation.setActiveTool('select')
+  }
+}
 
 // Shift 鍵狀態：按下 Shift 時，儲存按鈕改為「捨棄變更」
 const shiftDown = ref(false)
@@ -117,6 +130,13 @@ function handlePageMouseDown(e: MouseEvent) {
           <FolderOpenIcon class="w-4 h-4" />
         </button>
 
+        <!-- Annotate toggle button -->
+        <button @click="toggleAnnotationToolbar"
+          class="rounded w-8 h-8 flex items-center justify-center transition-colors"
+          :class="annotation.activeTool !== null ? 'bg-blue-400 text-white hover:bg-blue-700' : 'hover:bg-hover'"
+          title="Annotate">
+          <PencilIcon class="w-4 h-4" />
+        </button>
       </div>
 
       <!-- 中間：頁碼導覽 (絕對置中) -->

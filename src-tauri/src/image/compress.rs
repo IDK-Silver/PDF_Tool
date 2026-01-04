@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
+use base64::{Engine as _, engine::general_purpose};
 
 /// 圖像壓縮參數
 #[derive(Deserialize)]
@@ -203,4 +204,47 @@ fn encode_image(
     }
 
     Ok(out)
+}
+
+/// 儲存 Base64 編碼的圖像數據到檔案
+///
+/// 用於儲存從前端 Canvas 匯出的圖像（帶有標注）
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveImageBytesArgs {
+    pub dest_path: String,
+    pub data_base64: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveImageBytesResult {
+    pub path: String,
+    pub size: u64,
+}
+
+#[tauri::command]
+pub async fn save_image_bytes(args: SaveImageBytesArgs) -> Result<SaveImageBytesResult, AppError> {
+    tokio::task::spawn_blocking(move || save_image_bytes_sync(args))
+        .await
+        .map_err(|e| AppError::async_error(format!("異步任務失敗: {e}")))?
+}
+
+fn save_image_bytes_sync(args: SaveImageBytesArgs) -> Result<SaveImageBytesResult, AppError> {
+    // Decode base64
+    let bytes = general_purpose::STANDARD
+        .decode(&args.data_base64)
+        .map_err(|e| AppError::decode_error(format!("Base64 解碼失敗: {e}")))?;
+
+    // Write to file
+    fs::write(&args.dest_path, &bytes)
+        .map_err(|e| AppError::io_error(format!("寫入檔案失敗: {e}")))?;
+
+    let meta = fs::metadata(&args.dest_path)
+        .map_err(|e| AppError::io_error(format!("讀取檔案資訊失敗: {e}")))?;
+
+    Ok(SaveImageBytesResult {
+        path: args.dest_path,
+        size: meta.len(),
+    })
 }

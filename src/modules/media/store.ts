@@ -285,11 +285,11 @@ export const useMediaStore = defineStore('media', () => {
     }
   }
 
-  // 確認是否允許切換到另一個檔案/路徑。會處理儲存/放棄/取消三態。
+  // 確認是否允許切換到另一個檔案/路徑。會處理儲存/放棄兩態。
   async function ensureCanSwitch(nextPath: string): Promise<boolean> {
     if (!dirty.value) return true
     if (selected.value?.path === nextPath) return true
-    // Step 1: 詢問是否先儲存
+    // 詢問是否先儲存
     const wantsSave = await confirmDialog('此文件有未儲存變更，是否先儲存？', {
       title: '未儲存的變更',
       okLabel: '儲存',
@@ -304,18 +304,9 @@ export const useMediaStore = defineStore('media', () => {
         return false
       }
     }
-    // Step 2: 不儲存 → 再次確認是否放棄變更
-    const discard = await confirmDialog('放棄變更並繼續切換？', {
-      title: '放棄變更',
-      okLabel: '放棄',
-      cancelLabel: '取消',
-    })
-    if (discard) {
-      // 放棄變更：直接清除 dirty
-      setDirtyState(false, revision.value)
-      return true
-    }
-    return false
+    // 不儲存 → 直接放棄變更
+    setDirtyState(false, revision.value)
+    return true
   }
 
   // 從後端讀取圖片 bytes 並建立 blob URL

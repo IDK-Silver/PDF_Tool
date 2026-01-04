@@ -1,21 +1,60 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
-import { selectAndPrepareImage, handleSelectToolKeyboard } from '@/modules/annotation/tools'
-import type { ToolType } from '@/modules/annotation/types'
-
-// Icons (using simple SVG paths for now)
-const icons = {
-  select: 'M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z',
-  image: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z',
-  rect: 'M3 3h18v18H3V3z',
-  ellipse: 'M12 3C7.03 3 3 7.03 3 12s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9z',
-  line: 'M3 21L21 3',
-}
+import { selectAndPrepareImage } from '@/modules/annotation/tools'
+import type { ToolType, StrokeStyle } from '@/modules/annotation/types'
 
 const annotation = useAnnotationStore()
 
 const activeTool = computed(() => annotation.activeTool)
+
+// Color palette for quick selection
+const colorPalette = [
+  '#FF0000', // Red
+  '#FF9500', // Orange
+  '#FFCC00', // Yellow
+  '#34C759', // Green
+  '#007AFF', // Blue
+  '#5856D6', // Purple
+  '#FF2D55', // Pink
+  '#000000', // Black
+]
+
+// Stroke width options
+const strokeWidths = [1, 2, 4, 8]
+
+// Stroke style options
+const strokeStyles: { value: StrokeStyle; label: string; pattern: string }[] = [
+  { value: 'solid', label: 'Solid', pattern: '' },
+  { value: 'dashed', label: 'Dashed', pattern: '8 4' },
+  { value: 'dotted', label: 'Dotted', pattern: '2 4' },
+]
+
+// Key bindings
+const keyBindings: Record<string, ToolType> = {
+  'v': 'select',
+  'r': 'rect',
+  'o': 'ellipse',
+  'l': 'line',
+  'a': 'arrow',
+  't': 'text',
+  'm': 'pixelate',
+  'n': 'counter',
+  'p': 'pen',
+  'h': 'highlighter',
+  'i': 'image',
+  's': 'signature',
+}
+
+// Show popovers
+const showColorPicker = ref(false)
+const showStrokePicker = ref(false)
+
+// Close popovers when clicking outside
+function closePopovers() {
+  showColorPicker.value = false
+  showStrokePicker.value = false
+}
 
 function isActive(tool: ToolType): boolean {
   return activeTool.value === tool
@@ -30,20 +69,82 @@ async function selectTool(tool: ToolType) {
   }
 }
 
+function closeToolbar() {
+  annotation.setActiveTool(null)
+  annotation.clearSelection()
+  annotation.setPendingObject(null)
+}
+
+function setColor(color: string) {
+  annotation.updateToolSettings({ color })
+  showColorPicker.value = false
+}
+
+function toggleColorPicker() {
+  showStrokePicker.value = false
+  showColorPicker.value = !showColorPicker.value
+}
+
+function toggleStrokePicker() {
+  showColorPicker.value = false
+  showStrokePicker.value = !showStrokePicker.value
+}
+
+function setStrokeWidth(width: number) {
+  annotation.updateToolSettings({ strokeWidth: width })
+}
+
+function setStrokeStyle(style: StrokeStyle) {
+  annotation.updateToolSettings({ strokeStyle: style })
+}
+
+function isInputElement(target: EventTarget | null): boolean {
+  if (!target) return false
+  const el = target as HTMLElement
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+}
+
 function handleKeyDown(e: KeyboardEvent) {
   // Skip if in text input
-  const target = e.target as HTMLElement | null
-  if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return
+  if (isInputElement(e.target)) return
 
-  // Handle select tool keyboard events
-  if (handleSelectToolKeyboard(e)) return
+  const key = e.key.toLowerCase()
+
+  // Tool shortcuts (only when toolbar is open)
+  if (annotation.activeTool !== null && key in keyBindings) {
+    e.preventDefault()
+    selectTool(keyBindings[key])
+    return
+  }
+
+  // Delete/Backspace to remove selected or pending objects
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (annotation.selectedIds.length > 0) {
+      e.preventDefault()
+      annotation.deleteSelected()
+      return
+    }
+    if (annotation.pendingObject) {
+      e.preventDefault()
+      annotation.setPendingObject(null)
+      return
+    }
+  }
 
   // Escape to exit annotation mode
   if (e.key === 'Escape' && annotation.activeTool) {
     e.preventDefault()
-    annotation.setActiveTool(null)
-    annotation.clearSelection()
-    annotation.setPendingObject(null)
+    closeToolbar()
+  }
+
+  // Undo/Redo
+  if ((e.metaKey || e.ctrlKey) && key === 'z') {
+    e.preventDefault()
+    if (e.shiftKey) {
+      annotation.redo()
+    } else {
+      annotation.undo()
+    }
   }
 }
 
@@ -54,24 +155,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
 })
+
 </script>
 
 <template>
-  <!-- Collapsed state: single button to open toolbar -->
-  <button
-    v-if="!activeTool"
-    @click="selectTool('select')"
-    class="tool-btn-main px-3 py-1.5 bg-background/80 backdrop-blur rounded-lg border shadow-sm flex items-center gap-2 hover:bg-muted"
-    title="Open Annotation Tools"
-  >
-    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-    </svg>
-    <span class="text-sm">Annotate</span>
-  </button>
-
-  <!-- Expanded state: full toolbar -->
-  <div v-else class="annotation-toolbar flex items-center gap-1 px-2 py-1 bg-background/80 backdrop-blur rounded-lg border shadow-sm">
+  <!-- Annotation toolbar (shown when activeTool is set) -->
+  <div v-if="activeTool" class="annotation-toolbar flex items-center gap-0.5 px-2 py-1.5 bg-background/95 backdrop-blur rounded-lg border shadow-lg">
     <!-- Select Tool -->
     <button
       @click="selectTool('select')"
@@ -79,107 +168,239 @@ onBeforeUnmount(() => {
       title="Select (V)"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path :d="icons.select" />
+        <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
+        <path d="M13 13l6 6" />
       </svg>
     </button>
 
-    <div class="w-px h-5 bg-border mx-1"></div>
+    <div class="divider"></div>
 
-    <!-- Image Tool -->
-    <button
-      @click="selectTool('image')"
-      :class="['tool-btn', { active: isActive('image') }]"
-      title="Insert Image"
-    >
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path :d="icons.image" />
-      </svg>
-    </button>
-
-    <div class="w-px h-5 bg-border mx-1"></div>
-
-    <!-- Rectangle Tool -->
+    <!-- Shape Tools -->
     <button
       @click="selectTool('rect')"
       :class="['tool-btn', { active: isActive('rect') }]"
-      title="Rectangle"
+      title="Rectangle (R)"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <rect x="3" y="3" width="18" height="18" rx="2" />
       </svg>
     </button>
 
-    <!-- Ellipse Tool -->
     <button
       @click="selectTool('ellipse')"
       :class="['tool-btn', { active: isActive('ellipse') }]"
-      title="Ellipse"
+      title="Ellipse (O)"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <ellipse cx="12" cy="12" rx="9" ry="9" />
+        <circle cx="12" cy="12" r="9" />
       </svg>
     </button>
 
-    <!-- Line Tool -->
     <button
       @click="selectTool('line')"
       :class="['tool-btn', { active: isActive('line') }]"
-      title="Line"
+      title="Line (L)"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <line x1="3" y1="21" x2="21" y2="3" />
+        <line x1="5" y1="19" x2="19" y2="5" />
       </svg>
     </button>
 
-    <div class="w-px h-5 bg-border mx-1"></div>
-
-    <!-- Tool Settings (when a tool is active) -->
-    <template v-if="activeTool && activeTool !== 'select' && activeTool !== 'image'">
-      <!-- Fill Color -->
-      <label class="flex items-center gap-1 text-xs" title="Fill Color">
-        <input
-          type="color"
-          :value="annotation.toolSettings.fill"
-          @input="annotation.updateToolSettings({ fill: ($event.target as HTMLInputElement).value })"
-          class="w-6 h-6 rounded cursor-pointer border-0 p-0"
-        />
-      </label>
-
-      <!-- Stroke Color -->
-      <label class="flex items-center gap-1 text-xs" title="Stroke Color">
-        <input
-          type="color"
-          :value="annotation.toolSettings.stroke"
-          @input="annotation.updateToolSettings({ stroke: ($event.target as HTMLInputElement).value })"
-          class="w-6 h-6 rounded cursor-pointer border-0 p-0"
-        />
-      </label>
-
-      <!-- Stroke Width -->
-      <label class="flex items-center gap-1 text-xs" title="Stroke Width">
-        <input
-          type="range"
-          min="1"
-          max="10"
-          :value="annotation.toolSettings.strokeWidth"
-          @input="annotation.updateToolSettings({ strokeWidth: Number(($event.target as HTMLInputElement).value) })"
-          class="w-16 h-4"
-        />
-        <span class="w-4 text-center">{{ annotation.toolSettings.strokeWidth }}</span>
-      </label>
-    </template>
-
-    <!-- Close button -->
     <button
-      v-if="activeTool"
-      @click="annotation.setActiveTool(null); annotation.clearSelection(); annotation.setPendingObject(null)"
-      class="tool-btn ml-1"
-      title="Exit Annotation Mode (Esc)"
+      @click="selectTool('arrow')"
+      :class="['tool-btn', { active: isActive('arrow') }]"
+      title="Arrow (A)"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path d="M6 18L18 6M6 6l12 12" />
+        <line x1="5" y1="19" x2="19" y2="5" />
+        <polyline points="10 5 19 5 19 14" />
       </svg>
     </button>
+
+    <div class="divider"></div>
+
+    <!-- Text Tool -->
+    <button
+      @click="selectTool('text')"
+      :class="['tool-btn', { active: isActive('text') }]"
+      title="Text (T)"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M4 7V4h16v3" />
+        <path d="M12 4v16" />
+        <path d="M8 20h8" />
+      </svg>
+    </button>
+
+    <div class="divider"></div>
+
+    <!-- Effect Tools -->
+    <button
+      @click="selectTool('pixelate')"
+      :class="['tool-btn', { active: isActive('pixelate') }]"
+      title="Pixelate (M)"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7" />
+        <rect x="14" y="3" width="7" height="7" />
+        <rect x="3" y="14" width="7" height="7" />
+        <rect x="14" y="14" width="7" height="7" />
+      </svg>
+    </button>
+
+    <button
+      @click="selectTool('counter')"
+      :class="['tool-btn', { active: isActive('counter') }]"
+      title="Counter (N)"
+    >
+      <svg class="w-5 h-5" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
+        <text x="12" y="16" text-anchor="middle" font-size="10" font-weight="bold" fill="currentColor">1</text>
+      </svg>
+    </button>
+
+    <div class="divider"></div>
+
+    <!-- Drawing Tools -->
+    <button
+      @click="selectTool('pen')"
+      :class="['tool-btn', { active: isActive('pen') }]"
+      title="Pen (P)"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M12 19l7-7 3 3-7 7-3-3z" />
+        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+        <path d="M2 2l7.586 7.586" />
+      </svg>
+    </button>
+
+    <button
+      @click="selectTool('highlighter')"
+      :class="['tool-btn', { active: isActive('highlighter') }]"
+      title="Highlighter (H)"
+    >
+      <svg class="w-5 h-5" viewBox="0 0 24 24">
+        <path d="M3 17l4-4 4 4-4 4-4-4z" fill="currentColor" opacity="0.3" stroke="none" />
+        <path d="M7 13l10-10 4 4-10 10" fill="none" stroke="currentColor" stroke-width="2" />
+        <path d="M11 17l6-6" fill="none" stroke="currentColor" stroke-width="2" />
+      </svg>
+    </button>
+
+    <div class="divider"></div>
+
+    <!-- Insert Tools -->
+    <button
+      @click="selectTool('image')"
+      :class="['tool-btn', { active: isActive('image') }]"
+      title="Insert Image (I)"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <path d="M21 15l-5-5L5 21" />
+      </svg>
+    </button>
+
+    <button
+      @click="selectTool('signature')"
+      :class="['tool-btn', { active: isActive('signature') }]"
+      title="Signature (S)"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M3 17c1-1 2-3 4-3s2 2 4 2 2-2 4-2 3 2 4 3" />
+        <path d="M3 21h18" />
+      </svg>
+    </button>
+
+    <div class="divider"></div>
+
+    <!-- Color Picker Button -->
+    <div class="relative">
+      <button
+        @click="toggleColorPicker"
+        class="color-dot-btn"
+        :style="{ backgroundColor: annotation.toolSettings.color }"
+        title="Color"
+      ></button>
+
+      <!-- Color Popover (dropdown) -->
+      <div v-if="showColorPicker" class="dropdown-popover color-dropdown">
+        <div class="flex flex-wrap gap-1 p-1.5">
+          <button
+            v-for="color in colorPalette"
+            :key="color"
+            @click="setColor(color)"
+            class="color-swatch"
+            :class="{ active: annotation.toolSettings.color === color }"
+            :style="{ backgroundColor: color }"
+          ></button>
+        </div>
+        <div class="px-1.5 pb-1.5 pt-1 border-t border-border">
+          <input
+            type="color"
+            :value="annotation.toolSettings.color"
+            @input="setColor(($event.target as HTMLInputElement).value)"
+            class="w-full h-5 cursor-pointer rounded"
+          />
+        </div>
+        <!-- Click outside to close -->
+        <div class="popover-backdrop" @click="closePopovers"></div>
+      </div>
+    </div>
+
+    <!-- Stroke Width Button with dropdown -->
+    <div class="relative">
+      <button
+        @click="toggleStrokePicker"
+        class="stroke-dropdown-btn"
+        title="Stroke Width"
+      >
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="4" y1="12" x2="16" y2="12" :stroke-width="annotation.toolSettings.strokeWidth" />
+        </svg>
+        <svg class="w-3 h-3 ml-0.5 opacity-60" viewBox="0 0 12 12" fill="currentColor">
+          <path d="M3 5l3 3 3-3" />
+        </svg>
+      </button>
+
+      <!-- Stroke Popover (dropdown) -->
+      <div v-if="showStrokePicker" class="dropdown-popover stroke-dropdown">
+        <div class="p-1.5 space-y-0.5">
+          <button
+            v-for="w in strokeWidths"
+            :key="w"
+            @click="setStrokeWidth(w); showStrokePicker = false"
+            :class="['stroke-option', { active: annotation.toolSettings.strokeWidth === w }]"
+          >
+            <svg class="w-8 h-3" viewBox="0 0 32 12">
+              <line x1="2" y1="6" x2="30" y2="6" stroke="currentColor" :stroke-width="w" stroke-linecap="round" />
+            </svg>
+            <span class="text-muted-foreground">{{ w }}</span>
+          </button>
+        </div>
+        <div class="p-1.5 pt-1 border-t border-border space-y-0.5">
+          <button
+            v-for="style in strokeStyles"
+            :key="style.value"
+            @click="setStrokeStyle(style.value); showStrokePicker = false"
+            :class="['stroke-option', { active: annotation.toolSettings.strokeStyle === style.value }]"
+          >
+            <svg class="w-8 h-3" viewBox="0 0 32 12">
+              <line
+                x1="2" y1="6" x2="30" y2="6"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                :stroke-dasharray="style.pattern"
+              />
+            </svg>
+          </button>
+        </div>
+        <!-- Click outside to close -->
+        <div class="popover-backdrop" @click="closePopovers"></div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -190,9 +411,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.25rem;
+  border-radius: 0.375rem;
   transition: background-color 0.15s, color 0.15s;
   color: hsl(var(--foreground) / 0.7);
+  flex-shrink: 0;
 }
 
 .tool-btn:hover {
@@ -201,13 +423,127 @@ onBeforeUnmount(() => {
 }
 
 .tool-btn.active {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.tool-btn.active:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+.divider {
+  width: 1px;
+  height: 1.25rem;
+  background-color: hsl(var(--border));
+  margin: 0 0.25rem;
+  flex-shrink: 0;
+}
+
+/* Color dot button */
+.color-dot-btn {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 0 0 1px hsl(var(--border));
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  flex-shrink: 0;
+}
+
+.color-dot-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 1px hsl(var(--border)), 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Stroke dropdown button */
+.stroke-dropdown-btn {
+  height: 2rem;
+  padding: 0 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  transition: background-color 0.15s;
+  color: hsl(var(--foreground) / 0.7);
+  flex-shrink: 0;
+}
+
+.stroke-dropdown-btn:hover {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+/* Dropdown popover */
+.dropdown-popover {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.375rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.color-dropdown {
+  right: 0;
+  min-width: 120px;
+}
+
+.stroke-dropdown {
+  right: 0;
+  min-width: 100px;
+}
+
+/* Color swatch in popover */
+.color-swatch {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 0.125rem;
+  border: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.active {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 1px;
+}
+
+/* Stroke option in dropdown */
+.stroke-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.375rem;
+  border-radius: 0.25rem;
+  transition: background-color 0.15s;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+}
+
+.stroke-option:hover {
+  background-color: hsl(var(--muted));
+}
+
+.stroke-option.active {
   background-color: hsl(var(--primary) / 0.1);
   color: hsl(var(--primary));
 }
 
+/* Color input */
 input[type="color"] {
   -webkit-appearance: none;
   appearance: none;
+  border: none;
+  padding: 0;
 }
 
 input[type="color"]::-webkit-color-swatch-wrapper {
@@ -217,5 +553,12 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 input[type="color"]::-webkit-color-swatch {
   border: 1px solid hsl(var(--border));
   border-radius: 4px;
+}
+
+/* Backdrop to close popover when clicking outside */
+.popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
 }
 </style>

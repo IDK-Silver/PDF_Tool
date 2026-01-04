@@ -178,6 +178,7 @@ pub fn run() {
             media::analyze_media,
             image::image_read,
             image::compress_image,
+            image::save_image_bytes,
             pdf::compress_pdf_lossless,
             pdf::compress_pdf_smart,
             media::image_to_pdf,

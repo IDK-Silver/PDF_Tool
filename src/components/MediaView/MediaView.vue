@@ -6,9 +6,9 @@ import type { Ref } from 'vue'
 import MediaToolbar from './parts/MediaToolbar.vue'
 import PdfViewport from './parts/PdfViewport.vue'
 import ImageViewport from './parts/ImageViewport.vue'
-// import AnnotationToolbar from './parts/AnnotationToolbar.vue'
+import AnnotationToolbar from './parts/AnnotationToolbar.vue'
 import { useMediaStore } from '@/modules/media/store'
-// import { useAnnotationStore } from '@/modules/annotation/store'
+import { useAnnotationStore } from '@/modules/annotation/store'
 // import { embedAllAnnotations } from '@/modules/annotation/service'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
@@ -21,7 +21,7 @@ const { t } = useI18n()
 const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
-// const annotationStore = useAnnotationStore()
+const annotationStore = useAnnotationStore()
 
 const saving = ref(false)
 
@@ -122,10 +122,14 @@ watchEffect(() => {
   searchActive.value = !!(vp && unref(vp.searchVisible))
 })
 
-// Reset annotation store when switching files - temporarily disabled
-// watch(() => media.descriptor?.path, () => {
-//   annotationStore.reset()
-// })
+// Reset annotation store when switching files
+watchEffect(() => {
+  // Access descriptor path to track changes
+  const _path = media.descriptor?.path
+  if (!_path) {
+    annotationStore.reset()
+  }
+})
 
 function handleSetFitMode() {
   activeControls.value?.setFitMode()
@@ -221,8 +225,17 @@ onBeforeRouteLeave(async (to) => {
 
 async function onSaveNow() {
   const d = media.descriptor
+  if (!d) return
+
+  // Handle image with annotations
+  if (d.type === 'image' && annotationStore.hasAnnotations) {
+    await saveImageWithAnnotations()
+    return
+  }
+
+  // Handle PDF
   const docId = media.docId
-  if (!d || d.type !== 'pdf' || docId == null) return
+  if (d.type !== 'pdf' || docId == null) return
   try {
     saving.value = true
 
@@ -238,13 +251,180 @@ async function onSaveNow() {
     const path = media.descriptor?.path
     if (path) {
       try { filelist.setLastPage(path, Math.max(1, currentPage.value)) } catch {}
-      // 若為另存新檔，保持選取同步到新路徑
       await media.selectPath(path)
     }
   } catch (e: any) {
     if (String(e?.message || e) !== 'SAVE_CANCELLED') {
       alert(e?.message || String(e))
     }
+  } finally {
+    saving.value = false
+  }
+}
+
+async function saveImageWithAnnotations() {
+  const d = media.descriptor
+  if (!d || d.type !== 'image') return
+
+  try {
+    saving.value = true
+
+    // Get the image element
+    const imgEl = document.querySelector('[data-image-card] img') as HTMLImageElement | null
+    if (!imgEl) {
+      alert('Cannot find image element')
+      return
+    }
+
+    // Wait for image to load if needed
+    if (!imgEl.complete) {
+      await new Promise<void>((resolve) => {
+        imgEl.onload = () => resolve()
+      })
+    }
+
+    const naturalWidth = imgEl.naturalWidth
+    const naturalHeight = imgEl.naturalHeight
+
+    // Create canvas
+    const canvas = document.createElement('canvas')
+    canvas.width = naturalWidth
+    canvas.height = naturalHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      alert('Cannot create canvas context')
+      return
+    }
+
+    // Draw the original image
+    ctx.drawImage(imgEl, 0, 0, naturalWidth, naturalHeight)
+
+    // Draw annotations
+    const annotations = annotationStore.getPageAnnotations(0)
+    for (const obj of annotations) {
+      ctx.save()
+      ctx.globalAlpha = obj.opacity ?? 1
+
+      if (obj.stroke) {
+        ctx.strokeStyle = obj.stroke
+      }
+      if (obj.strokeWidth) {
+        ctx.lineWidth = obj.strokeWidth
+      }
+
+      // Apply stroke dash array
+      if (obj.strokeStyle === 'dashed') {
+        ctx.setLineDash([8, 4])
+      } else if (obj.strokeStyle === 'dotted') {
+        ctx.setLineDash([2, 4])
+      }
+
+      // Image coordinate system: origin at top-left, Y increases downward
+      // Annotations use PDF-like coordinates: origin at bottom-left, Y increases upward
+      // Convert: canvas_y = naturalHeight - pdf_y
+      const toCanvasY = (pdfY: number) => naturalHeight - pdfY
+
+      if (obj.type === 'rect') {
+        const x = obj.x
+        const y = toCanvasY(obj.y)
+        if (obj.fill && obj.fill !== 'none') {
+          ctx.fillStyle = obj.fill
+          ctx.fillRect(x, y, obj.width, obj.height)
+        }
+        if (obj.stroke) {
+          ctx.strokeRect(x, y, obj.width, obj.height)
+        }
+      } else if (obj.type === 'ellipse') {
+        const cx = obj.x + obj.width / 2
+        const cy = toCanvasY(obj.y) + obj.height / 2
+        const rx = obj.width / 2
+        const ry = obj.height / 2
+        ctx.beginPath()
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
+        if (obj.fill && obj.fill !== 'none') {
+          ctx.fillStyle = obj.fill
+          ctx.fill()
+        }
+        if (obj.stroke) {
+          ctx.stroke()
+        }
+      } else if ((obj.type === 'line' || obj.type === 'arrow') && obj.points && obj.points.length >= 4) {
+        const [x1, y1, x2, y2] = obj.points
+        const cy1 = toCanvasY(y1)
+        const cy2 = toCanvasY(y2)
+
+        ctx.beginPath()
+        ctx.moveTo(x1, cy1)
+        ctx.lineTo(x2, cy2)
+        ctx.stroke()
+
+        // Draw arrowhead for arrow type
+        if (obj.type === 'arrow') {
+          const angle = Math.atan2(cy2 - cy1, x2 - x1)
+          const headLength = (obj.strokeWidth || 2) * 5
+          ctx.beginPath()
+          ctx.moveTo(x2, cy2)
+          ctx.lineTo(
+            x2 - headLength * Math.cos(angle - Math.PI / 6),
+            cy2 - headLength * Math.sin(angle - Math.PI / 6)
+          )
+          ctx.moveTo(x2, cy2)
+          ctx.lineTo(
+            x2 - headLength * Math.cos(angle + Math.PI / 6),
+            cy2 - headLength * Math.sin(angle + Math.PI / 6)
+          )
+          ctx.stroke()
+        }
+      }
+
+      ctx.restore()
+    }
+
+    // Export the canvas
+    const { save: saveDialog } = await import('@tauri-apps/plugin-dialog')
+    const ext = d.name?.split('.').pop()?.toLowerCase() || 'png'
+    const baseName = d.name?.replace(/\.[^.]+$/, '') || 'image'
+    const defaultPath = `${baseName}_annotated.${ext}`
+
+    const destPath = await saveDialog({
+      defaultPath,
+      filters: [{ name: 'Image', extensions: [ext, 'png', 'jpg', 'jpeg', 'webp'] }]
+    })
+    if (!destPath) return
+
+    // Determine mime type
+    const destExt = destPath.split('.').pop()?.toLowerCase() || ext
+    let mimeType = 'image/png'
+    if (destExt === 'jpg' || destExt === 'jpeg') {
+      mimeType = 'image/jpeg'
+    } else if (destExt === 'webp') {
+      mimeType = 'image/webp'
+    }
+
+    // Get base64 from canvas
+    const dataUrl = canvas.toDataURL(mimeType, 0.92)
+    const base64Data = dataUrl.split(',')[1]
+    if (!base64Data) {
+      alert('Failed to export image')
+      return
+    }
+
+    // Write to file using Tauri backend
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('save_image_bytes', {
+      args: { destPath, dataBase64: base64Data }
+    })
+
+    // Clear annotations and dirty state after saving
+    annotationStore.reset()
+    media.clearDirty()
+
+    // Add to file list and select
+    try { filelist.add(destPath) } catch {}
+    await media.selectPath(destPath)
+
+  } catch (e: any) {
+    alert(e?.message || String(e))
   } finally {
     saving.value = false
   }
@@ -313,7 +493,7 @@ onBeforeUnmount(() => {
 
     <MediaToolbar
       :saving="saving"
-      :can-save="media.dirty && isPdf"
+      :can-save="(media.dirty && isPdf) || (isImage && annotationStore.hasAnnotations)"
       :can-reveal="canReveal"
       :current-page="currentPage"
       :total-pages="totalPages"
@@ -334,13 +514,13 @@ onBeforeUnmount(() => {
       @jump-to-page="handleJumpToPage"
     />
 
-    <!-- Annotation Toolbar (floating) - temporarily disabled -->
-    <!-- <div
-      v-if="isPdf"
+    <!-- Annotation Toolbar (floating) -->
+    <div
+      v-if="isPdf || isImage"
       class="absolute top-14 left-1/2 -translate-x-1/2 z-30"
     >
       <AnnotationToolbar />
-    </div> -->
+    </div>
 
     <div class="flex-1 flex min-h-0">
       <div v-if="media.loading" class="p-4">讀取中…</div>

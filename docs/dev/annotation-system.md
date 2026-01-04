@@ -94,10 +94,11 @@ interface AnnotationObject {
   // 通用樣式
   opacity: number               // 0-1
 
-  // 圖形樣式（rect, ellipse, line）
+  // 圖形樣式（rect, ellipse, line, arrow）
   fill?: string                 // 填充色（hex 或 'none'）
   stroke?: string               // 邊框色
   strokeWidth?: number          // 邊框寬度（pt）
+  strokeStyle?: StrokeStyle     // 線條樣式：'solid' | 'dashed' | 'dotted'
 
   // 圖片/簽名特定
   imageData?: string            // base64 PNG
@@ -106,7 +107,8 @@ interface AnnotationObject {
   points?: number[]
 }
 
-type AnnotationType = 'image' | 'signature' | 'rect' | 'ellipse' | 'line'
+type AnnotationType = 'image' | 'signature' | 'rect' | 'ellipse' | 'line' | 'arrow'
+type StrokeStyle = 'solid' | 'dashed' | 'dotted'
 ```
 
 #### 欄位規則（避免歧義）
@@ -131,9 +133,9 @@ interface AnnotationState {
 
   // 工具設定
   toolSettings: {
-    fill: string
-    stroke: string
+    color: string           // 統一顏色（用於 stroke）
     strokeWidth: number
+    strokeStyle: StrokeStyle
     opacity: number
   }
 
@@ -141,7 +143,7 @@ interface AnnotationState {
   pendingObject: AnnotationObject | null
 }
 
-type ToolType = 'select' | 'image' | 'signature' | 'rect' | 'ellipse' | 'line'
+type ToolType = 'select' | 'image' | 'signature' | 'rect' | 'ellipse' | 'line' | 'arrow' | 'text' | 'pixelate' | 'counter' | 'pen' | 'highlighter'
 ```
 
 ### SignatureInfo（簽名資訊）
@@ -477,7 +479,7 @@ export const useAnnotationStore = defineStore('annotation', () => {
 
 ## 實現階段
 
-### Phase 1：基礎架構 + 圖片插入
+### Phase 1：基礎架構 + 圖片插入 ✅ 已完成
 
 **目標**：建立核心架構，實現最基本的圖片插入功能。
 
@@ -487,7 +489,7 @@ export const useAnnotationStore = defineStore('annotation', () => {
 - 圖片插入（選擇檔案 → 放置 → 儲存）
 - 基本選擇/移動功能
 
-**預估**：5-7 天
+**完成日期**：2025-01-04
 
 ### Phase 2：簽名功能
 
@@ -498,31 +500,33 @@ export const useAnnotationStore = defineStore('annotation', () => {
 - 簽名管理（儲存、列表、刪除）
 - 簽名放置流程
 
-**預估**：4-5 天
+**狀態**：待實現
 
-### Phase 3：基本圖形
+### Phase 3：基本圖形 ✅ 已完成
 
-**目標**：矩形、圓形、線條繪製。
+**目標**：矩形、圓形、線條、箭頭繪製。
 
 **範圍**：
-- RectTool、EllipseTool、LineTool
-- 樣式面板（填充、邊框、線寬）
-- 後端圖形嵌入 API
+- 形狀繪製工具（rect, ellipse, line, arrow）
+- 樣式面板（顏色、線寬、線條樣式：實線/虛線/點線）
+- 選擇、移動、調整大小功能
+- 支援 PDF 和圖片兩種媒體類型
+- 圖片標註儲存（Canvas 合成後存檔）
 
-**預估**：4-5 天
+**完成日期**：2025-01-04
 
 ### Phase 4：進階交互
 
 **目標**：完善編輯體驗。
 
 **範圍**：
-- 調整大小手柄
+- ~~調整大小手柄~~ ✅ 已完成
 - 旋轉功能
 - 複製/貼上
 - 圖層順序
-- 鍵盤快捷鍵
+- 鍵盤快捷鍵（部分完成：V 選擇、R 矩形、O 橢圓、L 線條、A 箭頭、Delete 刪除）
 
-**預估**：5-6 天
+**狀態**：部分完成
 
 ---
 
@@ -592,3 +596,4 @@ objects.create_image_object(
 | 2025-12-31 | 初版建立：完整架構設計、資料模型、UI 規劃、實現階段 |
 | 2025-12-31 | 完成 PDFium API PoC 驗證，確認 `create_image_object()` 可用 |
 | 2025-12-31 | 新增 `pdf_add_image_to_page` 命令至 `media.rs` |
+| 2025-01-04 | 完成 Phase 1 & 3：AnnotationLayer、AnnotationToolbar、形狀繪製（rect, ellipse, line, arrow）、選擇/移動/調整大小、樣式設定（顏色、線寬、線條樣式）、圖片標註儲存、鍵盤快捷鍵 |

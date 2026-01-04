@@ -1,8 +1,32 @@
-// Annotation types as defined in docs/annotation-system.md
+// Annotation types as defined in docs/annotation-toolbar-design.md
 
-export type AnnotationType = 'image' | 'signature' | 'rect' | 'ellipse' | 'line'
+export type AnnotationType =
+  | 'rect'
+  | 'ellipse'
+  | 'line'
+  | 'arrow'
+  | 'text'
+  | 'pixelate'
+  | 'counter'
+  | 'path'       // pen/highlighter produce this type
+  | 'image'
+  | 'signature'
 
-export type ToolType = 'select' | 'image' | 'signature' | 'rect' | 'ellipse' | 'line'
+export type ToolType =
+  | 'select'
+  | 'rect'
+  | 'ellipse'
+  | 'line'
+  | 'arrow'
+  | 'text'
+  | 'pixelate'
+  | 'counter'
+  | 'pen'
+  | 'highlighter'
+  | 'image'
+  | 'signature'
+
+export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
 
 export interface AnnotationObject {
   id: string
@@ -18,10 +42,11 @@ export interface AnnotationObject {
   // Common style
   opacity: number // 0-1
 
-  // Shape styles (rect, ellipse, line)
+  // Shape styles (rect, ellipse, line, arrow)
   fill?: string // hex color or 'none'
   stroke?: string // hex color
   strokeWidth?: number // in pt
+  strokeStyle?: StrokeStyle // solid, dashed, dotted
 
   // Image/signature specific
   imageData?: string // base64 PNG
@@ -31,10 +56,44 @@ export interface AnnotationObject {
 }
 
 export interface ToolSettings {
+  // Common
+  color: string           // Primary color
+  strokeWidth: number     // Line width (pt)
+  strokeStyle: StrokeStyle // Line style
+  opacity: number         // Opacity
+
+  // Legacy (for backward compatibility)
   fill: string
   stroke: string
-  strokeWidth: number
-  opacity: number
+
+  // Pixelate specific
+  pixelateSize: number
+  pixelateStrength: number
+
+  // Counter specific
+  counterStart: number
+
+  // Text specific
+  fontSize: number
+  fontFamily: string
+
+  // Highlighter specific
+  highlighterWidth: number
+}
+
+export const defaultToolSettings: ToolSettings = {
+  color: '#FF0000',
+  strokeWidth: 2,
+  strokeStyle: 'solid',
+  opacity: 1,
+  fill: '#ffff00',
+  stroke: '#000000',
+  pixelateSize: 10,
+  pixelateStrength: 8,
+  counterStart: 1,
+  fontSize: 14,
+  fontFamily: 'system-ui',
+  highlighterWidth: 16,
 }
 
 export interface AnnotationState {

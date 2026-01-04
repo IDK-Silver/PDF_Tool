@@ -1,8 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
-import type { AnnotationObject, CoordinateContext } from '@/modules/annotation/types'
+import type { AnnotationObject, CoordinateContext, StrokeStyle } from '@/modules/annotation/types'
 import { pdfToSvg, pdfSizeToSvg, screenToPdf, svgToPdf } from '@/modules/annotation/coordinateUtils'
+
+// Stroke dash arrays for different styles
+const strokeDashArrays: Record<StrokeStyle, string> = {
+  solid: '',
+  dashed: '8 4',
+  dotted: '2 4',
+}
+
+function getStrokeDashArray(style?: StrokeStyle): string | undefined {
+  if (!style || style === 'solid') return undefined
+  return strokeDashArrays[style]
+}
 
 const props = defineProps<{
   pageIndex: number
@@ -29,6 +41,7 @@ const coordCtx = computed<CoordinateContext>(() => ({
 const pageAnnotations = computed(() => annotation.getPageAnnotations(props.pageIndex))
 
 const isInteractive = computed(() => annotation.activeTool !== null)
+const isSelectMode = computed(() => annotation.activeTool === 'select')
 
 // Drag state for moving annotations
 const dragState = ref<{
@@ -37,6 +50,7 @@ const dragState = ref<{
   startY: number
   origX: number
   origY: number
+  origPoints?: number[]
 } | null>(null)
 
 // Resize state
@@ -72,32 +86,30 @@ function getSvgSize(obj: AnnotationObject) {
   return pdfSizeToSvg(obj.width, obj.height, coordCtx.value)
 }
 
-function getLinePoints(obj: AnnotationObject): string {
-  if (!obj.points || obj.points.length < 4) return ''
-  const [x1, y1, x2, y2] = obj.points
-  const p1 = pdfToSvg(x1, y1, coordCtx.value)
-  const p2 = pdfToSvg(x2, y2, coordCtx.value)
-  return `${p1.x},${p1.y} ${p2.x},${p2.y}`
-}
-
 function isSelected(id: string): boolean {
   return annotation.selectedIds.includes(id)
 }
 
 function onAnnotationMouseDown(obj: AnnotationObject, e: MouseEvent) {
+  // Only allow selection/drag in select mode
   if (annotation.activeTool !== 'select') return
+
   e.stopPropagation()
   e.preventDefault()
 
   annotation.select(obj.id, e.shiftKey)
 
-  // Start drag
+  // Start drag - for lines/arrows, we need to track points separately
+  const isLineType = obj.type === 'line' || obj.type === 'arrow'
+
   dragState.value = {
     id: obj.id,
     startX: e.clientX,
     startY: e.clientY,
     origX: obj.x,
     origY: obj.y,
+    // Store original points for lines/arrows
+    origPoints: isLineType && obj.points ? [...obj.points] : undefined,
   }
 
   window.addEventListener('mousemove', onDragMove)
@@ -117,7 +129,18 @@ function onDragMove(e: MouseEvent) {
   const newX = dragState.value.origX + pdfDx
   const newY = dragState.value.origY + pdfDy
 
-  annotation.updateAnnotation(dragState.value.id, { x: newX, y: newY })
+  // For lines/arrows, also update the points
+  if (dragState.value.origPoints && dragState.value.origPoints.length >= 4) {
+    const [x1, y1, x2, y2] = dragState.value.origPoints
+    const newPoints = [x1 + pdfDx, y1 + pdfDy, x2 + pdfDx, y2 + pdfDy]
+    annotation.updateAnnotation(dragState.value.id, {
+      x: newX,
+      y: newY,
+      points: newPoints,
+    })
+  } else {
+    annotation.updateAnnotation(dragState.value.id, { x: newX, y: newY })
+  }
 }
 
 function onDragEnd() {
@@ -161,6 +184,7 @@ function onResizeMove(e: MouseEvent) {
   let newHeight = origHeight
 
   // Handle resize based on which corner/edge
+  // Note: In PDF coords, y is the TOP edge (max Y). pdfDy is positive when dragging up on screen.
   if (handle.includes('e')) {
     newWidth = Math.max(10, origWidth + pdfDx)
   }
@@ -170,13 +194,15 @@ function onResizeMove(e: MouseEvent) {
     newWidth = origWidth - delta
   }
   if (handle.includes('n')) {
-    newHeight = Math.max(10, origHeight + pdfDy)
-    newY = origY + pdfDy
+    // North resize: move top edge, bottom edge stays fixed
+    const delta = Math.max(-origHeight + 10, pdfDy)
+    newY = origY + delta
+    newHeight = origHeight + delta
   }
   if (handle.includes('s')) {
-    const delta = Math.min(-pdfDy, origHeight - 10)
-    newY = origY - delta
-    newHeight = origHeight + delta
+    // South resize: top edge stays fixed, only height changes
+    // Dragging down on screen: dy > 0, pdfDy < 0, height increases
+    newHeight = Math.max(10, origHeight - pdfDy)
   }
 
   annotation.updateAnnotation(resizeState.value.id, {
@@ -224,8 +250,8 @@ function onSvgMouseDown(e: MouseEvent) {
     return
   }
 
-  // Shape drawing (rect, ellipse, line)
-  if (tool === 'rect' || tool === 'ellipse' || tool === 'line') {
+  // Shape drawing (rect, ellipse, line, arrow)
+  if (tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'arrow') {
     e.preventDefault()
     const svg = e.currentTarget as SVGElement
     const rect = svg.getBoundingClientRect()
@@ -263,20 +289,21 @@ function onDrawEnd(_e: MouseEvent) {
 
   const minSize = 5 // Minimum size in PDF points
 
-  if (tool === 'line') {
+  if (tool === 'line' || tool === 'arrow') {
     const dx = Math.abs(end.x - start.x)
     const dy = Math.abs(end.y - start.y)
     if (dx > minSize || dy > minSize) {
       annotation.addAnnotation({
-        type: 'line',
+        type: tool,
         pageIndex: props.pageIndex,
         x: Math.min(start.x, end.x),
         y: Math.min(start.y, end.y),
         width: Math.abs(end.x - start.x),
         height: Math.abs(end.y - start.y),
         points: [start.x, start.y, end.x, end.y],
-        stroke: annotation.toolSettings.stroke,
+        stroke: annotation.toolSettings.color,
         strokeWidth: annotation.toolSettings.strokeWidth,
+        strokeStyle: annotation.toolSettings.strokeStyle,
         opacity: annotation.toolSettings.opacity,
       })
     }
@@ -294,9 +321,10 @@ function onDrawEnd(_e: MouseEvent) {
         y,
         width,
         height,
-        fill: annotation.toolSettings.fill,
-        stroke: annotation.toolSettings.stroke,
+        fill: 'none',
+        stroke: annotation.toolSettings.color,
         strokeWidth: annotation.toolSettings.strokeWidth,
+        strokeStyle: annotation.toolSettings.strokeStyle,
         opacity: annotation.toolSettings.opacity,
       })
     }
@@ -310,7 +338,7 @@ interface DrawPreviewBase {
   type: string | null
 }
 interface LinePreview extends DrawPreviewBase {
-  type: 'line'
+  type: 'line' | 'arrow'
   x1: number
   y1: number
   x2: number
@@ -325,11 +353,11 @@ interface ShapePreview extends DrawPreviewBase {
 }
 
 function isLinePreview(p: LinePreview | ShapePreview | null): p is LinePreview {
-  return p?.type === 'line'
+  return p?.type === 'line' || p?.type === 'arrow'
 }
 
 function isShapePreview(p: LinePreview | ShapePreview | null): p is ShapePreview {
-  return p !== null && p.type !== 'line' && 'x' in p
+  return p !== null && p.type !== 'line' && p.type !== 'arrow' && 'x' in p
 }
 
 const drawPreview = computed<LinePreview | ShapePreview | null>(() => {
@@ -337,9 +365,9 @@ const drawPreview = computed<LinePreview | ShapePreview | null>(() => {
   const { startX, startY, currentX, currentY } = drawState.value
   const tool = annotation.activeTool
 
-  if (tool === 'line') {
+  if (tool === 'line' || tool === 'arrow') {
     return {
-      type: 'line' as const,
+      type: tool as 'line',
       x1: startX,
       y1: startY,
       x2: currentX,
@@ -390,10 +418,41 @@ function getResizeHandles(obj: AnnotationObject) {
     :width="displayWidth"
     :height="displayHeight"
     :viewBox="`0 0 ${displayWidth} ${displayHeight}`"
-    :class="['annotation-layer', { interactive: isInteractive }]"
+    :class="['annotation-layer', { interactive: isInteractive, 'select-mode': isSelectMode }]"
     :data-annotation-layer="pageIndex"
     @mousedown="onSvgMouseDown"
   >
+    <!-- Arrow marker definitions -->
+    <defs>
+      <!-- Preview marker -->
+      <marker
+        id="arrowhead-preview"
+        markerWidth="10"
+        markerHeight="7"
+        refX="9"
+        refY="3.5"
+        orient="auto"
+        markerUnits="strokeWidth"
+      >
+        <polygon points="0 0, 10 3.5, 0 7" :fill="annotation.toolSettings.color" />
+      </marker>
+      <!-- Markers for each arrow annotation -->
+      <template v-for="obj in pageAnnotations" :key="`marker-${obj.id}`">
+        <marker
+          v-if="obj.type === 'arrow'"
+          :id="`arrowhead-${obj.id}`"
+          markerWidth="10"
+          markerHeight="7"
+          refX="9"
+          refY="3.5"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polygon points="0 0, 10 3.5, 0 7" :fill="obj.stroke" />
+        </marker>
+      </template>
+    </defs>
+
     <!-- Render annotations -->
     <template v-for="obj in pageAnnotations" :key="obj.id">
       <!-- Image/Signature -->
@@ -407,6 +466,7 @@ function getResizeHandles(obj: AnnotationObject) {
         :opacity="obj.opacity"
         :class="{ selected: isSelected(obj.id) }"
         preserveAspectRatio="none"
+        style="pointer-events: all; cursor: move;"
         @mousedown="onAnnotationMouseDown(obj, $event)"
       />
 
@@ -420,8 +480,10 @@ function getResizeHandles(obj: AnnotationObject) {
         :fill="obj.fill === 'none' ? 'transparent' : obj.fill"
         :stroke="obj.stroke"
         :stroke-width="obj.strokeWidth"
+        :stroke-dasharray="getStrokeDashArray(obj.strokeStyle)"
         :opacity="obj.opacity"
         :class="{ selected: isSelected(obj.id) }"
+        style="pointer-events: all; cursor: move;"
         @mousedown="onAnnotationMouseDown(obj, $event)"
       />
 
@@ -435,25 +497,74 @@ function getResizeHandles(obj: AnnotationObject) {
         :fill="obj.fill === 'none' ? 'transparent' : obj.fill"
         :stroke="obj.stroke"
         :stroke-width="obj.strokeWidth"
+        :stroke-dasharray="getStrokeDashArray(obj.strokeStyle)"
         :opacity="obj.opacity"
         :class="{ selected: isSelected(obj.id) }"
+        style="pointer-events: all; cursor: move;"
         @mousedown="onAnnotationMouseDown(obj, $event)"
       />
 
-      <!-- Line -->
-      <polyline
-        v-else-if="obj.type === 'line'"
-        :points="getLinePoints(obj)"
-        fill="none"
-        :stroke="obj.stroke"
-        :stroke-width="obj.strokeWidth"
-        :opacity="obj.opacity"
-        :class="{ selected: isSelected(obj.id) }"
-        @mousedown="onAnnotationMouseDown(obj, $event)"
-      />
+      <!-- Line (with hit area for easier selection) -->
+      <g v-else-if="obj.type === 'line' && obj.points && obj.points.length >= 4" style="cursor: move;">
+        <!-- Invisible hit area -->
+        <line
+          :x1="pdfToSvg(obj.points[0], obj.points[1], coordCtx).x"
+          :y1="pdfToSvg(obj.points[0], obj.points[1], coordCtx).y"
+          :x2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).x"
+          :y2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).y"
+          stroke="transparent"
+          :stroke-width="Math.max(20, (obj.strokeWidth || 2) + 16)"
+          style="pointer-events: all; cursor: move;"
+          @mousedown="onAnnotationMouseDown(obj, $event)"
+        />
+        <!-- Visible line -->
+        <line
+          :x1="pdfToSvg(obj.points[0], obj.points[1], coordCtx).x"
+          :y1="pdfToSvg(obj.points[0], obj.points[1], coordCtx).y"
+          :x2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).x"
+          :y2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).y"
+          fill="none"
+          :stroke="obj.stroke"
+          :stroke-width="obj.strokeWidth"
+          :stroke-dasharray="getStrokeDashArray(obj.strokeStyle)"
+          :opacity="obj.opacity"
+          :class="{ selected: isSelected(obj.id) }"
+          style="pointer-events: none;"
+        />
+      </g>
+
+      <!-- Arrow (with hit area for easier selection) -->
+      <g v-else-if="obj.type === 'arrow' && obj.points && obj.points.length >= 4" style="cursor: move;">
+        <!-- Invisible hit area -->
+        <line
+          :x1="pdfToSvg(obj.points[0], obj.points[1], coordCtx).x"
+          :y1="pdfToSvg(obj.points[0], obj.points[1], coordCtx).y"
+          :x2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).x"
+          :y2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).y"
+          stroke="transparent"
+          :stroke-width="Math.max(20, (obj.strokeWidth || 2) + 16)"
+          style="pointer-events: all; cursor: move;"
+          @mousedown="onAnnotationMouseDown(obj, $event)"
+        />
+        <!-- Visible arrow -->
+        <line
+          :x1="pdfToSvg(obj.points[0], obj.points[1], coordCtx).x"
+          :y1="pdfToSvg(obj.points[0], obj.points[1], coordCtx).y"
+          :x2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).x"
+          :y2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).y"
+          fill="none"
+          :stroke="obj.stroke"
+          :stroke-width="obj.strokeWidth"
+          :stroke-dasharray="getStrokeDashArray(obj.strokeStyle)"
+          :opacity="obj.opacity"
+          :marker-end="`url(#arrowhead-${obj.id})`"
+          :class="{ selected: isSelected(obj.id) }"
+          style="pointer-events: none;"
+        />
+      </g>
 
       <!-- Selection outline and resize handles -->
-      <template v-if="isSelected(obj.id) && obj.type !== 'line'">
+      <template v-if="isSelected(obj.id) && obj.type !== 'line' && obj.type !== 'arrow'">
         <rect
           :x="getSvgPosition(obj).x"
           :y="getSvgPosition(obj).y"
@@ -482,7 +593,7 @@ function getResizeHandles(obj: AnnotationObject) {
       </template>
     </template>
 
-    <!-- Drawing preview -->
+    <!-- Drawing preview (shows exactly what final shape will look like) -->
     <template v-if="drawPreview">
       <line
         v-if="isLinePreview(drawPreview)"
@@ -490,9 +601,11 @@ function getResizeHandles(obj: AnnotationObject) {
         :y1="drawPreview.y1"
         :x2="drawPreview.x2"
         :y2="drawPreview.y2"
-        :stroke="annotation.toolSettings.stroke"
+        :stroke="annotation.toolSettings.color"
         :stroke-width="annotation.toolSettings.strokeWidth"
-        stroke-dasharray="4 2"
+        :stroke-dasharray="getStrokeDashArray(annotation.toolSettings.strokeStyle)"
+        :opacity="annotation.toolSettings.opacity"
+        :marker-end="drawPreview.type === 'arrow' ? 'url(#arrowhead-preview)' : undefined"
         class="drawing-preview"
       />
       <rect
@@ -501,11 +614,11 @@ function getResizeHandles(obj: AnnotationObject) {
         :y="drawPreview.y"
         :width="drawPreview.width"
         :height="drawPreview.height"
-        :fill="annotation.toolSettings.fill === 'none' ? 'transparent' : annotation.toolSettings.fill"
-        :stroke="annotation.toolSettings.stroke"
+        fill="none"
+        :stroke="annotation.toolSettings.color"
         :stroke-width="annotation.toolSettings.strokeWidth"
-        fill-opacity="0.5"
-        stroke-dasharray="4 2"
+        :stroke-dasharray="getStrokeDashArray(annotation.toolSettings.strokeStyle)"
+        :opacity="annotation.toolSettings.opacity"
         class="drawing-preview"
       />
       <ellipse
@@ -514,11 +627,11 @@ function getResizeHandles(obj: AnnotationObject) {
         :cy="drawPreview.y + drawPreview.height / 2"
         :rx="drawPreview.width / 2"
         :ry="drawPreview.height / 2"
-        :fill="annotation.toolSettings.fill === 'none' ? 'transparent' : annotation.toolSettings.fill"
-        :stroke="annotation.toolSettings.stroke"
+        fill="none"
+        :stroke="annotation.toolSettings.color"
         :stroke-width="annotation.toolSettings.strokeWidth"
-        fill-opacity="0.5"
-        stroke-dasharray="4 2"
+        :stroke-dasharray="getStrokeDashArray(annotation.toolSettings.strokeStyle)"
+        :opacity="annotation.toolSettings.opacity"
         class="drawing-preview"
       />
     </template>
@@ -539,10 +652,17 @@ function getResizeHandles(obj: AnnotationObject) {
   cursor: crosshair;
 }
 
-.annotation-layer.interactive image,
-.annotation-layer.interactive rect:not(.selection-outline):not(.resize-handle),
-.annotation-layer.interactive ellipse,
-.annotation-layer.interactive polyline {
+/* In select mode, use default cursor on layer so shapes can show move cursor */
+.annotation-layer.select-mode {
+  cursor: default;
+}
+
+/* Show move cursor for annotation elements in select mode */
+.annotation-layer.select-mode image,
+.annotation-layer.select-mode rect:not(.selection-outline):not(.resize-handle),
+.annotation-layer.select-mode ellipse,
+.annotation-layer.select-mode line:not(.drawing-preview),
+.annotation-layer.select-mode g {
   cursor: move;
 }
 

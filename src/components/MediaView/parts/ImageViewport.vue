@@ -5,15 +5,19 @@ import { useSettingsStore } from '@/modules/settings/store'
 import { imageToPdf } from '@/modules/media/service'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
 import { useFileListStore } from '@/modules/filelist/store'
-import { useZoom, type ZoomContext } from '@/modules/media/useZoom' // 引入統一的縮放邏輯
+import { useZoom, type ZoomContext } from '@/modules/media/useZoom'
+import AnnotationLayer from './AnnotationLayer.vue'
+import { useAnnotationStore } from '@/modules/annotation/store'
 
 const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
+const annotationStore = useAnnotationStore()
 
 const scrollRootEl = ref<HTMLElement | null>(null)
 const imageEl = ref<HTMLImageElement | null>(null)
 const imageNaturalWidth = ref<number | null>(null)
+const imageNaturalHeight = ref<number | null>(null)
 const menu = ref<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
 
 // --- 1. 建立 ZoomContext ---
@@ -180,8 +184,44 @@ function scheduleUpdateFitPercent() {
 function onImageLoad(e: Event) {
   const el = e.target as HTMLImageElement
   imageNaturalWidth.value = el?.naturalWidth || null
+  imageNaturalHeight.value = el?.naturalHeight || null
   // 圖片載入完成後，更新 Fit 比例
   scheduleUpdateFitPercent()
+}
+
+// Annotation layer support
+function getAnnotationLayerProps() {
+  const naturalW = imageNaturalWidth.value
+  const naturalH = imageNaturalHeight.value
+  if (!naturalW || !naturalH) return null
+
+  // Calculate display size based on view mode and zoom
+  let displayWidth: number
+  let displayHeight: number
+
+  if (viewMode.value === 'fit') {
+    // In fit mode, width is container width
+    const containerW = scrollRootEl.value?.clientWidth || 800
+    displayWidth = containerW - 48 // Account for padding
+    displayHeight = displayWidth * (naturalH / naturalW)
+  } else {
+    // In actual mode, use zoom target
+    displayWidth = naturalW * (zoomTarget.value / 100)
+    displayHeight = naturalH * (zoomTarget.value / 100)
+  }
+
+  // Use natural dimensions as "PDF points" for coordinate conversion
+  return {
+    pageIndex: 0,
+    displayWidth,
+    displayHeight,
+    pageWidthPt: naturalW,
+    pageHeightPt: naturalH,
+  }
+}
+
+function shouldRenderAnnotationLayer(): boolean {
+  return annotationStore.activeTool !== null || annotationStore.getPageAnnotations(0).length > 0
 }
 
 // 當視窗大小改變 (ResizeObserver)
@@ -214,6 +254,7 @@ onBeforeUnmount(() => {
 // 當圖片路徑改變時，重置為 Fit 模式
 watch(() => media.imageUrl, () => {
   imageNaturalWidth.value = null
+  imageNaturalHeight.value = null
   viewMode.value = 'fit'
   zoomTarget.value = 100
   displayFitPercent.value = null
@@ -257,7 +298,7 @@ defineExpose({
       data-pdf-page="0"
     >
       <div
-        class="bg-card rounded-md shadow border border-border overflow-hidden flex-shrink-0"
+        class="bg-card rounded-md shadow border border-border overflow-hidden flex-shrink-0 relative"
         :class="viewMode === 'fit' ? 'max-w-none w-full' : undefined"
         :style="imageCardStyle"
         data-image-card
@@ -267,13 +308,18 @@ defineExpose({
           alt="image"
           :class="viewMode === 'fit' ? 'w-full block' : 'block'"
           :style="[
-             imgTransformStyle(), 
-             viewMode === 'actual' ? { width: '100%' } : {} 
+             imgTransformStyle(),
+             viewMode === 'actual' ? { width: '100%' } : {}
           ]"
           ref="imageEl"
           @load="onImageLoad"
           @error="media.fallbackLoadImageBlob()"
           draggable="false"
+        />
+        <!-- Annotation layer (SVG overlay for annotations) -->
+        <AnnotationLayer
+          v-if="shouldRenderAnnotationLayer() && getAnnotationLayerProps()"
+          v-bind="getAnnotationLayerProps()!"
         />
       </div>
     </div>
