@@ -23,8 +23,15 @@ export type ToolType =
   | 'counter'
   | 'pen'
   | 'highlighter'
+  | 'eraser'
   | 'image'
   | 'signature'
+
+// Point for drawing paths
+export interface Point {
+  x: number
+  y: number
+}
 
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
 
@@ -53,6 +60,17 @@ export interface AnnotationObject {
 
   // Line specific: [x1, y1, x2, y2] in PDF pt
   points?: number[]
+
+  // Path specific (pen/highlighter)
+  pathData?: string // SVG path data: "M x1 y1 L x2 y2 ..."
+  lineCap?: 'round' | 'butt' | 'square'
+  lineJoin?: 'round' | 'bevel' | 'miter'
+  pathSource?: 'pen' | 'highlighter' // track which tool created it
+
+  // Text specific
+  text?: string
+  fontSize?: number
+  fontFamily?: string
 }
 
 export interface ToolSettings {
@@ -76,9 +94,6 @@ export interface ToolSettings {
   // Text specific
   fontSize: number
   fontFamily: string
-
-  // Highlighter specific
-  highlighterWidth: number
 }
 
 export const defaultToolSettings: ToolSettings = {
@@ -93,7 +108,6 @@ export const defaultToolSettings: ToolSettings = {
   counterStart: 1,
   fontSize: 14,
   fontFamily: 'system-ui',
-  highlighterWidth: 16,
 }
 
 export interface AnnotationState {
@@ -111,6 +125,14 @@ export interface AnnotationState {
 
   // Pending object (e.g., image waiting to be placed)
   pendingObject: AnnotationObject | null
+
+  // Drawing state (pen/highlighter)
+  isDrawing: boolean
+  drawingPoints: Point[]
+  drawingPageIndex: number | null
+
+  // Text editing state
+  editingTextId: string | null
 }
 
 export interface SignatureInfo {

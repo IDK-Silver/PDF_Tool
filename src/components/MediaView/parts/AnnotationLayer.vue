@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
 import type { AnnotationObject, CoordinateContext, StrokeStyle } from '@/modules/annotation/types'
 import { pdfToSvg, pdfSizeToSvg, screenToPdf, svgToPdf } from '@/modules/annotation/coordinateUtils'
+import { pdfPathToSvgPath, pathDataToPoints, isPointNearPath, pointsToPathData } from '@/modules/annotation/pathUtils'
 
 // Stroke dash arrays for different styles
 const strokeDashArrays: Record<StrokeStyle, string> = {
@@ -42,6 +43,62 @@ const pageAnnotations = computed(() => annotation.getPageAnnotations(props.pageI
 
 const isInteractive = computed(() => annotation.activeTool !== null)
 const isSelectMode = computed(() => annotation.activeTool === 'select')
+const isEraserTool = computed(() => annotation.activeTool === 'eraser')
+
+// Eraser position for visual feedback
+const eraserPosition = ref<{ x: number; y: number } | null>(null)
+
+// Text input ref for autofocus
+const textInputRef = ref<HTMLInputElement | null>(null)
+
+// Track current editing text value for dynamic width calculation
+const editingTextValue = ref('')
+
+// Measure text width for dynamic input sizing
+function measureTextWidth(text: string, fontSize: number, fontFamily: string): number {
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return text.length * fontSize * 0.8
+  ctx.font = `${fontSize}px ${fontFamily}`
+  return ctx.measureText(text).width
+}
+
+// Calculate dynamic input width based on current text
+function getTextInputWidth(obj: AnnotationObject): number {
+  const text = editingTextValue.value || obj.text || ''
+  const scale = props.displayWidth / props.pageWidthPt
+  const fontSize = (obj.fontSize || 14) * scale
+  const fontFamily = obj.fontFamily || 'system-ui'
+  const textWidth = measureTextWidth(text, fontSize, fontFamily)
+  // Add padding and minimum width
+  return Math.max(100, textWidth + 30)
+}
+
+// Handle text input change for dynamic resizing
+function onTextInput(e: Event) {
+  const input = e.target as HTMLInputElement
+  editingTextValue.value = input.value
+}
+
+// Watch for text editing changes to autofocus input
+watch(() => annotation.editingTextId, (newId) => {
+  if (newId) {
+    // Find the annotation and set initial editing value
+    for (const pageObjs of Object.values(annotation.objects)) {
+      const obj = pageObjs.find(o => o.id === newId)
+      if (obj) {
+        editingTextValue.value = obj.text || ''
+        break
+      }
+    }
+    nextTick(() => {
+      textInputRef.value?.focus()
+      textInputRef.value?.select()
+    })
+  } else {
+    editingTextValue.value = ''
+  }
+})
 
 // Drag state for moving annotations
 const dragState = ref<{
@@ -63,6 +120,9 @@ const resizeState = ref<{
   origY: number
   origWidth: number
   origHeight: number
+  // For text annotations
+  isText?: boolean
+  origFontSize?: number
 } | null>(null)
 
 // Drawing state for shapes
@@ -90,12 +150,41 @@ function isSelected(id: string): boolean {
   return annotation.selectedIds.includes(id)
 }
 
-function onAnnotationMouseDown(obj: AnnotationObject, e: MouseEvent) {
-  // Only allow selection/drag in select mode
-  if (annotation.activeTool !== 'select') return
-
+function onTextAnnotationMouseDown(obj: AnnotationObject, e: MouseEvent) {
+  // Always stop propagation
   e.stopPropagation()
   e.preventDefault()
+
+  // In text mode, clicking on existing text starts editing it
+  if (annotation.activeTool === 'text') {
+    annotation.startEditingText(obj.id)
+    return
+  }
+
+  // In select mode, handle selection and drag
+  if (annotation.activeTool === 'select') {
+    annotation.select(obj.id, e.shiftKey)
+
+    dragState.value = {
+      id: obj.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: obj.x,
+      origY: obj.y,
+    }
+
+    window.addEventListener('mousemove', onDragMove)
+    window.addEventListener('mouseup', onDragEnd)
+  }
+}
+
+function onAnnotationMouseDown(obj: AnnotationObject, e: MouseEvent) {
+  // Always stop propagation to prevent SVG background handler from firing
+  e.stopPropagation()
+  e.preventDefault()
+
+  // Only allow selection/drag in select mode
+  if (annotation.activeTool !== 'select') return
 
   annotation.select(obj.id, e.shiftKey)
 
@@ -162,6 +251,9 @@ function onResizeMouseDown(obj: AnnotationObject, handle: string, e: MouseEvent)
     origY: obj.y,
     origWidth: obj.width,
     origHeight: obj.height,
+    // For text annotations, save original fontSize
+    isText: obj.type === 'text',
+    origFontSize: obj.fontSize,
   }
 
   window.addEventListener('mousemove', onResizeMove)
@@ -205,12 +297,25 @@ function onResizeMove(e: MouseEvent) {
     newHeight = Math.max(10, origHeight - pdfDy)
   }
 
-  annotation.updateAnnotation(resizeState.value.id, {
-    x: newX,
-    y: newY,
-    width: newWidth,
-    height: newHeight,
-  })
+  // For text annotations, also scale fontSize
+  if (resizeState.value.isText && resizeState.value.origFontSize) {
+    const scaleRatio = newHeight / origHeight
+    const newFontSize = Math.max(8, Math.min(200, resizeState.value.origFontSize * scaleRatio))
+    annotation.updateAnnotation(resizeState.value.id, {
+      x: newX,
+      y: newY,
+      width: newWidth,
+      height: newHeight,
+      fontSize: Math.round(newFontSize),
+    })
+  } else {
+    annotation.updateAnnotation(resizeState.value.id, {
+      x: newX,
+      y: newY,
+      width: newWidth,
+      height: newHeight,
+    })
+  }
 }
 
 function onResizeEnd() {
@@ -264,6 +369,100 @@ function onSvgMouseDown(e: MouseEvent) {
     window.addEventListener('mousemove', onDrawMove)
     window.addEventListener('mouseup', onDrawEnd)
   }
+
+  // Path drawing (pen, highlighter)
+  if (tool === 'pen' || tool === 'highlighter') {
+    e.preventDefault()
+    const svg = e.currentTarget as SVGElement
+    const pdfPos = screenToPdf(e.clientX, e.clientY, svg as unknown as HTMLElement, coordCtx.value)
+    annotation.startDrawing(pdfPos, props.pageIndex)
+    window.addEventListener('mousemove', onPathDrawMove)
+    window.addEventListener('mouseup', onPathDrawEnd)
+  }
+
+  // Eraser
+  if (tool === 'eraser') {
+    e.preventDefault()
+    const svg = e.currentTarget as SVGElement
+    const rect = svg.getBoundingClientRect()
+    eraserPosition.value = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    }
+    window.addEventListener('mousemove', onEraserMove)
+    window.addEventListener('mouseup', onEraserEnd)
+  }
+
+  // Text tool - create new text annotation
+  if (tool === 'text') {
+    e.preventDefault()
+    const svg = e.currentTarget as SVGElement
+    const pdfPos = screenToPdf(e.clientX, e.clientY, svg as unknown as HTMLElement, coordCtx.value)
+
+    const fontSize = annotation.toolSettings.fontSize
+    const newAnnotation = annotation.addAnnotation({
+      type: 'text',
+      pageIndex: props.pageIndex,
+      x: pdfPos.x,
+      y: pdfPos.y,
+      width: 100, // Initial width, will be adjusted when text is entered
+      height: fontSize * 1.2,
+      text: '',
+      fontSize,
+      fontFamily: annotation.toolSettings.fontFamily,
+      stroke: annotation.toolSettings.color,
+      opacity: 1,
+    })
+
+    // Start editing the new text annotation
+    annotation.startEditingText(newAnnotation.id)
+  }
+}
+
+// Path drawing handlers for pen/highlighter
+function onPathDrawMove(e: MouseEvent) {
+  if (!annotation.isDrawing) return
+  const svg = document.querySelector(`[data-annotation-layer="${props.pageIndex}"]`) as SVGElement
+  if (!svg) return
+  const pdfPos = screenToPdf(e.clientX, e.clientY, svg as unknown as HTMLElement, coordCtx.value)
+  annotation.addDrawingPoint(pdfPos)
+}
+
+function onPathDrawEnd() {
+  window.removeEventListener('mousemove', onPathDrawMove)
+  window.removeEventListener('mouseup', onPathDrawEnd)
+  annotation.finishDrawing()
+}
+
+// Eraser handlers
+function onEraserMove(e: MouseEvent) {
+  const svg = document.querySelector(`[data-annotation-layer="${props.pageIndex}"]`) as SVGElement
+  if (!svg) return
+  const rect = svg.getBoundingClientRect()
+  eraserPosition.value = {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top,
+  }
+
+  // Check for path collisions
+  const pdfPos = screenToPdf(e.clientX, e.clientY, svg as unknown as HTMLElement, coordCtx.value)
+  // Use strokeWidth * 5 as eraser size for reasonable detection area
+  const eraserSizePdf = annotation.toolSettings.strokeWidth * 5 * (props.pageWidthPt / props.displayWidth)
+
+  for (const obj of pageAnnotations.value) {
+    if (obj.type === 'path' && obj.pathData) {
+      const pathPoints = pathDataToPoints(obj.pathData)
+      if (isPointNearPath(pdfPos, pathPoints, eraserSizePdf / 2)) {
+        annotation.deleteAnnotation(obj.id)
+      }
+    }
+  }
+}
+
+function onEraserEnd() {
+  window.removeEventListener('mousemove', onEraserMove)
+  window.removeEventListener('mouseup', onEraserEnd)
+  eraserPosition.value = null
 }
 
 function onDrawMove(e: MouseEvent) {
@@ -395,6 +594,29 @@ const drawPreview = computed<LinePreview | ShapePreview | null>(() => {
 //   if (!annotation.pendingObject) return null
 //   return annotation.pendingObject
 // })
+
+// Drawing path preview (pen/highlighter)
+const drawingPathPreview = computed(() => {
+  if (!annotation.isDrawing || annotation.drawingPageIndex !== props.pageIndex) return null
+  if (annotation.drawingPoints.length < 2) return null
+
+  const scale = props.displayWidth / props.pageWidthPt
+  const isPen = annotation.activeTool === 'pen'
+
+  // Convert PDF points to SVG path
+  const svgPath = pdfPathToSvgPath(
+    pointsToPathData(annotation.drawingPoints),
+    props.pageHeightPt,
+    scale
+  )
+
+  return {
+    d: svgPath,
+    stroke: annotation.toolSettings.color,
+    strokeWidth: annotation.toolSettings.strokeWidth * scale,
+    opacity: isPen ? 1 : 0.4,
+  }
+})
 
 // Resize handles for selected objects
 function getResizeHandles(obj: AnnotationObject) {
@@ -563,6 +785,76 @@ function getResizeHandles(obj: AnnotationObject) {
         />
       </g>
 
+      <!-- Path (pen/highlighter drawn paths) -->
+      <path
+        v-else-if="obj.type === 'path' && obj.pathData"
+        :d="pdfPathToSvgPath(obj.pathData, pageHeightPt, displayWidth / pageWidthPt)"
+        fill="none"
+        :stroke="obj.stroke"
+        :stroke-width="(obj.strokeWidth || 2) * (displayWidth / pageWidthPt)"
+        :opacity="obj.opacity"
+        :stroke-linecap="obj.lineCap || 'round'"
+        :stroke-linejoin="obj.lineJoin || 'round'"
+        :class="{ selected: isSelected(obj.id) }"
+        style="pointer-events: all; cursor: move;"
+        @mousedown="onAnnotationMouseDown(obj, $event)"
+      />
+
+      <!-- Text annotation -->
+      <g v-else-if="obj.type === 'text'">
+        <!-- Display text (when not editing) -->
+        <text
+          v-if="annotation.editingTextId !== obj.id"
+          :x="getSvgPosition(obj).x"
+          :y="getSvgPosition(obj).y + (obj.fontSize || 14) * (displayWidth / pageWidthPt)"
+          :fill="obj.stroke"
+          :font-size="(obj.fontSize || 14) * (displayWidth / pageWidthPt)"
+          :font-family="obj.fontFamily || 'system-ui'"
+          :opacity="obj.opacity"
+          :class="{ selected: isSelected(obj.id) }"
+          style="pointer-events: all; cursor: pointer;"
+          @mousedown="onTextAnnotationMouseDown(obj, $event)"
+          @dblclick="annotation.startEditingText(obj.id)"
+        >{{ obj.text || '' }}</text>
+
+        <!-- Text input (when editing) -->
+        <foreignObject
+          v-else
+          :x="getSvgPosition(obj).x - 2"
+          :y="getSvgPosition(obj).y - 2"
+          :width="getTextInputWidth(obj)"
+          :height="getSvgSize(obj).height + 10"
+        >
+          <input
+            ref="textInputRef"
+            type="text"
+            :value="obj.text || ''"
+            :style="{
+              width: '100%',
+              height: '100%',
+              fontSize: ((obj.fontSize || 14) * (displayWidth / pageWidthPt)) + 'px',
+              fontFamily: obj.fontFamily || 'system-ui',
+              color: obj.stroke,
+              border: '1px solid #0066ff',
+              borderRadius: '2px',
+              padding: '0 4px',
+              outline: 'none',
+              background: 'rgba(255,255,255,0.9)',
+            }"
+            @input="onTextInput($event)"
+            @blur="(e) => annotation.updateTextContent(obj.id, (e.target as HTMLInputElement).value)"
+            @keydown.stop
+            @keyup.stop
+            @keypress.stop
+            @keydown.enter="(e) => annotation.updateTextContent(obj.id, (e.target as HTMLInputElement).value)"
+            @keydown.escape="annotation.stopEditingText()"
+            @mousedown.stop
+            @click.stop
+            @vue:mounted="(e: any) => { e.el?.focus(); e.el?.select(); }"
+          />
+        </foreignObject>
+      </g>
+
       <!-- Selection outline and resize handles -->
       <template v-if="isSelected(obj.id) && obj.type !== 'line' && obj.type !== 'arrow'">
         <rect
@@ -635,6 +927,32 @@ function getResizeHandles(obj: AnnotationObject) {
         class="drawing-preview"
       />
     </template>
+
+    <!-- Path drawing preview (pen/highlighter) -->
+    <path
+      v-if="drawingPathPreview"
+      :d="drawingPathPreview.d"
+      fill="none"
+      :stroke="drawingPathPreview.stroke"
+      :stroke-width="drawingPathPreview.strokeWidth"
+      :opacity="drawingPathPreview.opacity"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="drawing-preview"
+    />
+
+    <!-- Eraser cursor -->
+    <circle
+      v-if="isEraserTool && eraserPosition"
+      :cx="eraserPosition.x"
+      :cy="eraserPosition.y"
+      :r="annotation.toolSettings.strokeWidth * 2.5"
+      fill="none"
+      stroke="#666"
+      stroke-width="1"
+      stroke-dasharray="4 2"
+      class="eraser-cursor"
+    />
   </svg>
 </template>
 
@@ -662,6 +980,7 @@ function getResizeHandles(obj: AnnotationObject) {
 .annotation-layer.select-mode rect:not(.selection-outline):not(.resize-handle),
 .annotation-layer.select-mode ellipse,
 .annotation-layer.select-mode line:not(.drawing-preview),
+.annotation-layer.select-mode path:not(.drawing-preview),
 .annotation-layer.select-mode g {
   cursor: move;
 }
@@ -680,6 +999,10 @@ function getResizeHandles(obj: AnnotationObject) {
 }
 
 .drawing-preview {
+  pointer-events: none;
+}
+
+.eraser-cursor {
   pointer-events: none;
 }
 </style>

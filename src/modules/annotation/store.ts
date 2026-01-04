@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AnnotationObject, AnnotationState, ToolType, ToolSettings } from './types'
+import type { AnnotationObject, AnnotationState, ToolType, ToolSettings, Point } from './types'
 import { defaultToolSettings } from './types'
 import { useMediaStore } from '@/modules/media/store'
+import { simplifyPath, pointsToPathData, calculateBoundingBox } from './pathUtils'
 
 function generateId(): string {
   return crypto.randomUUID()
@@ -17,6 +18,14 @@ export const useAnnotationStore = defineStore('annotation', () => {
   const activeTool = ref<ToolType | null>(null)
   const toolSettings = ref<ToolSettings>({ ...defaultToolSettings })
   const pendingObject = ref<AnnotationObject | null>(null)
+
+  // Drawing state for pen/highlighter
+  const isDrawing = ref(false)
+  const drawingPoints = ref<Point[]>([])
+  const drawingPageIndex = ref<number | null>(null)
+
+  // Text editing state
+  const editingTextId = ref<string | null>(null)
 
   // History for undo/redo
   const history = ref<AnnotationState[]>([])
@@ -35,6 +44,10 @@ export const useAnnotationStore = defineStore('annotation', () => {
     activeTool: activeTool.value,
     toolSettings: toolSettings.value,
     pendingObject: pendingObject.value,
+    isDrawing: isDrawing.value,
+    drawingPoints: drawingPoints.value,
+    drawingPageIndex: drawingPageIndex.value,
+    editingTextId: editingTextId.value,
   }))
 
   const selectedObjects = computed(() => {
@@ -207,6 +220,129 @@ export const useAnnotationStore = defineStore('annotation', () => {
     toolSettings.value = { ...toolSettings.value, ...updates }
   }
 
+  // Drawing actions for pen/highlighter
+  function startDrawing(point: Point, pageIndex: number) {
+    isDrawing.value = true
+    drawingPoints.value = [point]
+    drawingPageIndex.value = pageIndex
+  }
+
+  function addDrawingPoint(point: Point) {
+    if (isDrawing.value) {
+      drawingPoints.value.push(point)
+    }
+  }
+
+  function finishDrawing() {
+    if (!isDrawing.value || drawingPoints.value.length < 2 || drawingPageIndex.value === null) {
+      isDrawing.value = false
+      drawingPoints.value = []
+      drawingPageIndex.value = null
+      return
+    }
+
+    // Simplify path to reduce points
+    const epsilon = 1.0 // tolerance in PDF points
+    const simplified = simplifyPath(drawingPoints.value, epsilon)
+
+    // Create path annotation
+    const pathData = pointsToPathData(simplified)
+    const bbox = calculateBoundingBox(simplified)
+
+    const isPen = activeTool.value === 'pen'
+    const stroke = toolSettings.value.color
+    const strokeWidth = toolSettings.value.strokeWidth
+    const opacity = isPen ? 1.0 : 0.4
+
+    const annotation: Omit<AnnotationObject, 'id'> = {
+      type: 'path',
+      pageIndex: drawingPageIndex.value,
+      x: bbox.x,
+      y: bbox.y,
+      width: bbox.width,
+      height: bbox.height,
+      pathData,
+      stroke,
+      strokeWidth,
+      opacity,
+      lineCap: 'round',
+      lineJoin: 'round',
+      pathSource: isPen ? 'pen' : 'highlighter',
+    }
+
+    addAnnotation(annotation)
+
+    // Reset drawing state
+    isDrawing.value = false
+    drawingPoints.value = []
+    drawingPageIndex.value = null
+  }
+
+  function cancelDrawing() {
+    isDrawing.value = false
+    drawingPoints.value = []
+    drawingPageIndex.value = null
+  }
+
+  // Text editing actions
+  function startEditingText(id: string) {
+    editingTextId.value = id
+  }
+
+  function stopEditingText() {
+    editingTextId.value = null
+  }
+
+  // Measure text width using canvas
+  function measureTextWidth(text: string, fontSize: number, fontFamily: string): number {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      // Fallback estimation
+      return estimateTextWidth(text, fontSize)
+    }
+    ctx.font = `${fontSize}px ${fontFamily}`
+    return ctx.measureText(text).width
+  }
+
+  // Fallback estimation for text width
+  function estimateTextWidth(text: string, fontSize: number): number {
+    let width = 0
+    for (const char of text) {
+      // CJK characters are typically 1em wide
+      if (/[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/.test(char)) {
+        width += fontSize
+      } else {
+        // Latin and other characters are typically 0.5-0.6em
+        width += fontSize * 0.55
+      }
+    }
+    return Math.max(20, width)
+  }
+
+  function updateTextContent(id: string, text: string) {
+    // If text is empty, delete the annotation
+    if (!text.trim()) {
+      deleteAnnotation(id)
+      stopEditingText()
+      return
+    }
+
+    // Update the text content
+    for (const pageObjs of Object.values(objects.value)) {
+      const obj = pageObjs.find(o => o.id === id)
+      if (obj) {
+        // Measure actual text width
+        const fontSize = obj.fontSize || toolSettings.value.fontSize
+        const fontFamily = obj.fontFamily || 'system-ui'
+        const newWidth = measureTextWidth(text, fontSize, fontFamily)
+        updateAnnotation(id, { text, width: newWidth })
+        break
+      }
+    }
+    stopEditingText()
+  }
+
   function undo() {
     if (historyIndex.value > 0) {
       historyIndex.value--
@@ -238,6 +374,10 @@ export const useAnnotationStore = defineStore('annotation', () => {
     pendingObject.value = null
     history.value = []
     historyIndex.value = -1
+    isDrawing.value = false
+    drawingPoints.value = []
+    drawingPageIndex.value = null
+    editingTextId.value = null
   }
 
   // Get all annotations for embedding into PDF
@@ -256,6 +396,11 @@ export const useAnnotationStore = defineStore('annotation', () => {
     activeTool,
     toolSettings,
     pendingObject,
+
+    // Drawing state
+    isDrawing,
+    drawingPoints,
+    drawingPageIndex,
 
     // Computed
     currentState,
@@ -283,5 +428,17 @@ export const useAnnotationStore = defineStore('annotation', () => {
     undo,
     redo,
     reset,
+
+    // Drawing actions
+    startDrawing,
+    addDrawingPoint,
+    finishDrawing,
+    cancelDrawing,
+
+    // Text editing
+    editingTextId,
+    startEditingText,
+    stopEditingText,
+    updateTextContent,
   }
 })

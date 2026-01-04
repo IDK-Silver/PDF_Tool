@@ -528,6 +528,36 @@ export const useAnnotationStore = defineStore('annotation', () => {
 
 **狀態**：部分完成
 
+### Phase 5：繪圖工具 ✅ 已完成
+
+**目標**：自由繪製功能。
+
+**範圍**：
+- ✅ 畫筆工具 (`pen`) - 快捷鍵 P
+- ✅ 螢光筆工具 (`highlighter`) - 快捷鍵 H，半透明效果
+- ✅ 橡皮擦工具 (`eraser`) - 快捷鍵 E
+- ✅ 路徑簡化演算法 (Ramer-Douglas-Peucker)
+- ✅ SVG 即時預覽
+- ⏳ 後端路徑嵌入 API（待實現）
+
+**完成日期**：2026-01-04
+
+**詳細設計**：見 `docs/dev/drawing-feature.md`
+
+### Phase 6：文字工具 ✅ 已完成
+
+**目標**：文字標註功能。
+
+**範圍**：
+- ✅ 文字工具 (`text`) - 快捷鍵 T
+- ✅ 點擊創建新文字
+- ✅ 雙擊編輯現有文字
+- ✅ Enter/Blur 確認，Escape 取消
+- ✅ 字型大小選擇器 (10-48pt)
+- ✅ 空文字自動刪除
+
+**完成日期**：2026-01-04
+
 ---
 
 ## PoC 驗證結果
@@ -597,3 +627,5 @@ objects.create_image_object(
 | 2025-12-31 | 完成 PDFium API PoC 驗證，確認 `create_image_object()` 可用 |
 | 2025-12-31 | 新增 `pdf_add_image_to_page` 命令至 `media.rs` |
 | 2025-01-04 | 完成 Phase 1 & 3：AnnotationLayer、AnnotationToolbar、形狀繪製（rect, ellipse, line, arrow）、選擇/移動/調整大小、樣式設定（顏色、線寬、線條樣式）、圖片標註儲存、鍵盤快捷鍵 |
+| 2026-01-04 | 完成 Phase 5：繪圖工具（畫筆、螢光筆、橡皮擦）、路徑簡化演算法、pathUtils.ts |
+| 2026-01-04 | 完成 Phase 6：文字工具、字型大小選擇器、雙擊編輯 |

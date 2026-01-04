@@ -42,6 +42,7 @@ const keyBindings: Record<string, ToolType> = {
   'n': 'counter',
   'p': 'pen',
   'h': 'highlighter',
+  'e': 'eraser',
   'i': 'image',
   's': 'signature',
 }
@@ -105,8 +106,9 @@ function isInputElement(target: EventTarget | null): boolean {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
-  // Skip if in text input
+  // Skip if in text input or editing text annotation
   if (isInputElement(e.target)) return
+  if (annotation.editingTextId) return
 
   const key = e.key.toLowerCase()
 
@@ -286,6 +288,17 @@ onBeforeUnmount(() => {
       </svg>
     </button>
 
+    <button
+      @click="selectTool('eraser')"
+      :class="['tool-btn', { active: isActive('eraser') }]"
+      title="Eraser (E)"
+    >
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M20 20H7L3 16c-.6-.6-.6-1.5 0-2.1l10-10c.6-.6 1.5-.6 2.1 0l7 7c.6.6.6 1.5 0 2.1L16 19" />
+        <line x1="5.5" y1="13.5" x2="10.5" y2="18.5" />
+      </svg>
+    </button>
+
     <div class="divider"></div>
 
     <!-- Insert Tools -->
@@ -400,6 +413,23 @@ onBeforeUnmount(() => {
         <div class="popover-backdrop" @click="closePopovers"></div>
       </div>
     </div>
+
+    <!-- Font Size (shown when text tool is active) -->
+    <template v-if="activeTool === 'text'">
+      <div class="divider"></div>
+      <div class="flex items-center gap-1 px-1">
+        <select
+          :value="annotation.toolSettings.fontSize"
+          @change="annotation.updateToolSettings({ fontSize: parseInt(($event.target as HTMLSelectElement).value) })"
+          class="font-size-select"
+        >
+          <option v-for="size in [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48]" :key="size" :value="size">
+            {{ size }}
+          </option>
+        </select>
+        <span class="text-xs text-muted-foreground">pt</span>
+      </div>
+    </template>
 
   </div>
 </template>
@@ -555,10 +585,28 @@ input[type="color"]::-webkit-color-swatch {
   border-radius: 4px;
 }
 
+/* Font size select */
+.font-size-select {
+  height: 1.5rem;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.25rem;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+}
+
+.font-size-select:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+}
+
 /* Backdrop to close popover when clicking outside */
 .popover-backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
 }
+
 </style>
