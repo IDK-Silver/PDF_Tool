@@ -120,7 +120,7 @@ const hasSignatures = computed(() => signatures.value.length > 0)
     </div>
 
     <!-- Add new signature button -->
-    <button class="add-signature-btn" @click="openDrawDialog">
+    <button class="add-signature-btn" @click.stop="openDrawDialog">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path d="M12 5v14M5 12h14" />
       </svg>
@@ -128,7 +128,7 @@ const hasSignatures = computed(() => signatures.value.length > 0)
     </button>
 
     <!-- Click outside backdrop -->
-    <div class="popover-backdrop" @click="emit('close')"></div>
+    <div class="popover-backdrop" @click.stop="emit('close')"></div>
 
     <!-- Draw dialog -->
     <SignatureDrawDialog
@@ -151,6 +151,7 @@ const hasSignatures = computed(() => signatures.value.length > 0)
   z-index: 100;
   min-width: 200px;
   max-width: 280px;
+  overflow: visible;
 }
 
 .picker-header {
@@ -226,6 +227,8 @@ const hasSignatures = computed(() => signatures.value.length > 0)
 }
 
 .add-signature-btn {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -236,6 +239,7 @@ const hasSignatures = computed(() => signatures.value.length > 0)
   font-size: 0.8125rem;
   color: hsl(var(--primary));
   transition: background-color 0.15s;
+  cursor: pointer;
 }
 
 .add-signature-btn:hover {

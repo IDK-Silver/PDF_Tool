@@ -82,11 +82,47 @@ function toggleSignaturePicker() {
   showSignaturePicker.value = !showSignaturePicker.value
 }
 
-function handleSignatureSelect(sig: SignatureItem) {
+async function handleSignatureSelect(sig: SignatureItem) {
   showSignaturePicker.value = false
   annotation.setActiveTool('signature')
-  // Store signature data for placing
-  annotation.updateToolSettings({ signatureDataUrl: sig.dataUrl })
+
+  // Get signature image dimensions
+  const dimensions = await getImageDimensions(sig.dataUrl)
+
+  // Calculate size in PDF points (maintain aspect ratio)
+  const DEFAULT_SIGNATURE_WIDTH = 120
+  let widthPt = DEFAULT_SIGNATURE_WIDTH
+  let heightPt = DEFAULT_SIGNATURE_WIDTH
+  if (dimensions.width && dimensions.height) {
+    const aspect = dimensions.height / dimensions.width
+    heightPt = widthPt * aspect
+  }
+
+  // Create pending object for placement
+  annotation.setPendingObject({
+    id: '',
+    type: 'signature',
+    pageIndex: -1,
+    x: 0,
+    y: 0,
+    width: widthPt,
+    height: heightPt,
+    opacity: 1,
+    imageData: sig.dataUrl,
+  })
+}
+
+function getImageDimensions(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight })
+    }
+    img.onerror = () => {
+      resolve({ width: 0, height: 0 })
+    }
+    img.src = dataUrl
+  })
 }
 
 function closeSignaturePicker() {

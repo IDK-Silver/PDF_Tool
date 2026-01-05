@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 
 const emit = defineEmits<{
   (e: 'save', dataUrl: string): void
@@ -9,6 +9,7 @@ const emit = defineEmits<{
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const isDrawing = ref(false)
 const hasDrawn = ref(false)
+const isInitialized = ref(false)
 
 // Drawing settings
 const strokeColor = ref('#000000')
@@ -21,15 +22,30 @@ let ctx: CanvasRenderingContext2D | null = null
 let lastX = 0
 let lastY = 0
 
-onMounted(() => {
-  if (!canvasRef.value) return
-  ctx = canvasRef.value.getContext('2d')
+let retryCount = 0
+const MAX_RETRIES = 10
+
+function setupCanvas() {
+  const canvas = canvasRef.value
+  if (!canvas || isInitialized.value) return
+
+  ctx = canvas.getContext('2d')
   if (!ctx) return
 
-  // Set canvas size
-  const rect = canvasRef.value.getBoundingClientRect()
-  canvasRef.value.width = rect.width * 2
-  canvasRef.value.height = rect.height * 2
+  // Set canvas size based on CSS dimensions
+  const rect = canvas.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) {
+    // Dimensions not ready yet, retry
+    if (retryCount < MAX_RETRIES) {
+      retryCount++
+      requestAnimationFrame(setupCanvas)
+    }
+    return
+  }
+
+  // Set actual canvas dimensions (2x for retina)
+  canvas.width = rect.width * 2
+  canvas.height = rect.height * 2
   ctx.scale(2, 2)
 
   // Initial settings
@@ -38,27 +54,29 @@ onMounted(() => {
   ctx.strokeStyle = strokeColor.value
   ctx.lineWidth = strokeWidth.value
 
-  // Add event listeners
-  canvasRef.value.addEventListener('mousedown', startDrawing)
-  canvasRef.value.addEventListener('mousemove', draw)
-  canvasRef.value.addEventListener('mouseup', stopDrawing)
-  canvasRef.value.addEventListener('mouseleave', stopDrawing)
+  isInitialized.value = true
+  retryCount = 0
+}
 
-  // Touch support
-  canvasRef.value.addEventListener('touchstart', handleTouchStart)
-  canvasRef.value.addEventListener('touchmove', handleTouchMove)
-  canvasRef.value.addEventListener('touchend', stopDrawing)
+// Watch for canvas ref changes (when Teleport renders)
+watch(canvasRef, (canvas) => {
+  if (canvas && !isInitialized.value) {
+    // Use setTimeout to ensure DOM is fully rendered after Teleport
+    setTimeout(setupCanvas, 0)
+  }
+}, { immediate: true })
+
+onMounted(() => {
+  // Also try to setup on mount
+  if (!isInitialized.value) {
+    setupCanvas()
+  }
 })
 
 onBeforeUnmount(() => {
-  if (!canvasRef.value) return
-  canvasRef.value.removeEventListener('mousedown', startDrawing)
-  canvasRef.value.removeEventListener('mousemove', draw)
-  canvasRef.value.removeEventListener('mouseup', stopDrawing)
-  canvasRef.value.removeEventListener('mouseleave', stopDrawing)
-  canvasRef.value.removeEventListener('touchstart', handleTouchStart)
-  canvasRef.value.removeEventListener('touchmove', handleTouchMove)
-  canvasRef.value.removeEventListener('touchend', stopDrawing)
+  isInitialized.value = false
+  retryCount = 0
+  ctx = null
 })
 
 function getCanvasCoords(e: MouseEvent | Touch): { x: number; y: number } {
@@ -231,7 +249,17 @@ function handleBackdropClick(e: MouseEvent) {
 
       <!-- Canvas area -->
       <div class="canvas-container">
-        <canvas ref="canvasRef" class="signature-canvas"></canvas>
+        <canvas
+          ref="canvasRef"
+          class="signature-canvas"
+          @mousedown="startDrawing"
+          @mousemove="draw"
+          @mouseup="stopDrawing"
+          @mouseleave="stopDrawing"
+          @touchstart.prevent="handleTouchStart"
+          @touchmove.prevent="handleTouchMove"
+          @touchend="stopDrawing"
+        ></canvas>
         <div v-if="!hasDrawn" class="canvas-hint">
           Draw your signature here
         </div>
