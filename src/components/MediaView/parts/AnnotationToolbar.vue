@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAnnotationStore } from '@/modules/annotation/store'
 import { selectAndPrepareImage } from '@/modules/annotation/tools'
 import type { ToolType, StrokeStyle } from '@/modules/annotation/types'
 import SignaturePicker, { type SignatureItem } from './SignaturePicker.vue'
 
+const { t } = useI18n()
 const annotation = useAnnotationStore()
 
 const activeTool = computed(() => annotation.activeTool)
@@ -25,11 +27,11 @@ const colorPalette = [
 const strokeWidths = [1, 2, 4, 8]
 
 // Stroke style options
-const strokeStyles: { value: StrokeStyle; label: string; pattern: string }[] = [
-  { value: 'solid', label: 'Solid', pattern: '' },
-  { value: 'dashed', label: 'Dashed', pattern: '8 4' },
-  { value: 'dotted', label: 'Dotted', pattern: '2 4' },
-]
+const strokeStyles = computed(() => [
+  { value: 'solid' as StrokeStyle, label: t('annotation.strokeStyle.solid'), pattern: '' },
+  { value: 'dashed' as StrokeStyle, label: t('annotation.strokeStyle.dashed'), pattern: '8 4' },
+  { value: 'dotted' as StrokeStyle, label: t('annotation.strokeStyle.dotted'), pattern: '2 4' },
+])
 
 // Key bindings
 const keyBindings: Record<string, ToolType> = {
@@ -242,7 +244,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('select')"
       :class="['tool-btn', { active: isActive('select') }]"
-      title="Select (V)"
+      :title="t('annotation.toolbar.select')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
@@ -256,7 +258,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('rect')"
       :class="['tool-btn', { active: isActive('rect') }]"
-      title="Rectangle (R)"
+      :title="t('annotation.toolbar.rectangle')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -266,7 +268,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('ellipse')"
       :class="['tool-btn', { active: isActive('ellipse') }]"
-      title="Ellipse (O)"
+      :title="t('annotation.toolbar.ellipse')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" />
@@ -276,7 +278,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('line')"
       :class="['tool-btn', { active: isActive('line') }]"
-      title="Line (L)"
+      :title="t('annotation.toolbar.line')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <line x1="5" y1="19" x2="19" y2="5" />
@@ -286,7 +288,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('arrow')"
       :class="['tool-btn', { active: isActive('arrow') }]"
-      title="Arrow (A)"
+      :title="t('annotation.toolbar.arrow')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <line x1="5" y1="19" x2="19" y2="5" />
@@ -300,7 +302,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('text')"
       :class="['tool-btn', { active: isActive('text') }]"
-      title="Text (T)"
+      :title="t('annotation.toolbar.text')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path d="M4 7V4h16v3" />
@@ -315,7 +317,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('pixelate')"
       :class="['tool-btn', { active: isActive('pixelate') }]"
-      title="Pixelate (M)"
+      :title="t('annotation.toolbar.pixelate')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <rect x="3" y="3" width="7" height="7" />
@@ -328,7 +330,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('counter')"
       :class="['tool-btn', { active: isActive('counter') }]"
-      title="Counter (N)"
+      :title="t('annotation.toolbar.counter')"
     >
       <svg class="w-5 h-5" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2" />
@@ -342,7 +344,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('pen')"
       :class="['tool-btn', { active: isActive('pen') }]"
-      title="Pen (P)"
+      :title="t('annotation.toolbar.pen')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path d="M12 19l7-7 3 3-7 7-3-3z" />
@@ -354,7 +356,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('highlighter')"
       :class="['tool-btn', { active: isActive('highlighter') }]"
-      title="Highlighter (H)"
+      :title="t('annotation.toolbar.highlighter')"
     >
       <svg class="w-5 h-5" viewBox="0 0 24 24">
         <path d="M3 17l4-4 4 4-4 4-4-4z" fill="currentColor" opacity="0.3" stroke="none" />
@@ -366,7 +368,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('eraser')"
       :class="['tool-btn', { active: isActive('eraser') }]"
-      title="Eraser (E)"
+      :title="t('annotation.toolbar.eraser')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <path d="M20 20H7L3 16c-.6-.6-.6-1.5 0-2.1l10-10c.6-.6 1.5-.6 2.1 0l7 7c.6.6.6 1.5 0 2.1L16 19" />
@@ -380,7 +382,7 @@ onBeforeUnmount(() => {
     <button
       @click="selectTool('image')"
       :class="['tool-btn', { active: isActive('image') }]"
-      title="Insert Image (I)"
+      :title="t('annotation.toolbar.insertImage')"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
         <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -393,7 +395,7 @@ onBeforeUnmount(() => {
       <button
         @click="selectTool('signature')"
         :class="['tool-btn', { active: isActive('signature') || showSignaturePicker }]"
-        title="Signature (S)"
+        :title="t('annotation.toolbar.signature')"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path d="M3 17c1-1 2-3 4-3s2 2 4 2 2-2 4-2 3 2 4 3" />
@@ -417,7 +419,7 @@ onBeforeUnmount(() => {
         @click="toggleColorPicker"
         class="color-dot-btn"
         :style="{ backgroundColor: annotation.toolSettings.color }"
-        title="Color"
+        :title="t('annotation.toolbar.color')"
       ></button>
 
       <!-- Color Popover (dropdown) -->
@@ -450,7 +452,7 @@ onBeforeUnmount(() => {
       <button
         @click="toggleStrokePicker"
         class="stroke-dropdown-btn"
-        title="Stroke Width"
+        :title="t('annotation.toolbar.strokeWidth')"
       >
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="4" y1="12" x2="16" y2="12" :stroke-width="annotation.toolSettings.strokeWidth" />
@@ -503,14 +505,14 @@ onBeforeUnmount(() => {
       <button
         @click="toggleCounterPicker"
         class="tool-setting-btn"
-        title="Start Number"
+        :title="t('annotation.toolbar.startNumber')"
       >
         <span class="text-xs font-mono">#{{ annotation.nextCounterValue }}</span>
       </button>
 
       <div v-if="showCounterPicker" class="dropdown-popover counter-dropdown">
         <div class="p-1.5 flex items-center gap-1.5">
-          <label class="text-xs text-muted-foreground whitespace-nowrap">Next</label>
+          <label class="text-xs text-muted-foreground whitespace-nowrap">{{ t('annotation.toolbar.nextCounter') }}</label>
           <input
             type="number"
             min="1"

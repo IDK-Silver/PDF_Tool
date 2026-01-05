@@ -291,6 +291,43 @@
     "contactDescription": "Follow the GitHub project for update notifications. For suggestions or bug reports, open an issue to help improve {appName}.",
     "homepage": "Project homepage"
   },
+  "annotation": {
+    "toolbar": {
+      "select": "Select (V)",
+      "rectangle": "Rectangle (R)",
+      "ellipse": "Ellipse (O)",
+      "line": "Line (L)",
+      "arrow": "Arrow (A)",
+      "text": "Text (T)",
+      "pixelate": "Pixelate (M)",
+      "counter": "Counter (N)",
+      "pen": "Pen (P)",
+      "highlighter": "Highlighter (H)",
+      "eraser": "Eraser (E)",
+      "insertImage": "Insert Image (I)",
+      "signature": "Signature (S)",
+      "color": "Color",
+      "strokeWidth": "Stroke Width",
+      "startNumber": "Start Number",
+      "nextCounter": "Next"
+    },
+    "strokeStyle": {
+      "solid": "Solid",
+      "dashed": "Dashed",
+      "dotted": "Dotted"
+    },
+    "signature": {
+      "mySignatures": "My Signatures",
+      "newSignature": "New Signature",
+      "loading": "Loading...",
+      "noSignatures": "No signatures yet",
+      "drawHint": "Draw your signature here",
+      "width": "Width",
+      "color": "Color",
+      "delete": "Delete",
+      "fromImage": "From Image"
+    }
+  },
   "menu": {
     "file": "File",
     "open": "Open",

@@ -26,7 +26,8 @@ export async function selectAndPrepareImage(): Promise<boolean> {
   })
 
   if (!picked) {
-    annotation.setActiveTool(null)
+    // User cancelled - keep toolbar open, revert to select tool
+    annotation.setActiveTool('select')
     return false
   }
 
@@ -69,7 +70,8 @@ export async function selectAndPrepareImage(): Promise<boolean> {
     return true
   } catch (err) {
     console.error('[ImageTool] Failed to load image:', err)
-    annotation.setActiveTool(null)
+    // Keep toolbar open, revert to select tool
+    annotation.setActiveTool('select')
     return false
   }
 }

@@ -343,6 +343,8 @@ export const useAnnotationStore = defineStore('annotation', () => {
     if (!text.trim()) {
       deleteAnnotation(id)
       stopEditingText()
+      // Switch to select tool after text editing
+      activeTool.value = 'select'
       return
     }
 
@@ -359,6 +361,8 @@ export const useAnnotationStore = defineStore('annotation', () => {
       }
     }
     stopEditingText()
+    // Switch to select tool after text editing
+    activeTool.value = 'select'
   }
 
   function undo() {

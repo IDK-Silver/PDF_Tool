@@ -1017,7 +1017,7 @@ function getResizeHandles(obj: AnnotationObject) {
             @keyup.stop
             @keypress.stop
             @keydown.enter="annotation.updateTextContent(obj.id, editingTextValue)"
-            @keydown.escape="annotation.stopEditingText()"
+            @keydown.escape="annotation.updateTextContent(obj.id, editingTextValue)"
             @mousedown.stop
             @click.stop
             @vue:mounted="(e: any) => { e.el?.focus(); e.el?.select(); }"

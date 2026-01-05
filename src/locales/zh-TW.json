@@ -291,6 +291,43 @@
     "contactDescription": "追蹤 GitHub 專案以取得更新通知。若有建議或錯誤回報，請直接開 Issue，讓 {appName} 變得更好。",
     "homepage": "專案首頁"
   },
+  "annotation": {
+    "toolbar": {
+      "select": "選取 (V)",
+      "rectangle": "矩形 (R)",
+      "ellipse": "橢圓 (O)",
+      "line": "直線 (L)",
+      "arrow": "箭頭 (A)",
+      "text": "文字 (T)",
+      "pixelate": "馬賽克 (M)",
+      "counter": "計數器 (N)",
+      "pen": "畫筆 (P)",
+      "highlighter": "螢光筆 (H)",
+      "eraser": "橡皮擦 (E)",
+      "insertImage": "插入圖片 (I)",
+      "signature": "簽名 (S)",
+      "color": "顏色",
+      "strokeWidth": "線條寬度",
+      "startNumber": "起始數字",
+      "nextCounter": "下一個"
+    },
+    "strokeStyle": {
+      "solid": "實線",
+      "dashed": "虛線",
+      "dotted": "點線"
+    },
+    "signature": {
+      "mySignatures": "我的簽名",
+      "newSignature": "新增簽名",
+      "loading": "載入中...",
+      "noSignatures": "尚無簽名",
+      "drawHint": "在此繪製您的簽名",
+      "width": "寬度",
+      "color": "顏色",
+      "delete": "刪除",
+      "fromImage": "從圖片"
+    }
+  },
   "menu": {
     "file": "檔案",
     "open": "開啟",

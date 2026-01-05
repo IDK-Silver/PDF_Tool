@@ -1,5 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
+import { invoke } from '@tauri-apps/api/core'
+
+const { t } = useI18n()
+
+interface ImageReadResult {
+  imageBytes: number[]
+  mimeType: string
+  width: number
+  height: number
+}
 
 const emit = defineEmits<{
   (e: 'save', dataUrl: string): void
@@ -231,6 +243,36 @@ function handleBackdropClick(e: MouseEvent) {
     emit('close')
   }
 }
+
+async function importFromImage() {
+  const picked = await openDialog({
+    multiple: false,
+    filters: [
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] },
+    ],
+  })
+
+  if (!picked) return
+
+  const path = Array.isArray(picked) ? picked[0] : picked
+
+  try {
+    const result = await invoke<ImageReadResult>('image_read', { path })
+    const bytes = new Uint8Array(result.imageBytes)
+
+    // Convert to base64
+    let binary = ''
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i])
+    }
+    const base64 = btoa(binary)
+    const dataUrl = `data:${result.mimeType};base64,${base64}`
+
+    emit('save', dataUrl)
+  } catch (err) {
+    console.error('Failed to import image:', err)
+  }
+}
 </script>
 
 <template>
@@ -239,7 +281,7 @@ function handleBackdropClick(e: MouseEvent) {
       <div class="dialog-content">
       <!-- Header -->
       <div class="dialog-header">
-        <span class="dialog-title">New Signature</span>
+        <span class="dialog-title">{{ t('annotation.signature.newSignature') }}</span>
         <button class="close-btn" @click="emit('close')">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M6 18L18 6M6 6l12 12" />
@@ -261,7 +303,7 @@ function handleBackdropClick(e: MouseEvent) {
           @touchend="stopDrawing"
         ></canvas>
         <div v-if="!hasDrawn" class="canvas-hint">
-          Draw your signature here
+          {{ t('annotation.signature.drawHint') }}
         </div>
       </div>
 
@@ -269,7 +311,7 @@ function handleBackdropClick(e: MouseEvent) {
       <div class="settings-row">
         <!-- Stroke width -->
         <div class="setting-group">
-          <span class="setting-label">Width</span>
+          <span class="setting-label">{{ t('annotation.signature.width') }}</span>
           <div class="width-options">
             <button
               v-for="w in widthOptions"
@@ -286,7 +328,7 @@ function handleBackdropClick(e: MouseEvent) {
 
         <!-- Color -->
         <div class="setting-group">
-          <span class="setting-label">Color</span>
+          <span class="setting-label">{{ t('annotation.signature.color') }}</span>
           <div class="color-options">
             <button
               v-for="color in colorOptions"
@@ -302,18 +344,21 @@ function handleBackdropClick(e: MouseEvent) {
       <!-- Actions -->
       <div class="dialog-actions">
         <button class="action-btn secondary" @click="clearCanvas">
-          Clear
+          {{ t('common.reset') }}
+        </button>
+        <button class="action-btn secondary" @click="importFromImage">
+          {{ t('annotation.signature.fromImage') }}
         </button>
         <div class="action-spacer"></div>
         <button class="action-btn secondary" @click="emit('close')">
-          Cancel
+          {{ t('common.cancel') }}
         </button>
         <button
           class="action-btn primary"
           :disabled="!hasDrawn"
           @click="handleSave"
         >
-          Save
+          {{ t('common.save') }}
         </button>
       </div>
     </div>
