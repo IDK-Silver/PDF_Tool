@@ -36,6 +36,12 @@ export const useAnnotationStore = defineStore('annotation', () => {
   const historyIndex = ref(-1)
   const MAX_HISTORY = 50
 
+  // Clean state tracking - index at which document is considered "saved"
+  const cleanHistoryIndex = ref(-1)
+
+  // Batch mode for grouping multiple updates (e.g., drag operations)
+  const isBatching = ref(false)
+
   // Get current objects state (only what needs to be in history)
   function getObjectsSnapshot(): Record<number, AnnotationObject[]> {
     return JSON.parse(JSON.stringify(objects.value))
@@ -72,6 +78,12 @@ export const useAnnotationStore = defineStore('annotation', () => {
     return Object.values(objects.value).some(pageObjs => pageObjs.length > 0)
   })
 
+  // Whether current state matches the saved/clean state
+  const isClean = computed(() => {
+    if (historyIndex.value === -1) return true
+    return historyIndex.value === cleanHistoryIndex.value
+  })
+
   // Get annotations for a specific page
   function getPageAnnotations(pageIndex: number): AnnotationObject[] {
     return objects.value[pageIndex] || []
@@ -86,6 +98,7 @@ export const useAnnotationStore = defineStore('annotation', () => {
     if (history.value.length === 0) {
       history.value = [{ objects: getObjectsSnapshot() } as AnnotationState]
       historyIndex.value = 0
+      cleanHistoryIndex.value = 0
     }
   }
 
@@ -114,6 +127,25 @@ export const useAnnotationStore = defineStore('annotation', () => {
     pendingObject.value = null
   }
 
+  // Batch mode: group multiple updates into one undo step
+  function beginBatch() {
+    if (isBatching.value) return
+    saveStateBeforeChange()
+    isBatching.value = true
+  }
+
+  function endBatch() {
+    if (!isBatching.value) return
+    isBatching.value = false
+    pushState()
+    media.markDirty()
+  }
+
+  // Mark current state as clean (called after save)
+  function markAsClean() {
+    cleanHistoryIndex.value = historyIndex.value
+  }
+
   // Actions
   function addAnnotation(obj: Omit<AnnotationObject, 'id'>) {
     // Save state before change (initializes history if needed)
@@ -136,16 +168,20 @@ export const useAnnotationStore = defineStore('annotation', () => {
   }
 
   function updateAnnotation(id: string, updates: Partial<AnnotationObject>) {
-    // Save state before change
-    saveStateBeforeChange()
+    // In batch mode, skip state management (handled by beginBatch/endBatch)
+    if (!isBatching.value) {
+      saveStateBeforeChange()
+    }
 
     for (const pageObjs of Object.values(objects.value)) {
       const idx = pageObjs.findIndex(o => o.id === id)
       if (idx !== -1) {
         pageObjs[idx] = { ...pageObjs[idx], ...updates }
-        // Save state after change
-        pushState()
-        media.markDirty()
+        // In batch mode, skip pushState (will be called by endBatch)
+        if (!isBatching.value) {
+          pushState()
+          media.markDirty()
+        }
         return
       }
     }
@@ -369,8 +405,10 @@ export const useAnnotationStore = defineStore('annotation', () => {
     if (historyIndex.value > 0) {
       historyIndex.value--
       restoreState(history.value[historyIndex.value])
-      // Mark dirty if we have changes, or clean if back to initial
-      if (historyIndex.value > 0 || Object.keys(objects.value).some(k => objects.value[Number(k)]?.length > 0)) {
+      // Update dirty state based on whether we're at clean index
+      if (historyIndex.value === cleanHistoryIndex.value) {
+        media.clearDirty()
+      } else {
         media.markDirty()
       }
     }
@@ -380,7 +418,12 @@ export const useAnnotationStore = defineStore('annotation', () => {
     if (historyIndex.value < history.value.length - 1) {
       historyIndex.value++
       restoreState(history.value[historyIndex.value])
-      media.markDirty()
+      // Update dirty state based on whether we're at clean index
+      if (historyIndex.value === cleanHistoryIndex.value) {
+        media.clearDirty()
+      } else {
+        media.markDirty()
+      }
     }
   }
 
@@ -396,6 +439,8 @@ export const useAnnotationStore = defineStore('annotation', () => {
     pendingObject.value = null
     history.value = []
     historyIndex.value = -1
+    cleanHistoryIndex.value = -1
+    isBatching.value = false
     isDrawing.value = false
     drawingPoints.value = []
     drawingPageIndex.value = null
@@ -430,6 +475,7 @@ export const useAnnotationStore = defineStore('annotation', () => {
     selectedObjects,
     hasSelection,
     hasAnnotations,
+    isClean,
 
     // Getters
     getPageAnnotations,
@@ -451,6 +497,11 @@ export const useAnnotationStore = defineStore('annotation', () => {
     undo,
     redo,
     reset,
+
+    // Batch operations (for grouping drag/resize into single undo)
+    beginBatch,
+    endBatch,
+    markAsClean,
 
     // Counter actions
     nextCounterValue,

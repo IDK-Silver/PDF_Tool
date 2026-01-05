@@ -174,6 +174,7 @@ function onTextAnnotationMouseDown(obj: AnnotationObject, e: MouseEvent) {
   // In select mode, handle selection and drag
   if (annotation.activeTool === 'select') {
     annotation.select(obj.id, e.shiftKey)
+    annotation.beginBatch()
 
     dragState.value = {
       id: obj.id,
@@ -197,6 +198,7 @@ function onAnnotationMouseDown(obj: AnnotationObject, e: MouseEvent) {
   if (annotation.activeTool !== 'select') return
 
   annotation.select(obj.id, e.shiftKey)
+  annotation.beginBatch()
 
   // Start drag - for lines/arrows, we need to track points separately
   const isLineType = obj.type === 'line' || obj.type === 'arrow'
@@ -243,6 +245,9 @@ function onDragMove(e: MouseEvent) {
 }
 
 function onDragEnd() {
+  if (dragState.value) {
+    annotation.endBatch()
+  }
   dragState.value = null
   window.removeEventListener('mousemove', onDragMove)
   window.removeEventListener('mouseup', onDragEnd)
@@ -251,6 +256,8 @@ function onDragEnd() {
 function onResizeMouseDown(obj: AnnotationObject, handle: string, e: MouseEvent) {
   e.stopPropagation()
   e.preventDefault()
+
+  annotation.beginBatch()
 
   resizeState.value = {
     id: obj.id,
@@ -329,6 +336,9 @@ function onResizeMove(e: MouseEvent) {
 }
 
 function onResizeEnd() {
+  if (resizeState.value) {
+    annotation.endBatch()
+  }
   resizeState.value = null
   window.removeEventListener('mousemove', onResizeMove)
   window.removeEventListener('mouseup', onResizeEnd)

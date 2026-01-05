@@ -20,6 +20,7 @@ const props = defineProps({
   canZoomIn: { type: Boolean, default: true },
   canZoomOut: { type: Boolean, default: true },
   searchActive: { type: Boolean, default: false },
+  hasFile: { type: Boolean, default: false },
 })
 
 const emit = defineEmits<{
@@ -39,6 +40,7 @@ const annotation = useAnnotationStore()
 
 // Toggle annotation toolbar
 function toggleAnnotationToolbar() {
+  if (!props.hasFile) return
   if (annotation.activeTool !== null) {
     annotation.setActiveTool(null)
     annotation.clearSelection()
@@ -132,8 +134,9 @@ function handlePageMouseDown(e: MouseEvent) {
 
         <!-- Annotate toggle button -->
         <button @click="toggleAnnotationToolbar"
+          :disabled="!props.hasFile"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"
-          :class="annotation.activeTool !== null ? 'bg-blue-400 text-white hover:bg-blue-700' : 'hover:bg-hover'"
+          :class="!props.hasFile ? 'opacity-40 cursor-not-allowed' : annotation.activeTool !== null ? 'bg-blue-400 text-white hover:bg-blue-700' : 'hover:bg-hover'"
           title="Annotate">
           <PencilIcon class="w-4 h-4" />
         </button>

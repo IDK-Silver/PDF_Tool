@@ -444,6 +444,7 @@ onBeforeUnmount(() => {
       :can-zoom-in="canZoomIn"
       :can-zoom-out="canZoomOut"
       :search-active="searchActive"
+      :has-file="isPdf || isImage"
       @save="onSaveNow"
       @discard="onDiscardNow"
       @reveal="onReveal"
