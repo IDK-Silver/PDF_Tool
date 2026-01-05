@@ -1,4 +1,18 @@
 // Annotation types as defined in docs/annotation-toolbar-design.md
+// Phase 7: Relative size system - strokeWidth represents visual size, converted to pt at creation time
+
+/**
+ * Visual size options for all annotation tools (screen pixels at current zoom)
+ * The actual pt value is calculated as: actualPt = visualSize / scale
+ */
+export const VISUAL_SIZES = [1, 2, 4, 8] as const
+export type VisualSize = (typeof VISUAL_SIZES)[number]
+
+/**
+ * Base font size for text annotations (pt)
+ * Text fontSize = TEXT_BASE_SIZE * sizeMultiplier / scale
+ */
+export const TEXT_BASE_SIZE = 14
 
 export type AnnotationType =
   | 'rect'
@@ -71,12 +85,19 @@ export interface AnnotationObject {
   text?: string
   fontSize?: number
   fontFamily?: string
+
+  // Counter specific
+  counterValue?: number         // The number displayed in badge
+
+  // Pixelate specific
+  pixelatedImageData?: string   // Base64 of pixelated region
+  pixelateSize?: number         // Block size used for pixelation
 }
 
 export interface ToolSettings {
-  // Common
+  // Common - Phase 7: strokeWidth is visual size, converted to pt at creation time
   color: string           // Primary color
-  strokeWidth: number     // Line width (pt)
+  strokeWidth: number     // Visual size (1, 2, 4, 8) - converted to pt based on scale
   strokeStyle: StrokeStyle // Line style
   opacity: number         // Opacity
 
@@ -84,16 +105,15 @@ export interface ToolSettings {
   fill: string
   stroke: string
 
-  // Pixelate specific
-  pixelateSize: number
-  pixelateStrength: number
-
   // Counter specific
   counterStart: number
 
-  // Text specific
-  fontSize: number
+  // Text specific - Phase 7: fontSize is now derived from strokeWidth
+  fontSize: number        // Deprecated: use strokeWidth as size multiplier
   fontFamily: string
+
+  // Signature specific
+  signatureDataUrl?: string  // Selected signature image data URL
 }
 
 export const defaultToolSettings: ToolSettings = {
@@ -103,8 +123,6 @@ export const defaultToolSettings: ToolSettings = {
   opacity: 1,
   fill: '#ffff00',
   stroke: '#000000',
-  pixelateSize: 10,
-  pixelateStrength: 8,
   counterStart: 1,
   fontSize: 14,
   fontFamily: 'system-ui',

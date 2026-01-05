@@ -2,8 +2,11 @@
 import { computed, ref, watch, nextTick } from 'vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
 import type { AnnotationObject, CoordinateContext, StrokeStyle } from '@/modules/annotation/types'
+import { TEXT_BASE_SIZE } from '@/modules/annotation/types'
 import { pdfToSvg, pdfSizeToSvg, screenToPdf, svgToPdf } from '@/modules/annotation/coordinateUtils'
 import { pdfPathToSvgPath, pathDataToPoints, isPointNearPath, pointsToPathData } from '@/modules/annotation/pathUtils'
+import { visualSizeToPt, visualSizeToFontPt, getScale } from '@/modules/annotation/sizeUtils'
+import { captureAndPixelateRegion, type PixelateCaptureParams } from '@/modules/annotation/pixelateUtils'
 
 // Stroke dash arrays for different styles
 const strokeDashArrays: Record<StrokeStyle, string> = {
@@ -54,40 +57,43 @@ const textInputRef = ref<HTMLInputElement | null>(null)
 // Track current editing text value for dynamic width calculation
 const editingTextValue = ref('')
 
+// Store current editing annotation info for width calculation
+const editingAnnotationInfo = ref<{ fontSize: number; fontFamily: string } | null>(null)
+
 // Measure text width for dynamic input sizing
 function measureTextWidth(text: string, fontSize: number, fontFamily: string): number {
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
-  if (!ctx) return text.length * fontSize * 0.8
+  if (!ctx) return text.length * fontSize * 0.6
   ctx.font = `${fontSize}px ${fontFamily}`
   return ctx.measureText(text).width
 }
 
-// Calculate dynamic input width based on current text
-function getTextInputWidth(obj: AnnotationObject): number {
-  const text = editingTextValue.value || obj.text || ''
+// Computed property for text input width - explicitly tracks editingTextValue
+const textInputWidth = computed(() => {
+  const text = editingTextValue.value
+  if (!editingAnnotationInfo.value) return 100
+
   const scale = props.displayWidth / props.pageWidthPt
-  const fontSize = (obj.fontSize || 14) * scale
-  const fontFamily = obj.fontFamily || 'system-ui'
+  const fontSize = (editingAnnotationInfo.value.fontSize || 14) * scale
+  const fontFamily = editingAnnotationInfo.value.fontFamily || 'system-ui'
   const textWidth = measureTextWidth(text, fontSize, fontFamily)
   // Add padding and minimum width
   return Math.max(100, textWidth + 30)
-}
-
-// Handle text input change for dynamic resizing
-function onTextInput(e: Event) {
-  const input = e.target as HTMLInputElement
-  editingTextValue.value = input.value
-}
+})
 
 // Watch for text editing changes to autofocus input
 watch(() => annotation.editingTextId, (newId) => {
   if (newId) {
-    // Find the annotation and set initial editing value
+    // Find the annotation and set initial editing value and info
     for (const pageObjs of Object.values(annotation.objects)) {
       const obj = pageObjs.find(o => o.id === newId)
       if (obj) {
         editingTextValue.value = obj.text || ''
+        editingAnnotationInfo.value = {
+          fontSize: obj.fontSize || 14,
+          fontFamily: obj.fontFamily || 'system-ui',
+        }
         break
       }
     }
@@ -97,6 +103,7 @@ watch(() => annotation.editingTextId, (newId) => {
     })
   } else {
     editingTextValue.value = ''
+    editingAnnotationInfo.value = null
   }
 })
 
@@ -355,8 +362,8 @@ function onSvgMouseDown(e: MouseEvent) {
     return
   }
 
-  // Shape drawing (rect, ellipse, line, arrow)
-  if (tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'arrow') {
+  // Shape drawing (rect, ellipse, line, arrow, pixelate)
+  if (tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'arrow' || tool === 'pixelate') {
     e.preventDefault()
     const svg = e.currentTarget as SVGElement
     const rect = svg.getBoundingClientRect()
@@ -393,13 +400,43 @@ function onSvgMouseDown(e: MouseEvent) {
     window.addEventListener('mouseup', onEraserEnd)
   }
 
+  // Counter tool - single click to place numbered badge
+  if (tool === 'counter') {
+    e.preventDefault()
+    const svg = e.currentTarget as SVGElement
+    const pdfPos = screenToPdf(e.clientX, e.clientY, svg as unknown as HTMLElement, coordCtx.value)
+
+    const scale = getScale(coordCtx.value)
+    const counterValue = annotation.getNextCounterValue()
+    // Calculate radius based on strokeWidth (visual size * 6 for reasonable badge size)
+    const radiusPt = visualSizeToPt(annotation.toolSettings.strokeWidth * 6, scale)
+
+    // Store as bounding box (like other shapes): x = left edge, y = top edge (max Y in PDF)
+    annotation.addAnnotation({
+      type: 'counter',
+      pageIndex: props.pageIndex,
+      x: pdfPos.x - radiusPt,           // left edge
+      y: pdfPos.y + radiusPt,           // top edge (PDF Y increases upward)
+      width: radiusPt * 2,
+      height: radiusPt * 2,
+      counterValue,
+      stroke: annotation.toolSettings.color,
+      opacity: 1,
+    })
+    return
+  }
+
   // Text tool - create new text annotation
   if (tool === 'text') {
     e.preventDefault()
     const svg = e.currentTarget as SVGElement
     const pdfPos = screenToPdf(e.clientX, e.clientY, svg as unknown as HTMLElement, coordCtx.value)
 
-    const fontSize = annotation.toolSettings.fontSize
+    // Phase 7: Use unified size system for text
+    // fontSize = baseSize * sizeMultiplier / scale
+    const scale = getScale(coordCtx.value)
+    const sizeMultiplier = annotation.toolSettings.strokeWidth // Use strokeWidth as size multiplier
+    const fontSize = visualSizeToFontPt(sizeMultiplier, scale, TEXT_BASE_SIZE)
     const newAnnotation = annotation.addAnnotation({
       type: 'text',
       pageIndex: props.pageIndex,
@@ -431,7 +468,9 @@ function onPathDrawMove(e: MouseEvent) {
 function onPathDrawEnd() {
   window.removeEventListener('mousemove', onPathDrawMove)
   window.removeEventListener('mouseup', onPathDrawEnd)
-  annotation.finishDrawing()
+  // Phase 7: Pass scale for visual size to pt conversion
+  const scale = getScale(coordCtx.value)
+  annotation.finishDrawing(scale)
 }
 
 // Eraser handlers
@@ -488,6 +527,10 @@ function onDrawEnd(_e: MouseEvent) {
 
   const minSize = 5 // Minimum size in PDF points
 
+  // Phase 7: Convert visual size to actual pt based on scale
+  const scale = getScale(coordCtx.value)
+  const strokeWidth = visualSizeToPt(annotation.toolSettings.strokeWidth, scale)
+
   if (tool === 'line' || tool === 'arrow') {
     const dx = Math.abs(end.x - start.x)
     const dy = Math.abs(end.y - start.y)
@@ -501,7 +544,7 @@ function onDrawEnd(_e: MouseEvent) {
         height: Math.abs(end.y - start.y),
         points: [start.x, start.y, end.x, end.y],
         stroke: annotation.toolSettings.color,
-        strokeWidth: annotation.toolSettings.strokeWidth,
+        strokeWidth,
         strokeStyle: annotation.toolSettings.strokeStyle,
         opacity: annotation.toolSettings.opacity,
       })
@@ -522,9 +565,50 @@ function onDrawEnd(_e: MouseEvent) {
         height,
         fill: 'none',
         stroke: annotation.toolSettings.color,
-        strokeWidth: annotation.toolSettings.strokeWidth,
+        strokeWidth,
         strokeStyle: annotation.toolSettings.strokeStyle,
         opacity: annotation.toolSettings.opacity,
+      })
+    }
+  } else if (tool === 'pixelate') {
+    const x = Math.min(start.x, end.x)
+    const y = Math.max(start.y, end.y) // PDF Y is flipped
+    const width = Math.abs(end.x - start.x)
+    const height = Math.abs(end.y - start.y)
+
+    if (width > minSize && height > minSize) {
+      // Use strokeWidth as block size (unified size system)
+      const blockSize = annotation.toolSettings.strokeWidth
+
+      // Create annotation with placeholder - noise will be generated async
+      const ann = annotation.addAnnotation({
+        type: 'pixelate',
+        pageIndex: props.pageIndex,
+        x,
+        y,
+        width,
+        height,
+        pixelateSize: blockSize,
+        opacity: 1,
+      })
+
+      // Async: generate noise for the region
+      const scale = props.displayWidth / props.pageWidthPt
+      const captureParams: PixelateCaptureParams = {
+        pageIndex: props.pageIndex,
+        x,
+        y,
+        width,
+        height,
+        pageWidthPt: props.pageWidthPt,
+        pageHeightPt: props.pageHeightPt,
+        blockSize,
+        scale,
+      }
+      captureAndPixelateRegion(captureParams).then(imageData => {
+        if (imageData) {
+          annotation.updateAnnotation(ann.id, { pixelatedImageData: imageData })
+        }
       })
     }
   }
@@ -610,10 +694,11 @@ const drawingPathPreview = computed(() => {
     scale
   )
 
+  // Phase 7: strokeWidth is visual size - show directly without scale multiplication
   return {
     d: svgPath,
     stroke: annotation.toolSettings.color,
-    strokeWidth: annotation.toolSettings.strokeWidth * scale,
+    strokeWidth: annotation.toolSettings.strokeWidth, // Visual size in screen pixels
     opacity: isPen ? 1 : 0.4,
   }
 })
@@ -701,7 +786,7 @@ function getResizeHandles(obj: AnnotationObject) {
         :height="getSvgSize(obj).height"
         :fill="obj.fill === 'none' ? 'transparent' : obj.fill"
         :stroke="obj.stroke"
-        :stroke-width="obj.strokeWidth"
+        :stroke-width="(obj.strokeWidth || 2) * (displayWidth / pageWidthPt)"
         :stroke-dasharray="getStrokeDashArray(obj.strokeStyle)"
         :opacity="obj.opacity"
         :class="{ selected: isSelected(obj.id) }"
@@ -718,7 +803,7 @@ function getResizeHandles(obj: AnnotationObject) {
         :ry="getSvgSize(obj).height / 2"
         :fill="obj.fill === 'none' ? 'transparent' : obj.fill"
         :stroke="obj.stroke"
-        :stroke-width="obj.strokeWidth"
+        :stroke-width="(obj.strokeWidth || 2) * (displayWidth / pageWidthPt)"
         :stroke-dasharray="getStrokeDashArray(obj.strokeStyle)"
         :opacity="obj.opacity"
         :class="{ selected: isSelected(obj.id) }"
@@ -747,7 +832,7 @@ function getResizeHandles(obj: AnnotationObject) {
           :y2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).y"
           fill="none"
           :stroke="obj.stroke"
-          :stroke-width="obj.strokeWidth"
+          :stroke-width="(obj.strokeWidth || 2) * (displayWidth / pageWidthPt)"
           :stroke-dasharray="getStrokeDashArray(obj.strokeStyle)"
           :opacity="obj.opacity"
           :class="{ selected: isSelected(obj.id) }"
@@ -776,7 +861,7 @@ function getResizeHandles(obj: AnnotationObject) {
           :y2="pdfToSvg(obj.points[2], obj.points[3], coordCtx).y"
           fill="none"
           :stroke="obj.stroke"
-          :stroke-width="obj.strokeWidth"
+          :stroke-width="(obj.strokeWidth || 2) * (displayWidth / pageWidthPt)"
           :stroke-dasharray="getStrokeDashArray(obj.strokeStyle)"
           :opacity="obj.opacity"
           :marker-end="`url(#arrowhead-${obj.id})`"
@@ -800,6 +885,60 @@ function getResizeHandles(obj: AnnotationObject) {
         @mousedown="onAnnotationMouseDown(obj, $event)"
       />
 
+      <!-- Pixelate region -->
+      <image
+        v-else-if="obj.type === 'pixelate' && obj.pixelatedImageData"
+        :x="getSvgPosition(obj).x"
+        :y="getSvgPosition(obj).y"
+        :width="getSvgSize(obj).width"
+        :height="getSvgSize(obj).height"
+        :href="obj.pixelatedImageData"
+        :opacity="obj.opacity"
+        :class="{ selected: isSelected(obj.id) }"
+        preserveAspectRatio="none"
+        style="pointer-events: all; cursor: move;"
+        @mousedown="onAnnotationMouseDown(obj, $event)"
+      />
+      <!-- Pixelate placeholder (while processing) -->
+      <rect
+        v-else-if="obj.type === 'pixelate' && !obj.pixelatedImageData"
+        :x="getSvgPosition(obj).x"
+        :y="getSvgPosition(obj).y"
+        :width="getSvgSize(obj).width"
+        :height="getSvgSize(obj).height"
+        fill="rgba(128, 128, 128, 0.5)"
+        stroke="#666"
+        stroke-width="1"
+        stroke-dasharray="4 2"
+        :class="{ selected: isSelected(obj.id) }"
+        style="pointer-events: all; cursor: move;"
+        @mousedown="onAnnotationMouseDown(obj, $event)"
+      />
+
+      <!-- Counter badge -->
+      <g v-else-if="obj.type === 'counter'">
+        <circle
+          :cx="getSvgPosition(obj).x + getSvgSize(obj).width / 2"
+          :cy="getSvgPosition(obj).y + getSvgSize(obj).height / 2"
+          :r="getSvgSize(obj).width / 2"
+          :fill="obj.stroke || '#FF0000'"
+          :opacity="obj.opacity"
+          :class="{ selected: isSelected(obj.id) }"
+          style="pointer-events: all; cursor: move;"
+          @mousedown="onAnnotationMouseDown(obj, $event)"
+        />
+        <text
+          :x="getSvgPosition(obj).x + getSvgSize(obj).width / 2"
+          :y="getSvgPosition(obj).y + getSvgSize(obj).height / 2"
+          text-anchor="middle"
+          dominant-baseline="central"
+          :font-size="getSvgSize(obj).width * 0.6"
+          font-weight="bold"
+          fill="white"
+          style="pointer-events: none; user-select: none;"
+        >{{ obj.counterValue }}</text>
+      </g>
+
       <!-- Text annotation -->
       <g v-else-if="obj.type === 'text'">
         <!-- Display text (when not editing) -->
@@ -812,9 +951,8 @@ function getResizeHandles(obj: AnnotationObject) {
           :font-family="obj.fontFamily || 'system-ui'"
           :opacity="obj.opacity"
           :class="{ selected: isSelected(obj.id) }"
-          style="pointer-events: all; cursor: pointer;"
+          :style="{ pointerEvents: 'all', cursor: annotation.activeTool === 'select' ? 'move' : 'pointer' }"
           @mousedown="onTextAnnotationMouseDown(obj, $event)"
-          @dblclick="annotation.startEditingText(obj.id)"
         >{{ obj.text || '' }}</text>
 
         <!-- Text input (when editing) -->
@@ -822,13 +960,13 @@ function getResizeHandles(obj: AnnotationObject) {
           v-else
           :x="getSvgPosition(obj).x - 2"
           :y="getSvgPosition(obj).y - 2"
-          :width="getTextInputWidth(obj)"
+          :width="textInputWidth"
           :height="getSvgSize(obj).height + 10"
         >
           <input
             ref="textInputRef"
             type="text"
-            :value="obj.text || ''"
+            v-model="editingTextValue"
             :style="{
               width: '100%',
               height: '100%',
@@ -841,12 +979,11 @@ function getResizeHandles(obj: AnnotationObject) {
               outline: 'none',
               background: 'rgba(255,255,255,0.9)',
             }"
-            @input="onTextInput($event)"
-            @blur="(e) => annotation.updateTextContent(obj.id, (e.target as HTMLInputElement).value)"
+            @blur="annotation.updateTextContent(obj.id, editingTextValue)"
             @keydown.stop
             @keyup.stop
             @keypress.stop
-            @keydown.enter="(e) => annotation.updateTextContent(obj.id, (e.target as HTMLInputElement).value)"
+            @keydown.enter="annotation.updateTextContent(obj.id, editingTextValue)"
             @keydown.escape="annotation.stopEditingText()"
             @mousedown.stop
             @click.stop
@@ -924,6 +1061,18 @@ function getResizeHandles(obj: AnnotationObject) {
         :stroke-width="annotation.toolSettings.strokeWidth"
         :stroke-dasharray="getStrokeDashArray(annotation.toolSettings.strokeStyle)"
         :opacity="annotation.toolSettings.opacity"
+        class="drawing-preview"
+      />
+      <rect
+        v-else-if="isShapePreview(drawPreview) && drawPreview.type === 'pixelate'"
+        :x="drawPreview.x"
+        :y="drawPreview.y"
+        :width="drawPreview.width"
+        :height="drawPreview.height"
+        fill="rgba(128, 128, 128, 0.3)"
+        stroke="#666"
+        stroke-width="2"
+        stroke-dasharray="8 4"
         class="drawing-preview"
       />
     </template>

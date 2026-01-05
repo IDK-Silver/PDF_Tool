@@ -598,6 +598,87 @@ objects.create_image_object(
 
 ---
 
+## Phase 7：相對大小系統 ✅ 已完成
+
+### 設計目標
+
+將工具大小從「絕對 pt 值」改為「相對視覺大小」，實現所見即所得的繪製體驗。
+
+**完成日期**：2026-01-05
+
+### 核心概念
+
+- **大小選項**：1, 2, 4, 8（代表螢幕上的視覺大小，單位為像素）
+- **統一系統**：所有工具（形狀、畫筆、文字）使用同一套大小選項
+- **動態換算**：根據當前縮放比例，自動計算實際存儲的 pt 值
+
+### 計算公式
+
+```
+scale = displayWidth / pageWidthPt
+actualPt = visualSize / scale
+```
+
+**情境範例**（用戶選擇大小 4）：
+
+| 縮放比例 | scale | 螢幕視覺 | 實際存儲 pt |
+|---------|-------|---------|------------|
+| 100% | 1.0 | 4px | 4pt |
+| 200% | 2.0 | 4px | 2pt |
+| 400% | 4.0 | 4px | 1pt |
+| 50% | 0.5 | 4px | 8pt |
+
+### 行為說明
+
+1. **繪製時**：用戶在 400% 縮放下選擇大小 4 繪製
+   - 螢幕上看起來是 4 像素粗
+   - 實際存儲為 1pt
+
+2. **查看時**：縮回 100% 查看
+   - 1pt 線條看起來會很細
+   - 這是正確的，因為用戶當時就是想要那個視覺大小
+
+### 文字大小處理
+
+- **移除獨立的 pt 選擇器**（目前的 10, 12, 14... 48pt）
+- **使用統一大小選項**：1, 2, 4, 8
+- **換算公式**：`fontSize = baseSize * sizeMultiplier / scale`
+  - `baseSize`：基準字體大小（如 14pt）
+  - `sizeMultiplier`：用戶選擇的大小（1, 2, 4, 8）
+  - `scale`：當前縮放比例
+
+### 需要修改的檔案
+
+1. **`src/modules/annotation/types.ts`**
+   - 修改 `ToolSettings`，移除 `fontSize`，統一使用 `size`
+   - 新增大小常數定義
+
+2. **`src/modules/annotation/store.ts`**
+   - 新增 `calculateActualPt(visualSize: number, scale: number)` 函數
+   - 修改 `finishDrawing()` 使用動態換算
+
+3. **`src/components/MediaView/parts/AnnotationToolbar.vue`**
+   - 移除文字專用的 pt 選擇器
+   - 修改大小選項的顯示方式（可能改為圖示或更直觀的標籤）
+
+4. **`src/components/MediaView/parts/AnnotationLayer.vue`**
+   - 創建標註時傳入當前 scale
+   - 修改 `onSvgMouseDown`、`onDrawEnd` 等函數
+
+5. **`src/modules/annotation/coordinateUtils.ts`**（可選）
+   - 新增 `visualSizeToPt(visualSize: number, ctx: CoordinateContext)` 輔助函數
+
+### 實作步驟
+
+1. [x] 在 `types.ts` 定義新的大小系統常數（`VISUAL_SIZES`, `TEXT_BASE_SIZE`）
+2. [x] 在 `sizeUtils.ts` 新增換算函數（`visualSizeToPt`, `visualSizeToFontPt`, `getScale`）
+3. [x] 修改 `store.ts` 的 `finishDrawing(scale)` 使用動態換算
+4. [x] 修改 `AnnotationToolbar.vue` 移除文字 pt 選擇器
+5. [x] 修改 `AnnotationLayer.vue` 創建標註時使用換算
+6. [x] 更新文件
+
+---
+
 ## 建議的下一步
 
 1. ~~**驗證 PDFium API**~~：✅ 已完成（2025-12-31）
@@ -629,3 +710,5 @@ objects.create_image_object(
 | 2025-01-04 | 完成 Phase 1 & 3：AnnotationLayer、AnnotationToolbar、形狀繪製（rect, ellipse, line, arrow）、選擇/移動/調整大小、樣式設定（顏色、線寬、線條樣式）、圖片標註儲存、鍵盤快捷鍵 |
 | 2026-01-04 | 完成 Phase 5：繪圖工具（畫筆、螢光筆、橡皮擦）、路徑簡化演算法、pathUtils.ts |
 | 2026-01-04 | 完成 Phase 6：文字工具、字型大小選擇器、雙擊編輯 |
+| 2026-01-04 | 規劃 Phase 7：相對大小系統設計（視覺大小 → 動態 pt 換算） |
+| 2026-01-05 | 完成 Phase 7：相對大小系統（sizeUtils.ts、統一大小選項、移除文字 pt 選擇器） |

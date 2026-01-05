@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
 import { selectAndPrepareImage } from '@/modules/annotation/tools'
 import type { ToolType, StrokeStyle } from '@/modules/annotation/types'
+import SignaturePicker, { type SignatureItem } from './SignaturePicker.vue'
 
 const annotation = useAnnotationStore()
 
@@ -50,11 +51,15 @@ const keyBindings: Record<string, ToolType> = {
 // Show popovers
 const showColorPicker = ref(false)
 const showStrokePicker = ref(false)
+const showCounterPicker = ref(false)
+const showSignaturePicker = ref(false)
 
 // Close popovers when clicking outside
 function closePopovers() {
   showColorPicker.value = false
   showStrokePicker.value = false
+  showCounterPicker.value = false
+  showSignaturePicker.value = false
 }
 
 function isActive(tool: ToolType): boolean {
@@ -65,9 +70,27 @@ async function selectTool(tool: ToolType) {
   if (tool === 'image') {
     annotation.setActiveTool('image')
     await selectAndPrepareImage()
+  } else if (tool === 'signature') {
+    toggleSignaturePicker()
   } else {
     annotation.setActiveTool(tool)
   }
+}
+
+function toggleSignaturePicker() {
+  closePopovers()
+  showSignaturePicker.value = !showSignaturePicker.value
+}
+
+function handleSignatureSelect(sig: SignatureItem) {
+  showSignaturePicker.value = false
+  annotation.setActiveTool('signature')
+  // Store signature data for placing
+  annotation.updateToolSettings({ signatureDataUrl: sig.dataUrl })
+}
+
+function closeSignaturePicker() {
+  showSignaturePicker.value = false
 }
 
 function closeToolbar() {
@@ -97,6 +120,17 @@ function setStrokeWidth(width: number) {
 
 function setStrokeStyle(style: StrokeStyle) {
   annotation.updateToolSettings({ strokeStyle: style })
+}
+
+function toggleCounterPicker() {
+  closePopovers()
+  showCounterPicker.value = !showCounterPicker.value
+}
+
+function setCounterStart(start: number) {
+  const value = Math.max(1, start)
+  annotation.updateToolSettings({ counterStart: value })
+  annotation.resetCounterSequence(value)
 }
 
 function isInputElement(target: EventTarget | null): boolean {
@@ -314,16 +348,25 @@ onBeforeUnmount(() => {
       </svg>
     </button>
 
-    <button
-      @click="selectTool('signature')"
-      :class="['tool-btn', { active: isActive('signature') }]"
-      title="Signature (S)"
-    >
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path d="M3 17c1-1 2-3 4-3s2 2 4 2 2-2 4-2 3 2 4 3" />
-        <path d="M3 21h18" />
-      </svg>
-    </button>
+    <div class="relative">
+      <button
+        @click="selectTool('signature')"
+        :class="['tool-btn', { active: isActive('signature') || showSignaturePicker }]"
+        title="Signature (S)"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M3 17c1-1 2-3 4-3s2 2 4 2 2-2 4-2 3 2 4 3" />
+          <path d="M3 21h18" />
+        </svg>
+      </button>
+
+      <!-- Signature Picker Popover -->
+      <SignaturePicker
+        v-if="showSignaturePicker"
+        @select="handleSignatureSelect"
+        @close="closeSignaturePicker"
+      />
+    </div>
 
     <div class="divider"></div>
 
@@ -414,20 +457,34 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Font Size (shown when text tool is active) -->
-    <template v-if="activeTool === 'text'">
+    <!-- Phase 7: Text and Pixelate use unified size system (strokeWidth) -->
+
+    <!-- Counter Settings (shown when counter tool is active) -->
+    <template v-if="activeTool === 'counter'">
       <div class="divider"></div>
-      <div class="flex items-center gap-1 px-1">
-        <select
-          :value="annotation.toolSettings.fontSize"
-          @change="annotation.updateToolSettings({ fontSize: parseInt(($event.target as HTMLSelectElement).value) })"
-          class="font-size-select"
+      <div class="relative">
+        <button
+          @click="toggleCounterPicker"
+          class="tool-setting-btn"
+          title="Start Number"
         >
-          <option v-for="size in [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48]" :key="size" :value="size">
-            {{ size }}
-          </option>
-        </select>
-        <span class="text-xs text-muted-foreground">pt</span>
+          <span class="text-xs">#{{ annotation.nextCounterValue }}</span>
+        </button>
+
+        <div v-if="showCounterPicker" class="dropdown-popover setting-dropdown">
+          <div class="p-2 space-y-2">
+            <label class="text-xs text-muted-foreground block">Start Number</label>
+            <input
+              type="number"
+              min="1"
+              :value="annotation.toolSettings.counterStart"
+              @change="setCounterStart(Number(($event.target as HTMLInputElement).value))"
+              @keydown.stop
+              class="w-full px-2 py-1 text-sm border rounded bg-background"
+            />
+          </div>
+          <div class="popover-backdrop" @click="closePopovers"></div>
+        </div>
       </div>
     </template>
 
@@ -585,28 +642,35 @@ input[type="color"]::-webkit-color-swatch {
   border-radius: 4px;
 }
 
-/* Font size select */
-.font-size-select {
-  height: 1.5rem;
-  padding: 0 0.25rem;
-  font-size: 0.75rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.25rem;
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  cursor: pointer;
-}
-
-.font-size-select:focus {
-  outline: none;
-  border-color: hsl(var(--primary));
-}
-
 /* Backdrop to close popover when clicking outside */
 .popover-backdrop {
   position: fixed;
   inset: 0;
   z-index: -1;
+}
+
+/* Tool setting button (for pixelate/counter) */
+.tool-setting-btn {
+  height: 2rem;
+  padding: 0 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  transition: background-color 0.15s;
+  color: hsl(var(--foreground) / 0.7);
+  background-color: hsl(var(--muted) / 0.5);
+  flex-shrink: 0;
+}
+
+.tool-setting-btn:hover {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.setting-dropdown {
+  right: 0;
+  min-width: 120px;
 }
 
 </style>

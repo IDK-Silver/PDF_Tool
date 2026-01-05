@@ -9,7 +9,8 @@ import ImageViewport from './parts/ImageViewport.vue'
 import AnnotationToolbar from './parts/AnnotationToolbar.vue'
 import { useMediaStore } from '@/modules/media/store'
 import { useAnnotationStore } from '@/modules/annotation/store'
-// import { embedAllAnnotations } from '@/modules/annotation/service'
+import { embedAllAnnotations, type PageSize } from '@/modules/annotation/service'
+import { renderAnnotationsToCanvasAsync } from '@/modules/export/canvasRenderer'
 import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
@@ -239,13 +240,24 @@ async function onSaveNow() {
   try {
     saving.value = true
 
-    // Embed annotations before saving - temporarily disabled
-    // const annotations = annotationStore.getAllAnnotations()
-    // if (annotations.length > 0) {
-    //   await embedAllAnnotations(docId, annotations)
-    //   // Clear annotations after embedding (they are now part of the PDF)
-    //   annotationStore.reset()
-    // }
+    // Embed annotations before saving
+    const annotations = annotationStore.getAllAnnotations()
+    if (annotations.length > 0) {
+      // Build page sizes map
+      const pageSizes = new Map<number, PageSize>()
+      for (const ann of annotations) {
+        if (!pageSizes.has(ann.pageIndex)) {
+          const size = media.pageSizesPt[ann.pageIndex]
+          if (size) {
+            pageSizes.set(ann.pageIndex, size)
+          }
+        }
+      }
+
+      await embedAllAnnotations(docId, annotations, pageSizes)
+      // Clear annotations after embedding (they are now part of the PDF)
+      annotationStore.reset()
+    }
 
     await media.saveCurrentIfNeeded()
     const path = media.descriptor?.path
@@ -299,85 +311,14 @@ async function saveImageWithAnnotations() {
     // Draw the original image
     ctx.drawImage(imgEl, 0, 0, naturalWidth, naturalHeight)
 
-    // Draw annotations
+    // Draw annotations using the unified Canvas renderer
     const annotations = annotationStore.getPageAnnotations(0)
-    for (const obj of annotations) {
-      ctx.save()
-      ctx.globalAlpha = obj.opacity ?? 1
-
-      if (obj.stroke) {
-        ctx.strokeStyle = obj.stroke
-      }
-      if (obj.strokeWidth) {
-        ctx.lineWidth = obj.strokeWidth
-      }
-
-      // Apply stroke dash array
-      if (obj.strokeStyle === 'dashed') {
-        ctx.setLineDash([8, 4])
-      } else if (obj.strokeStyle === 'dotted') {
-        ctx.setLineDash([2, 4])
-      }
-
-      // Image coordinate system: origin at top-left, Y increases downward
-      // Annotations use PDF-like coordinates: origin at bottom-left, Y increases upward
-      // Convert: canvas_y = naturalHeight - pdf_y
-      const toCanvasY = (pdfY: number) => naturalHeight - pdfY
-
-      if (obj.type === 'rect') {
-        const x = obj.x
-        const y = toCanvasY(obj.y)
-        if (obj.fill && obj.fill !== 'none') {
-          ctx.fillStyle = obj.fill
-          ctx.fillRect(x, y, obj.width, obj.height)
-        }
-        if (obj.stroke) {
-          ctx.strokeRect(x, y, obj.width, obj.height)
-        }
-      } else if (obj.type === 'ellipse') {
-        const cx = obj.x + obj.width / 2
-        const cy = toCanvasY(obj.y) + obj.height / 2
-        const rx = obj.width / 2
-        const ry = obj.height / 2
-        ctx.beginPath()
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
-        if (obj.fill && obj.fill !== 'none') {
-          ctx.fillStyle = obj.fill
-          ctx.fill()
-        }
-        if (obj.stroke) {
-          ctx.stroke()
-        }
-      } else if ((obj.type === 'line' || obj.type === 'arrow') && obj.points && obj.points.length >= 4) {
-        const [x1, y1, x2, y2] = obj.points
-        const cy1 = toCanvasY(y1)
-        const cy2 = toCanvasY(y2)
-
-        ctx.beginPath()
-        ctx.moveTo(x1, cy1)
-        ctx.lineTo(x2, cy2)
-        ctx.stroke()
-
-        // Draw arrowhead for arrow type
-        if (obj.type === 'arrow') {
-          const angle = Math.atan2(cy2 - cy1, x2 - x1)
-          const headLength = (obj.strokeWidth || 2) * 5
-          ctx.beginPath()
-          ctx.moveTo(x2, cy2)
-          ctx.lineTo(
-            x2 - headLength * Math.cos(angle - Math.PI / 6),
-            cy2 - headLength * Math.sin(angle - Math.PI / 6)
-          )
-          ctx.moveTo(x2, cy2)
-          ctx.lineTo(
-            x2 - headLength * Math.cos(angle + Math.PI / 6),
-            cy2 - headLength * Math.sin(angle + Math.PI / 6)
-          )
-          ctx.stroke()
-        }
-      }
-
-      ctx.restore()
+    if (annotations.length > 0) {
+      await renderAnnotationsToCanvasAsync(ctx, annotations, {
+        pageWidthPt: naturalWidth,
+        pageHeightPt: naturalHeight,
+        scale: 1
+      })
     }
 
     // Export the canvas

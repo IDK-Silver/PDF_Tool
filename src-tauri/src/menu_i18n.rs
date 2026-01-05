@@ -1,5 +1,6 @@
 /// Menu string translations for i18n support
 
+#[allow(dead_code)]
 pub struct MenuStrings {
     pub file: &'static str,
     pub open: &'static str,

@@ -4,6 +4,7 @@ mod media;
 mod menu;
 mod menu_i18n;
 mod pdf;
+mod signature;
 mod updater;
 
 use std::{
@@ -169,6 +170,7 @@ pub fn run() {
                 .app_cache_dir()
                 .unwrap_or_else(|_| std::env::temp_dir().join("kano_pdf_tool_cache"));
             crate::pdf::init_pdf_worker(cache_dir.clone());
+            crate::signature::init_signature_db(&cache_dir);
 
             Ok(())
         })
@@ -206,6 +208,9 @@ pub fn run() {
             updater::get_platform,
             updater::is_self_update_enabled,
             updater::is_app_store_build,
+            signature::signature_list,
+            signature::signature_add,
+            signature::signature_delete,
         ]);
 
     let app = builder

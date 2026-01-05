@@ -1,13 +1,69 @@
 import { invoke } from '@tauri-apps/api/core'
 import type { AnnotationObject } from './types'
+import { createAnnotationOverlay } from '@/modules/export/canvasRenderer'
 
 export interface AddImageResult {
   success: boolean
   page_index: number
 }
 
+export interface PageSize {
+  widthPt: number
+  heightPt: number
+}
+
 /**
- * Embed an image annotation into a PDF page.
+ * Embed all annotations into the PDF document as overlay layers.
+ * Renders annotations to transparent PNG and embeds as full-page images.
+ * Should be called before saving.
+ */
+export async function embedAllAnnotations(
+  docId: number,
+  annotations: AnnotationObject[],
+  pageSizes: Map<number, PageSize>
+): Promise<void> {
+  if (annotations.length === 0) return
+
+  // Group by page
+  const byPage = new Map<number, AnnotationObject[]>()
+  for (const ann of annotations) {
+    const list = byPage.get(ann.pageIndex) || []
+    list.push(ann)
+    byPage.set(ann.pageIndex, list)
+  }
+
+  // Render each page's annotations as a single overlay layer
+  for (const [pageIndex, pageAnnotations] of byPage) {
+    const pageSize = pageSizes.get(pageIndex)
+    if (!pageSize) {
+      console.warn(`Page size not found for page ${pageIndex}, skipping annotations`)
+      continue
+    }
+
+    // Render all annotations on this page to a transparent PNG
+    const { pngBytes } = await createAnnotationOverlay(
+      pageAnnotations,
+      pageSize.widthPt,
+      pageSize.heightPt,
+      150 // DPI for overlay
+    )
+
+    // Embed as full-page overlay
+    await invoke<AddImageResult>('pdf_add_image_to_page', {
+      docId,
+      pageIndex,
+      imageBytes: Array.from(pngBytes),
+      xPt: 0,
+      yPt: 0,
+      widthPt: pageSize.widthPt,
+      heightPt: pageSize.heightPt,
+    })
+  }
+}
+
+/**
+ * Legacy function: Embed a single image annotation into a PDF page.
+ * Kept for backward compatibility but embedAllAnnotations is preferred.
  */
 export async function embedImageAnnotation(
   docId: number,
@@ -39,33 +95,6 @@ export async function embedImageAnnotation(
     widthPt: annotation.width,
     heightPt: annotation.height,
   })
-}
-
-/**
- * Embed all annotations into the PDF document.
- * Should be called before saving.
- */
-export async function embedAllAnnotations(
-  docId: number,
-  annotations: AnnotationObject[]
-): Promise<void> {
-  // Group by page for potential optimization
-  const byPage = new Map<number, AnnotationObject[]>()
-  for (const ann of annotations) {
-    const list = byPage.get(ann.pageIndex) || []
-    list.push(ann)
-    byPage.set(ann.pageIndex, list)
-  }
-
-  // Embed each annotation
-  for (const [_pageIndex, pageAnnotations] of byPage) {
-    for (const ann of pageAnnotations) {
-      if (ann.type === 'image' || ann.type === 'signature') {
-        await embedImageAnnotation(docId, ann)
-      }
-      // TODO: Add shape embedding when backend supports it (Phase 3)
-    }
-  }
 }
 
 function base64ToBytes(base64: string): Uint8Array {

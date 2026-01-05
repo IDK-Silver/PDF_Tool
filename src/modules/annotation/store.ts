@@ -4,6 +4,7 @@ import type { AnnotationObject, AnnotationState, ToolType, ToolSettings, Point }
 import { defaultToolSettings } from './types'
 import { useMediaStore } from '@/modules/media/store'
 import { simplifyPath, pointsToPathData, calculateBoundingBox } from './pathUtils'
+import { visualSizeToPt } from './sizeUtils'
 
 function generateId(): string {
   return crypto.randomUUID()
@@ -26,6 +27,9 @@ export const useAnnotationStore = defineStore('annotation', () => {
 
   // Text editing state
   const editingTextId = ref<string | null>(null)
+
+  // Counter auto-increment state
+  const nextCounterValue = ref(toolSettings.value.counterStart)
 
   // History for undo/redo
   const history = ref<AnnotationState[]>([])
@@ -220,6 +224,15 @@ export const useAnnotationStore = defineStore('annotation', () => {
     toolSettings.value = { ...toolSettings.value, ...updates }
   }
 
+  // Counter actions
+  function getNextCounterValue(): number {
+    return nextCounterValue.value++
+  }
+
+  function resetCounterSequence(start: number = 1) {
+    nextCounterValue.value = start
+  }
+
   // Drawing actions for pen/highlighter
   function startDrawing(point: Point, pageIndex: number) {
     isDrawing.value = true
@@ -233,7 +246,11 @@ export const useAnnotationStore = defineStore('annotation', () => {
     }
   }
 
-  function finishDrawing() {
+  /**
+   * Finish drawing and create path annotation
+   * @param scale - Current display scale (displayWidth / pageWidthPt) for size conversion
+   */
+  function finishDrawing(scale: number = 1) {
     if (!isDrawing.value || drawingPoints.value.length < 2 || drawingPageIndex.value === null) {
       isDrawing.value = false
       drawingPoints.value = []
@@ -251,7 +268,8 @@ export const useAnnotationStore = defineStore('annotation', () => {
 
     const isPen = activeTool.value === 'pen'
     const stroke = toolSettings.value.color
-    const strokeWidth = toolSettings.value.strokeWidth
+    // Phase 7: Convert visual size to actual pt based on scale
+    const strokeWidth = visualSizeToPt(toolSettings.value.strokeWidth, scale)
     const opacity = isPen ? 1.0 : 0.4
 
     const annotation: Omit<AnnotationObject, 'id'> = {
@@ -378,6 +396,7 @@ export const useAnnotationStore = defineStore('annotation', () => {
     drawingPoints.value = []
     drawingPageIndex.value = null
     editingTextId.value = null
+    nextCounterValue.value = toolSettings.value.counterStart
   }
 
   // Get all annotations for embedding into PDF
@@ -428,6 +447,11 @@ export const useAnnotationStore = defineStore('annotation', () => {
     undo,
     redo,
     reset,
+
+    // Counter actions
+    nextCounterValue,
+    getNextCounterValue,
+    resetCounterSequence,
 
     // Drawing actions
     startDrawing,
