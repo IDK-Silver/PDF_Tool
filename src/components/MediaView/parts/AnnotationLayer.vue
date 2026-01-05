@@ -51,6 +51,9 @@ const isEraserTool = computed(() => annotation.activeTool === 'eraser')
 // Eraser position for visual feedback
 const eraserPosition = ref<{ x: number; y: number } | null>(null)
 
+// Pending object preview position (for image/signature placement)
+const pendingPreviewPosition = ref<{ x: number; y: number } | null>(null)
+
 // Text input ref for autofocus
 const textInputRef = ref<HTMLInputElement | null>(null)
 
@@ -331,6 +334,18 @@ function onResizeEnd() {
   window.removeEventListener('mouseup', onResizeEnd)
 }
 
+function onSvgMouseMove(e: MouseEvent) {
+  // Update pending object preview position
+  if (annotation.pendingObject) {
+    const svg = e.currentTarget as SVGElement
+    const rect = svg.getBoundingClientRect()
+    pendingPreviewPosition.value = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    }
+  }
+}
+
 function onSvgMouseDown(e: MouseEvent) {
   const tool = annotation.activeTool
   if (!tool) return
@@ -358,6 +373,7 @@ function onSvgMouseDown(e: MouseEvent) {
       y: finalY,
     })
     annotation.setPendingObject(null)
+    pendingPreviewPosition.value = null
     annotation.setActiveTool('select')
     return
   }
@@ -703,6 +719,22 @@ const drawingPathPreview = computed(() => {
   }
 })
 
+// Pending object preview (for image/signature placement)
+const pendingPreview = computed(() => {
+  if (!annotation.pendingObject || !pendingPreviewPosition.value) return null
+  const pending = annotation.pendingObject
+  const scale = props.displayWidth / props.pageWidthPt
+  const width = pending.width * scale
+  const height = pending.height * scale
+  return {
+    x: pendingPreviewPosition.value.x - width / 2,
+    y: pendingPreviewPosition.value.y - height / 2,
+    width,
+    height,
+    imageData: pending.imageData,
+  }
+})
+
 // Resize handles for selected objects
 function getResizeHandles(obj: AnnotationObject) {
   if (obj.type === 'line') return [] // Lines don't have resize handles yet
@@ -728,6 +760,7 @@ function getResizeHandles(obj: AnnotationObject) {
     :class="['annotation-layer', { interactive: isInteractive, 'select-mode': isSelectMode }]"
     :data-annotation-layer="pageIndex"
     @mousedown="onSvgMouseDown"
+    @mousemove="onSvgMouseMove"
   >
     <!-- Arrow marker definitions -->
     <defs>
@@ -1090,6 +1123,18 @@ function getResizeHandles(obj: AnnotationObject) {
       class="drawing-preview"
     />
 
+    <!-- Pending image/signature preview -->
+    <image
+      v-if="pendingPreview"
+      :x="pendingPreview.x"
+      :y="pendingPreview.y"
+      :width="pendingPreview.width"
+      :height="pendingPreview.height"
+      :href="pendingPreview.imageData"
+      opacity="0.6"
+      class="pending-preview"
+    />
+
     <!-- Eraser cursor -->
     <circle
       v-if="isEraserTool && eraserPosition"
@@ -1148,6 +1193,10 @@ function getResizeHandles(obj: AnnotationObject) {
 }
 
 .drawing-preview {
+  pointer-events: none;
+}
+
+.pending-preview {
   pointer-events: none;
 }
 

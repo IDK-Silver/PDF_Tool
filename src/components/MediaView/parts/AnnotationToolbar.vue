@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
 import { selectAndPrepareImage } from '@/modules/annotation/tools'
 import type { ToolType, StrokeStyle } from '@/modules/annotation/types'
@@ -61,6 +61,11 @@ function closePopovers() {
   showCounterPicker.value = false
   showSignaturePicker.value = false
 }
+
+// Close counter picker when a counter is placed
+watch(() => annotation.nextCounterValue, () => {
+  showCounterPicker.value = false
+})
 
 function isActive(tool: ToolType): boolean {
   return activeTool.value === tool
@@ -493,36 +498,31 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Phase 7: Text and Pixelate use unified size system (strokeWidth) -->
+    <!-- Counter start number (reserve space, visible when counter active) -->
+    <div class="relative" :class="activeTool !== 'counter' && 'invisible'">
+      <button
+        @click="toggleCounterPicker"
+        class="tool-setting-btn"
+        title="Start Number"
+      >
+        <span class="text-xs font-mono">#{{ annotation.nextCounterValue }}</span>
+      </button>
 
-    <!-- Counter Settings (shown when counter tool is active) -->
-    <template v-if="activeTool === 'counter'">
-      <div class="divider"></div>
-      <div class="relative">
-        <button
-          @click="toggleCounterPicker"
-          class="tool-setting-btn"
-          title="Start Number"
-        >
-          <span class="text-xs">#{{ annotation.nextCounterValue }}</span>
-        </button>
-
-        <div v-if="showCounterPicker" class="dropdown-popover setting-dropdown">
-          <div class="p-2 space-y-2">
-            <label class="text-xs text-muted-foreground block">Start Number</label>
-            <input
-              type="number"
-              min="1"
-              :value="annotation.toolSettings.counterStart"
-              @change="setCounterStart(Number(($event.target as HTMLInputElement).value))"
-              @keydown.stop
-              class="w-full px-2 py-1 text-sm border rounded bg-background"
-            />
-          </div>
-          <div class="popover-backdrop" @click="closePopovers"></div>
+      <div v-if="showCounterPicker" class="dropdown-popover counter-dropdown">
+        <div class="p-1.5 flex items-center gap-1.5">
+          <label class="text-xs text-muted-foreground whitespace-nowrap">Next</label>
+          <input
+            type="number"
+            min="1"
+            :value="annotation.nextCounterValue"
+            @change="setCounterStart(Number(($event.target as HTMLInputElement).value))"
+            @keydown.stop
+            class="w-12 px-1 py-0.5 text-sm border rounded bg-background text-center"
+          />
         </div>
+        <div class="popover-backdrop" @click="closePopovers"></div>
       </div>
-    </template>
+    </div>
 
   </div>
 </template>
@@ -707,6 +707,10 @@ input[type="color"]::-webkit-color-swatch {
 .setting-dropdown {
   right: 0;
   min-width: 120px;
+}
+
+.counter-dropdown {
+  right: 0;
 }
 
 </style>
