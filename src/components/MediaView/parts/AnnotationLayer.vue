@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
 import type { AnnotationObject, CoordinateContext, StrokeStyle } from '@/modules/annotation/types'
 import { TEXT_BASE_SIZE } from '@/modules/annotation/types'
@@ -84,7 +84,8 @@ const textInputWidth = computed(() => {
   return Math.max(100, textWidth + 30)
 })
 
-// Watch for text editing changes to autofocus input
+// Watch for text editing changes to set initial value and info
+// (focus/select is handled by @vue:mounted on the input element)
 watch(() => annotation.editingTextId, (newId) => {
   if (newId) {
     // Find the annotation and set initial editing value and info
@@ -99,10 +100,6 @@ watch(() => annotation.editingTextId, (newId) => {
         break
       }
     }
-    nextTick(() => {
-      textInputRef.value?.focus()
-      textInputRef.value?.select()
-    })
   } else {
     editingTextValue.value = ''
     editingAnnotationInfo.value = null

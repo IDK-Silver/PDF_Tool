@@ -63,6 +63,11 @@ export async function initMenuBridge(): Promise<() => void> {
       }
     })
 
+    // File menu: Save
+    const unlistenSave = await listen('menu:save', () => {
+      window.dispatchEvent(new CustomEvent('menu:save'))
+    })
+
     // Edit menu: Find
     const unlistenFind = await listen('menu:find', () => {
       // Emit a custom event that can be caught by the MediaView component
@@ -92,6 +97,7 @@ export async function initMenuBridge(): Promise<() => void> {
 
     unlisteners = [
       unlistenOpen,
+      unlistenSave,
       unlistenClose,
       unlistenReveal,
       unlistenFind,

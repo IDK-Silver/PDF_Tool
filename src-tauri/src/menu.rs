@@ -10,6 +10,7 @@ const ABOUT_MENU_ID: &str = "about-custom";
 
 // File menu IDs
 const OPEN_FILE_ID: &str = "open-file";
+const SAVE_FILE_ID: &str = "save-file";
 const REMOVE_FILE_ID: &str = "remove-file";
 const OPEN_IN_FILE_MANAGER_ID: &str = "open-in-file-manager";
 
@@ -37,6 +38,7 @@ pub fn build_menu_with_lang<R: Runtime>(app: &AppHandle<R>, lang: &str) -> tauri
 
     // File menu items
     let open_file_item = MenuItem::with_id(app, OPEN_FILE_ID, strings.open, true, Some("CmdOrCtrl+O"))?;
+    let save_file_item = MenuItem::with_id(app, SAVE_FILE_ID, strings.save, true, Some("CmdOrCtrl+S"))?;
     let remove_file_item =
         MenuItem::with_id(app, REMOVE_FILE_ID, strings.close_file, true, Some("CmdOrCtrl+W"))?;
 
@@ -118,6 +120,7 @@ pub fn build_menu_with_lang<R: Runtime>(app: &AppHandle<R>, lang: &str) -> tauri
         true,
         &[
             &open_file_item,
+            &save_file_item,
             &remove_file_item,
             &open_in_fm_item,
             #[cfg(not(target_os = "macos"))]
@@ -230,6 +233,9 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent) {
         // File menu events - to be handled by frontend
         OPEN_FILE_ID => {
             let _ = app.emit("menu:open-file", ());
+        }
+        SAVE_FILE_ID => {
+            let _ = app.emit("menu:save", ());
         }
         REMOVE_FILE_ID => {
             let _ = app.emit("menu:remove-file", ());

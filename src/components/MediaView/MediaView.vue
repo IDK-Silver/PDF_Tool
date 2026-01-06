@@ -407,12 +407,17 @@ function onMenuFind() {
   handleToggleSearch()
 }
 
+function onMenuSave() {
+  onSaveNow()
+}
+
 onMounted(() => {
   window.addEventListener('menu:zoom-in', onMenuZoomIn)
   window.addEventListener('menu:zoom-out', onMenuZoomOut)
   window.addEventListener('menu:fit-mode', onMenuFitMode)
   window.addEventListener('menu:actual-size', onMenuActualSize)
   window.addEventListener('menu:find', onMenuFind)
+  window.addEventListener('menu:save', onMenuSave)
 })
 
 onBeforeUnmount(() => {
@@ -421,6 +426,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('menu:fit-mode', onMenuFitMode)
   window.removeEventListener('menu:actual-size', onMenuActualSize)
   window.removeEventListener('menu:find', onMenuFind)
+  window.removeEventListener('menu:save', onMenuSave)
 })
 </script>
 

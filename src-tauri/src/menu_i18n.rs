@@ -4,6 +4,7 @@
 pub struct MenuStrings {
     pub file: &'static str,
     pub open: &'static str,
+    pub save: &'static str,
     pub close_file: &'static str,
     pub reveal_in_finder: &'static str,
     pub show_in_folder: &'static str,
@@ -27,6 +28,7 @@ pub fn get_menu_strings(lang: &str) -> MenuStrings {
         "zh-TW" => MenuStrings {
             file: "檔案",
             open: "開啟",
+            save: "儲存",
             close_file: "關閉檔案",
             reveal_in_finder: "在 Finder 中顯示",
             show_in_folder: "在資料夾中顯示",
@@ -47,6 +49,7 @@ pub fn get_menu_strings(lang: &str) -> MenuStrings {
         _ => MenuStrings {
             file: "File",
             open: "Open",
+            save: "Save",
             close_file: "Close File",
             reveal_in_finder: "Reveal in Finder",
             show_in_folder: "Show in Folder",

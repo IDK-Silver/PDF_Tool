@@ -219,8 +219,8 @@ function handleKeyDown(e: KeyboardEvent) {
 
   const key = e.key.toLowerCase()
 
-  // Tool shortcuts (only when toolbar is open)
-  if (annotation.activeTool !== null && key in keyBindings) {
+  // Tool shortcuts (only when toolbar is open, without modifier keys)
+  if (annotation.activeTool !== null && key in keyBindings && !e.metaKey && !e.ctrlKey) {
     e.preventDefault()
     selectTool(keyBindings[key])
     return
