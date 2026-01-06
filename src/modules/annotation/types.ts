@@ -117,7 +117,7 @@ export interface ToolSettings {
 }
 
 export const defaultToolSettings: ToolSettings = {
-  color: '#FF0000',
+  color: '#000000',
   strokeWidth: 2,
   strokeStyle: 'solid',
   opacity: 1,

@@ -31,9 +31,23 @@ const strokeWidths = [1, 2, 4, 8]
 // Stroke style options
 const strokeStyles = computed(() => [
   { value: 'solid' as StrokeStyle, label: t('annotation.strokeStyle.solid'), pattern: '' },
-  { value: 'dashed' as StrokeStyle, label: t('annotation.strokeStyle.dashed'), pattern: '8 4' },
-  { value: 'dotted' as StrokeStyle, label: t('annotation.strokeStyle.dotted'), pattern: '2 4' },
+  { value: 'dashed' as StrokeStyle, label: t('annotation.strokeStyle.dashed'), pattern: '6 4' },
+  { value: 'dotted' as StrokeStyle, label: t('annotation.strokeStyle.dotted'), pattern: '2 6' },
 ])
+
+// Current stroke style info
+const currentStrokeStyle = computed(() => {
+  const current = annotation.toolSettings.strokeStyle
+  return strokeStyles.value.find((s) => s.value === current) || strokeStyles.value[0]
+})
+
+// Pattern for button icon (fixed, not scaled by stroke width)
+const currentStrokePattern = computed(() => {
+  const style = annotation.toolSettings.strokeStyle
+  if (style === 'solid') return ''
+  if (style === 'dashed') return '8 6'
+  return '3 6' // dotted
+})
 
 // Key bindings
 const keyBindings: Record<string, ToolType> = {
@@ -469,11 +483,20 @@ onBeforeUnmount(() => {
       <button
         @click="toggleStrokePicker"
         class="stroke-dropdown-btn"
-        :title="t('annotation.toolbar.strokeWidth')"
+        :title="`${t('annotation.toolbar.strokeWidth')}: ${annotation.toolSettings.strokeWidth} | ${currentStrokeStyle.label}`"
       >
-        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="4" y1="12" x2="16" y2="12" :stroke-width="annotation.toolSettings.strokeWidth" />
+        <svg class="w-10 h-5" viewBox="0 0 40 20" fill="none" stroke="currentColor">
+          <line
+            x1="2"
+            y1="10"
+            x2="38"
+            y2="10"
+            stroke-width="3"
+            stroke-linecap="round"
+            :stroke-dasharray="currentStrokePattern"
+          />
         </svg>
+        <span class="text-xs opacity-70">{{ annotation.toolSettings.strokeWidth }}</span>
         <svg class="w-3 h-3 ml-0.5 opacity-60" viewBox="0 0 12 12" fill="currentColor">
           <path d="M3 5l3 3 3-3" />
         </svg>
@@ -494,7 +517,11 @@ onBeforeUnmount(() => {
             <span class="text-muted-foreground">{{ w }}</span>
           </button>
         </div>
-        <div class="p-1.5 pt-1 border-t border-border space-y-0.5">
+        <!-- Stroke style - only show for shape tools -->
+        <div
+          v-if="['rect', 'ellipse', 'line', 'arrow'].includes(activeTool || '')"
+          class="p-1.5 pt-1 border-t border-border space-y-0.5"
+        >
           <button
             v-for="style in strokeStyles"
             :key="style.value"
@@ -670,6 +697,7 @@ onBeforeUnmount(() => {
 .color-dot-btn {
   width: 1.25rem;
   height: 1.25rem;
+  margin: 0 0.25rem;
   border-radius: 50%;
   border: 2px solid hsl(var(--background));
   box-shadow: 0 0 0 1px hsl(var(--border));
@@ -686,6 +714,7 @@ onBeforeUnmount(() => {
 /* Stroke dropdown button */
 .stroke-dropdown-btn {
   height: 2rem;
+  min-width: 5rem;
   padding: 0 0.375rem;
   display: flex;
   align-items: center;
