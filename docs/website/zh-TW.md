@@ -26,15 +26,16 @@ permalink: /zh-TW/
 | 刪除 / 新增頁面 | 高品質渲染 | 多格式支援 |
 | 單頁匯出 | 文字選擇與搜尋 | 圖片壓縮 |
 | PDF 壓縮 | 暗色模式 | 圖片瀏覽 |
+| 標注（螢光筆、圖形、文字、簽名） | | |
 
 ## 下載
 
 <p class="center">
-  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.0/Kano.PDF.Tool_3.11.0_universal.dmg" class="btn">下載 macOS 版</a>
+  <a href="https://apps.apple.com/tw/app/kano-pdf-tool/id6757261963?mt=12" class="btn">App Store</a>
   <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.0/Kano.PDF.Tool_3.11.0_x64-setup.exe" class="btn">下載 Windows 版</a>
 </p>
 
 <p class="center" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">
-  macOS：Universal Binary（Intel 與 Apple Silicon）· 已簽名與公證<br>
+  macOS：於 App Store 上架<br>
   Windows：x64 · 提供安裝檔
 </p>

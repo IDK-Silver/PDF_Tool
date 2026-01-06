@@ -23,15 +23,16 @@ title: Kano PDF Tool
 | Delete / Add Pages | High-Quality Rendering | Multi-Format Support |
 | Export Single Page | Text Selection & Search | Image Compression |
 | PDF Compression | Dark Mode | Image Viewer |
+| Annotations (Highlight, Shapes, Text, Signature) | | |
 
 ## Download
 
 <p class="center">
-  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.0/Kano.PDF.Tool_3.11.0_universal.dmg" class="btn">Download for macOS</a>
+  <a href="https://apps.apple.com/tw/app/kano-pdf-tool/id6757261963?mt=12" class="btn">App Store</a>
   <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.0/Kano.PDF.Tool_3.11.0_x64-setup.exe" class="btn">Download for Windows</a>
 </p>
 
 <p class="center" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">
-  macOS: Universal Binary (Intel & Apple Silicon) · Signed & Notarized<br>
+  macOS: Available on App Store<br>
   Windows: x64 · Installer available
 </p>

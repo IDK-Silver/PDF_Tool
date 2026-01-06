@@ -15,6 +15,7 @@ A powerful cross-platform PDF editing and reading tool.
 | Delete / Add Pages | High-Quality Rendering | Multi-Format Support |
 | Export Single Page as PDF / Image | Text Selection & Search | Image Compression |
 | PDF Compression | Dark Mode | Image Viewer |
+| Annotations (Highlight, Shapes, Text, Signature) | | |
 
 ## Support This Project
 
