@@ -511,3 +511,39 @@ pub async fn pdf_add_image_to_page(
     .await
     .map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
 }
+
+/// Add text to existing PDF page as real PDF text object
+#[tauri::command]
+pub async fn pdf_add_text_to_page(
+    doc_id: u64,
+    page_index: u32,
+    text: String,
+    x_pt: f32,
+    y_pt: f32,
+    font_size: f32,
+    color: String,
+) -> Result<AddImageResult, MediaError> {
+    tokio::task::spawn_blocking(move || -> Result<AddImageResult, MediaError> {
+        let (rtx, rrx) = mpsc::channel();
+        WORKER_TX
+            .lock()
+            .unwrap()
+            .as_ref()
+            .ok_or_else(|| MediaError::new("io_error", "PDF worker 未初始化"))?
+            .send(PdfRequest::AddTextToPage {
+                doc_id,
+                page_index,
+                text,
+                x_pt,
+                y_pt,
+                font_size,
+                color,
+                reply: rtx,
+            })
+            .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
+        rrx.recv()
+            .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))?
+    })
+    .await
+    .map_err(|e| MediaError::new("async_error", format!("異步任務失敗: {e}")))?
+}

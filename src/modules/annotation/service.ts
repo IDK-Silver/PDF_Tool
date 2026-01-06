@@ -12,9 +12,15 @@ export interface PageSize {
   heightPt: number
 }
 
+interface AddTextResult {
+  dirty: boolean
+  revision: number
+}
+
 /**
- * Embed all annotations into the PDF document as overlay layers.
- * Renders annotations to transparent PNG and embeds as full-page images.
+ * Embed all annotations into the PDF document.
+ * Text annotations are embedded as real PDF text objects (selectable).
+ * Other annotations are rendered to transparent PNG and embedded as overlay images.
  * Should be called before saving.
  */
 export async function embedAllAnnotations(
@@ -24,15 +30,33 @@ export async function embedAllAnnotations(
 ): Promise<void> {
   if (annotations.length === 0) return
 
-  // Group by page
+  // Separate text annotations from others
+  const textAnnotations = annotations.filter(ann => ann.type === 'text')
+  const otherAnnotations = annotations.filter(ann => ann.type !== 'text')
+
+  // Embed text annotations as real PDF text objects
+  for (const ann of textAnnotations) {
+    if (!ann.text) continue
+    await invoke<AddTextResult>('pdf_add_text_to_page', {
+      docId,
+      pageIndex: ann.pageIndex,
+      text: ann.text,
+      xPt: ann.x,
+      yPt: ann.y,
+      fontSize: ann.fontSize || 14,
+      color: ann.stroke || '#000000',
+    })
+  }
+
+  // Group other annotations by page
   const byPage = new Map<number, AnnotationObject[]>()
-  for (const ann of annotations) {
+  for (const ann of otherAnnotations) {
     const list = byPage.get(ann.pageIndex) || []
     list.push(ann)
     byPage.set(ann.pageIndex, list)
   }
 
-  // Render each page's annotations as a single overlay layer
+  // Render each page's other annotations as a single overlay layer
   for (const [pageIndex, pageAnnotations] of byPage) {
     const pageSize = pageSizes.get(pageIndex)
     if (!pageSize) {
@@ -40,7 +64,7 @@ export async function embedAllAnnotations(
       continue
     }
 
-    // Render all annotations on this page to a transparent PNG
+    // Render all non-text annotations on this page to a transparent PNG
     const { pngBytes } = await createAnnotationOverlay(
       pageAnnotations,
       pageSize.widthPt,

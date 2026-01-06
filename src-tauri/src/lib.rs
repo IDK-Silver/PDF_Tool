@@ -185,6 +185,7 @@ pub fn run() {
             pdf::compress_pdf_smart,
             media::image_to_pdf,
             media::pdf_add_image_to_page,
+            media::pdf_add_text_to_page,
             media::pdf_open,
             media::pdf_close,
             media::pdf_render_page,

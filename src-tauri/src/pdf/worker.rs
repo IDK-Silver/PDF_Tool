@@ -767,6 +767,17 @@ pub enum PdfRequest {
         height_pt: f32,
         reply: mpsc::Sender<Result<AddImageResult, MediaError>>,
     },
+    /// Add text to existing page as real PDF text object
+    AddTextToPage {
+        doc_id: u64,
+        page_index: u32,
+        text: String,
+        x_pt: f32,
+        y_pt: f32,
+        font_size: f32,
+        color: String,
+        reply: mpsc::Sender<Result<AddImageResult, MediaError>>,
+    },
 }
 
 // ============================================================================
@@ -1867,6 +1878,90 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                     )
                                 })?;
                         }
+
+                        // Mark document as dirty
+                        record.dirty = true;
+                        record.revision += 1;
+
+                        Ok(AddImageResult {
+                            dirty: record.dirty,
+                            revision: record.revision,
+                        })
+                    })();
+                    let _ = reply.send(res);
+                }
+                // Add text to existing page as real PDF text object
+                Ok(PdfRequest::AddTextToPage {
+                    doc_id,
+                    page_index,
+                    text,
+                    x_pt,
+                    y_pt,
+                    font_size,
+                    color,
+                    reply,
+                }) => {
+                    let res = (|| -> Result<AddImageResult, MediaError> {
+                        use pdfium_render::prelude::*;
+
+                        let record = docs.get_mut(&doc_id).ok_or_else(|| {
+                            MediaError::new("not_found", format!("文件 ID 不存在: {}", doc_id))
+                        })?;
+
+                        let page_count = record.doc.pages().len();
+                        if page_index as u16 >= page_count {
+                            return Err(MediaError::new(
+                                "not_found",
+                                format!("頁索引超出範圍: {} >= {}", page_index, page_count),
+                            ));
+                        }
+
+                        // Parse hex color to RGB
+                        let color_str = color.trim_start_matches('#');
+                        let r = u8::from_str_radix(&color_str[0..2], 16).unwrap_or(0);
+                        let g = u8::from_str_radix(&color_str[2..4], 16).unwrap_or(0);
+                        let b = u8::from_str_radix(&color_str[4..6], 16).unwrap_or(0);
+
+                        let idx_u16: u16 = page_index.try_into().map_err(|_| {
+                            MediaError::new("invalid_input", format!("頁索引過大: {}", page_index))
+                        })?;
+
+                        // Get font - use Helvetica as a standard PDF font
+                        let font = record.doc.fonts_mut().helvetica();
+
+                        // Create text object
+                        let mut text_obj = PdfPageTextObject::new(
+                            &record.doc,
+                            &text,
+                            font,
+                            PdfPoints::new(font_size),
+                        )
+                        .map_err(|e| {
+                            MediaError::new("unsupported", format!("建立文字物件失敗: {e}"))
+                        })?;
+
+                        // Set fill color
+                        text_obj
+                            .set_fill_color(PdfColor::new(r, g, b, 255))
+                            .map_err(|e| {
+                                MediaError::new("unsupported", format!("設定文字顏色失敗: {e}"))
+                            })?;
+
+                        // y_pt is already in PDF coordinates (origin at bottom-left)
+                        // Subtract font_size to position text baseline correctly
+                        text_obj
+                            .translate(PdfPoints::new(x_pt), PdfPoints::new(y_pt - font_size))
+                            .map_err(|e| {
+                                MediaError::new("unsupported", format!("設定文字位置失敗: {e}"))
+                            })?;
+
+                        // Add to page
+                        let mut page = record.doc.pages_mut().get(idx_u16).map_err(|_| {
+                            MediaError::new("not_found", format!("頁索引不存在: {}", page_index))
+                        })?;
+                        page.objects_mut().add_text_object(text_obj).map_err(|e| {
+                            MediaError::new("unsupported", format!("添加文字物件失敗: {e}"))
+                        })?;
 
                         // Mark document as dirty
                         record.dirty = true;
