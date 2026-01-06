@@ -1,4 +1,5 @@
 mod error;
+mod font;
 mod image;
 mod media;
 mod menu;
@@ -171,6 +172,7 @@ pub fn run() {
                 .unwrap_or_else(|_| std::env::temp_dir().join("kano_pdf_tool_cache"));
             crate::pdf::init_pdf_worker(cache_dir.clone());
             crate::signature::init_signature_db(&cache_dir);
+            crate::font::init_font_cache();
 
             Ok(())
         })
@@ -212,6 +214,7 @@ pub fn run() {
             signature::signature_list,
             signature::signature_add,
             signature::signature_delete,
+            font::list_system_fonts,
         ]);
 
     let app = builder

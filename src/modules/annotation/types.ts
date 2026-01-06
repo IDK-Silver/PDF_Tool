@@ -161,6 +161,13 @@ export interface SignatureInfo {
   lastUsedAt: number
 }
 
+// System font info from backend
+export interface FontInfo {
+  family: string
+  path?: string
+  isCjk: boolean
+}
+
 // Coordinate conversion context
 export interface CoordinateContext {
   pageWidthPt: number

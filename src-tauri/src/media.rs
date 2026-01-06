@@ -522,6 +522,7 @@ pub async fn pdf_add_text_to_page(
     y_pt: f32,
     font_size: f32,
     color: String,
+    font_family: Option<String>,
 ) -> Result<AddImageResult, MediaError> {
     tokio::task::spawn_blocking(move || -> Result<AddImageResult, MediaError> {
         let (rtx, rrx) = mpsc::channel();
@@ -538,6 +539,7 @@ pub async fn pdf_add_text_to_page(
                 y_pt,
                 font_size,
                 color,
+                font_family,
                 reply: rtx,
             })
             .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;

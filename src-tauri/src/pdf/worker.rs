@@ -776,6 +776,7 @@ pub enum PdfRequest {
         y_pt: f32,
         font_size: f32,
         color: String,
+        font_family: Option<String>,
         reply: mpsc::Sender<Result<AddImageResult, MediaError>>,
     },
 }
@@ -1899,6 +1900,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                     y_pt,
                     font_size,
                     color,
+                    font_family,
                     reply,
                 }) => {
                     let res = (|| -> Result<AddImageResult, MediaError> {
@@ -1926,8 +1928,33 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             MediaError::new("invalid_input", format!("頁索引過大: {}", page_index))
                         })?;
 
-                        // Get font - use Helvetica as a standard PDF font
-                        let font = record.doc.fonts_mut().helvetica();
+                        // Get font based on font_family
+                        let font = if let Some(ref family) = font_family {
+                            match family.as_str() {
+                                "Helvetica" | "" => record.doc.fonts_mut().helvetica(),
+                                "Times" | "Times-Roman" | "Times New Roman" => {
+                                    record.doc.fonts_mut().times_roman()
+                                }
+                                "Courier" | "Courier New" => record.doc.fonts_mut().courier(),
+                                _ => {
+                                    // Load system font and embed into PDF
+                                    let font_data = crate::font::load_font_data(family)
+                                        .map_err(|e| MediaError::new("font_error", e))?;
+                                    record
+                                        .doc
+                                        .fonts_mut()
+                                        .load_true_type_from_bytes(&font_data, true)
+                                        .map_err(|e| {
+                                            MediaError::new(
+                                                "font_error",
+                                                format!("Failed to embed font: {e}"),
+                                            )
+                                        })?
+                                }
+                            }
+                        } else {
+                            record.doc.fonts_mut().helvetica()
+                        };
 
                         // Create text object
                         let mut text_obj = PdfPageTextObject::new(

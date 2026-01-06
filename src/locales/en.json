@@ -309,7 +309,13 @@
       "color": "Color",
       "strokeWidth": "Stroke Width",
       "startNumber": "Start Number",
-      "nextCounter": "Next"
+      "nextCounter": "Next",
+      "font": "Font"
+    },
+    "fonts": {
+      "builtin": "Built-in",
+      "cjk": "CJK Fonts",
+      "latin": "Latin Fonts"
     },
     "strokeStyle": {
       "solid": "Solid",

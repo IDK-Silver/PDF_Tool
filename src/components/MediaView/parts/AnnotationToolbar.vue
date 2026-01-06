@@ -3,11 +3,13 @@ import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAnnotationStore } from '@/modules/annotation/store'
 import { selectAndPrepareImage } from '@/modules/annotation/tools'
+import { useSystemFonts } from '@/modules/annotation/useSystemFonts'
 import type { ToolType, StrokeStyle } from '@/modules/annotation/types'
 import SignaturePicker, { type SignatureItem } from './SignaturePicker.vue'
 
 const { t } = useI18n()
 const annotation = useAnnotationStore()
+const { cjkFonts, latinFonts, builtinFonts, loadFonts, loaded: fontsLoaded } = useSystemFonts()
 
 const activeTool = computed(() => annotation.activeTool)
 
@@ -55,6 +57,7 @@ const showColorPicker = ref(false)
 const showStrokePicker = ref(false)
 const showCounterPicker = ref(false)
 const showSignaturePicker = ref(false)
+const showFontPicker = ref(false)
 
 // Close popovers when clicking outside
 function closePopovers() {
@@ -62,6 +65,7 @@ function closePopovers() {
   showStrokePicker.value = false
   showCounterPicker.value = false
   showSignaturePicker.value = false
+  showFontPicker.value = false
 }
 
 // Close counter picker when a counter is placed
@@ -163,6 +167,19 @@ function setStrokeWidth(width: number) {
 
 function setStrokeStyle(style: StrokeStyle) {
   annotation.updateToolSettings({ strokeStyle: style })
+}
+
+function toggleFontPicker() {
+  closePopovers()
+  showFontPicker.value = !showFontPicker.value
+  if (showFontPicker.value && !fontsLoaded.value) {
+    loadFonts()
+  }
+}
+
+function setFontFamily(family: string) {
+  annotation.updateToolSettings({ fontFamily: family })
+  showFontPicker.value = false
 }
 
 function toggleCounterPicker() {
@@ -500,30 +517,114 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Counter start number (reserve space, visible when counter active) -->
-    <div class="relative" :class="activeTool !== 'counter' && 'invisible'">
+    <!-- Dynamic settings slot: Font (text) or Counter (counter) -->
+    <div class="relative dynamic-slot">
+      <!-- Placeholder to reserve space when neither text nor counter is active -->
       <button
-        @click="toggleCounterPicker"
-        class="tool-setting-btn"
-        :title="t('annotation.toolbar.startNumber')"
+        v-if="activeTool !== 'text' && activeTool !== 'counter'"
+        class="tool-setting-btn invisible w-full"
+        aria-hidden="true"
       >
-        <span class="text-xs font-mono">#{{ annotation.nextCounterValue }}</span>
+        <span class="text-xs font-mono">#1</span>
       </button>
 
-      <div v-if="showCounterPicker" class="dropdown-popover counter-dropdown">
-        <div class="p-1.5 flex items-center gap-1.5">
-          <label class="text-xs text-muted-foreground whitespace-nowrap">{{ t('annotation.toolbar.nextCounter') }}</label>
-          <input
-            type="number"
-            min="1"
-            :value="annotation.nextCounterValue"
-            @change="setCounterStart(Number(($event.target as HTMLInputElement).value))"
-            @keydown.stop
-            class="w-12 px-1 py-0.5 text-sm border rounded bg-background text-center"
-          />
+      <!-- Font Picker (text tool) -->
+      <template v-else-if="activeTool === 'text'">
+        <button
+          @click="toggleFontPicker"
+          class="font-dropdown-btn"
+          :title="`${t('annotation.toolbar.font')}: ${annotation.toolSettings.fontFamily}`"
+        >
+          <span class="font-preview" :style="{ fontFamily: annotation.toolSettings.fontFamily }">Aa</span>
+          <svg class="w-3 h-3 ml-0.5 opacity-60" viewBox="0 0 12 12" fill="currentColor">
+            <path d="M3 5l3 3 3-3" />
+          </svg>
+        </button>
+
+        <div v-if="showFontPicker" class="dropdown-popover font-dropdown">
+          <!-- Current font indicator -->
+          <div class="px-1.5 py-1 border-b border-border bg-muted/50">
+            <div class="text-xs text-muted-foreground">{{ t('annotation.toolbar.font') }}</div>
+            <div class="text-sm font-medium truncate" :style="{ fontFamily: annotation.toolSettings.fontFamily }">
+              {{ annotation.toolSettings.fontFamily }}
+            </div>
+          </div>
+
+          <!-- Built-in PDF fonts -->
+          <div class="p-1.5 border-b border-border">
+            <div class="text-xs text-muted-foreground mb-1">{{ t('annotation.fonts.builtin') }}</div>
+            <button
+              v-for="font in builtinFonts"
+              :key="font.family"
+              @click="setFontFamily(font.family)"
+              :class="['font-option', { active: annotation.toolSettings.fontFamily === font.family }]"
+              :style="{ fontFamily: font.family }"
+            >
+              {{ font.family }}
+            </button>
+          </div>
+
+          <!-- CJK fonts -->
+          <div v-if="cjkFonts.length > 0" class="p-1.5 border-b border-border">
+            <div class="text-xs text-muted-foreground mb-1">{{ t('annotation.fonts.cjk') }}</div>
+            <div class="max-h-32 overflow-y-auto">
+              <button
+                v-for="font in cjkFonts.slice(0, 20)"
+                :key="font.family"
+                @click="setFontFamily(font.family)"
+                :class="['font-option', { active: annotation.toolSettings.fontFamily === font.family }]"
+                :style="{ fontFamily: font.family }"
+              >
+                {{ font.family }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Latin fonts -->
+          <div v-if="latinFonts.length > 0" class="p-1.5">
+            <div class="text-xs text-muted-foreground mb-1">{{ t('annotation.fonts.latin') }}</div>
+            <div class="max-h-32 overflow-y-auto">
+              <button
+                v-for="font in latinFonts.slice(0, 20)"
+                :key="font.family"
+                @click="setFontFamily(font.family)"
+                :class="['font-option', { active: annotation.toolSettings.fontFamily === font.family }]"
+                :style="{ fontFamily: font.family }"
+              >
+                {{ font.family }}
+              </button>
+            </div>
+          </div>
+
+          <div class="popover-backdrop" @click="closePopovers"></div>
         </div>
-        <div class="popover-backdrop" @click="closePopovers"></div>
-      </div>
+      </template>
+
+      <!-- Counter Picker (counter tool) -->
+      <template v-else-if="activeTool === 'counter'">
+        <button
+          @click="toggleCounterPicker"
+          class="tool-setting-btn"
+          :title="t('annotation.toolbar.startNumber')"
+        >
+          <span class="text-xs font-mono">#{{ annotation.nextCounterValue }}</span>
+        </button>
+
+        <div v-if="showCounterPicker" class="dropdown-popover counter-dropdown">
+          <div class="p-1.5 flex items-center gap-1.5">
+            <label class="text-xs text-muted-foreground whitespace-nowrap">{{ t('annotation.toolbar.nextCounter') }}</label>
+            <input
+              type="number"
+              min="1"
+              :value="annotation.nextCounterValue"
+              @change="setCounterStart(Number(($event.target as HTMLInputElement).value))"
+              @keydown.stop
+              class="w-12 px-1 py-0.5 text-sm border rounded bg-background text-center"
+            />
+          </div>
+          <div class="popover-backdrop" @click="closePopovers"></div>
+        </div>
+      </template>
     </div>
 
   </div>
@@ -713,6 +814,65 @@ input[type="color"]::-webkit-color-swatch {
 
 .counter-dropdown {
   right: 0;
+}
+
+/* Font dropdown button */
+.font-dropdown-btn {
+  height: 2rem;
+  padding: 0 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  transition: background-color 0.15s;
+  color: hsl(var(--foreground) / 0.7);
+  flex-shrink: 0;
+}
+
+.font-dropdown-btn:hover {
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.font-preview {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Font dropdown */
+.font-dropdown {
+  right: 0;
+  min-width: 160px;
+  max-width: 200px;
+}
+
+/* Font option in dropdown */
+.font-option {
+  width: 100%;
+  display: block;
+  text-align: left;
+  padding: 0.25rem 0.375rem;
+  border-radius: 0.25rem;
+  transition: background-color 0.15s;
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.font-option:hover {
+  background-color: hsl(var(--muted));
+}
+
+.font-option.active {
+  background-color: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+/* Dynamic slot container - fixed width to prevent jumping */
+.dynamic-slot {
+  min-width: 3rem;
 }
 
 </style>

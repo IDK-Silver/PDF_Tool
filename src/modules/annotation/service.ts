@@ -45,6 +45,7 @@ export async function embedAllAnnotations(
       yPt: ann.y,
       fontSize: ann.fontSize || 14,
       color: ann.stroke || '#000000',
+      fontFamily: ann.fontFamily || null,
     })
   }
 
