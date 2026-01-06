@@ -64,14 +64,19 @@ pub fn get_pdfium() -> Result<pdfium_render::prelude::Pdfium, MediaError> {
     let mut tried: Vec<String> = Vec::new();
 
     // 優先嘗試匹配當前架構的動態庫
-    let current_arch = if cfg!(target_arch = "aarch64") {
+    // NOTE: Must check OS first, then arch. Otherwise x86_64 matches darwin before linux.
+    let current_arch = if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
         "aarch64-apple-darwin"
-    } else if cfg!(target_arch = "x86_64") {
+    } else if cfg!(target_os = "macos") && cfg!(target_arch = "x86_64") {
         "x86_64-apple-darwin"
     } else if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
         "x86_64-pc-windows-msvc"
+    } else if cfg!(target_os = "windows") && cfg!(target_arch = "aarch64") {
+        "aarch64-pc-windows-msvc"
     } else if cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") {
         "x86_64-unknown-linux-gnu"
+    } else if cfg!(target_os = "linux") && cfg!(target_arch = "aarch64") {
+        "aarch64-unknown-linux-gnu"
     } else {
         ""
     };
