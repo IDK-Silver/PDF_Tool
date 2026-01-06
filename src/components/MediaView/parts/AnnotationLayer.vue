@@ -6,7 +6,6 @@ import { TEXT_BASE_SIZE } from '@/modules/annotation/types'
 import { pdfToSvg, pdfSizeToSvg, screenToPdf, svgToPdf } from '@/modules/annotation/coordinateUtils'
 import { pdfPathToSvgPath, pathDataToPoints, isPointNearPath, pointsToPathData } from '@/modules/annotation/pathUtils'
 import { visualSizeToPt, visualSizeToFontPt, getScale } from '@/modules/annotation/sizeUtils'
-import { captureAndPixelateRegion, type PixelateCaptureParams } from '@/modules/annotation/pixelateUtils'
 
 // Stroke dash arrays for different styles
 const strokeDashArrays: Record<StrokeStyle, string> = {
@@ -388,8 +387,8 @@ function onSvgMouseDown(e: MouseEvent) {
     return
   }
 
-  // Shape drawing (rect, ellipse, line, arrow, pixelate)
-  if (tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'arrow' || tool === 'pixelate') {
+  // Shape drawing (rect, ellipse, line, arrow)
+  if (tool === 'rect' || tool === 'ellipse' || tool === 'line' || tool === 'arrow') {
     e.preventDefault()
     const svg = e.currentTarget as SVGElement
     const rect = svg.getBoundingClientRect()
@@ -594,47 +593,6 @@ function onDrawEnd(_e: MouseEvent) {
         strokeWidth,
         strokeStyle: annotation.toolSettings.strokeStyle,
         opacity: annotation.toolSettings.opacity,
-      })
-    }
-  } else if (tool === 'pixelate') {
-    const x = Math.min(start.x, end.x)
-    const y = Math.max(start.y, end.y) // PDF Y is flipped
-    const width = Math.abs(end.x - start.x)
-    const height = Math.abs(end.y - start.y)
-
-    if (width > minSize && height > minSize) {
-      // Use strokeWidth as block size (unified size system)
-      const blockSize = annotation.toolSettings.strokeWidth
-
-      // Create annotation with placeholder - noise will be generated async
-      const ann = annotation.addAnnotation({
-        type: 'pixelate',
-        pageIndex: props.pageIndex,
-        x,
-        y,
-        width,
-        height,
-        pixelateSize: blockSize,
-        opacity: 1,
-      })
-
-      // Async: generate noise for the region
-      const scale = props.displayWidth / props.pageWidthPt
-      const captureParams: PixelateCaptureParams = {
-        pageIndex: props.pageIndex,
-        x,
-        y,
-        width,
-        height,
-        pageWidthPt: props.pageWidthPt,
-        pageHeightPt: props.pageHeightPt,
-        blockSize,
-        scale,
-      }
-      captureAndPixelateRegion(captureParams).then(imageData => {
-        if (imageData) {
-          annotation.updateAnnotation(ann.id, { pixelatedImageData: imageData })
-        }
       })
     }
   }
@@ -928,36 +886,6 @@ function getResizeHandles(obj: AnnotationObject) {
         @mousedown="onAnnotationMouseDown(obj, $event)"
       />
 
-      <!-- Pixelate region -->
-      <image
-        v-else-if="obj.type === 'pixelate' && obj.pixelatedImageData"
-        :x="getSvgPosition(obj).x"
-        :y="getSvgPosition(obj).y"
-        :width="getSvgSize(obj).width"
-        :height="getSvgSize(obj).height"
-        :href="obj.pixelatedImageData"
-        :opacity="obj.opacity"
-        :class="{ selected: isSelected(obj.id) }"
-        preserveAspectRatio="none"
-        style="pointer-events: all; cursor: move;"
-        @mousedown="onAnnotationMouseDown(obj, $event)"
-      />
-      <!-- Pixelate placeholder (while processing) -->
-      <rect
-        v-else-if="obj.type === 'pixelate' && !obj.pixelatedImageData"
-        :x="getSvgPosition(obj).x"
-        :y="getSvgPosition(obj).y"
-        :width="getSvgSize(obj).width"
-        :height="getSvgSize(obj).height"
-        fill="rgba(128, 128, 128, 0.5)"
-        stroke="#666"
-        stroke-width="1"
-        stroke-dasharray="4 2"
-        :class="{ selected: isSelected(obj.id) }"
-        style="pointer-events: all; cursor: move;"
-        @mousedown="onAnnotationMouseDown(obj, $event)"
-      />
-
       <!-- Counter badge -->
       <g v-else-if="obj.type === 'counter'">
         <circle
@@ -1104,18 +1032,6 @@ function getResizeHandles(obj: AnnotationObject) {
         :stroke-width="annotation.toolSettings.strokeWidth"
         :stroke-dasharray="getStrokeDashArray(annotation.toolSettings.strokeStyle)"
         :opacity="annotation.toolSettings.opacity"
-        class="drawing-preview"
-      />
-      <rect
-        v-else-if="isShapePreview(drawPreview) && drawPreview.type === 'pixelate'"
-        :x="drawPreview.x"
-        :y="drawPreview.y"
-        :width="drawPreview.width"
-        :height="drawPreview.height"
-        fill="rgba(128, 128, 128, 0.3)"
-        stroke="#666"
-        stroke-width="2"
-        stroke-dasharray="8 4"
         class="drawing-preview"
       />
     </template>

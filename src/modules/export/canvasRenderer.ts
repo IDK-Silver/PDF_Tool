@@ -71,9 +71,6 @@ export function renderAnnotationsToCanvas(
       case 'counter':
         renderCounter(ctx, obj, pageHeightPt, scale)
         break
-      case 'pixelate':
-        renderPixelate(ctx, obj, pageHeightPt, scale)
-        break
       case 'image':
       case 'signature':
         renderImage(ctx, obj, pageHeightPt, scale)
@@ -304,16 +301,6 @@ function renderCounter(
   ctx.fillText(String(obj.counterValue || 1), cx, cy)
 }
 
-function renderPixelate(
-  ctx: CanvasRenderingContext2D,
-  obj: AnnotationObject,
-  pageHeightPt: number,
-  scale: number
-): void {
-  if (!obj.pixelatedImageData) return
-  renderImageData(ctx, obj.pixelatedImageData, obj, pageHeightPt, scale)
-}
-
 function renderImage(
   ctx: CanvasRenderingContext2D,
   obj: AnnotationObject,
@@ -363,8 +350,6 @@ export async function renderAnnotationsToCanvasAsync(
     let dataUrl: string | undefined
     if (obj.type === 'image' || obj.type === 'signature') {
       dataUrl = obj.imageData
-    } else if (obj.type === 'pixelate') {
-      dataUrl = obj.pixelatedImageData
     }
 
     if (dataUrl && !imageCache.has(dataUrl)) {
@@ -387,17 +372,6 @@ export async function renderAnnotationsToCanvasAsync(
     if (obj.type === 'image' || obj.type === 'signature') {
       if (obj.imageData) {
         const img = imageCache.get(obj.imageData)
-        if (img) {
-          const pos = pdfToCanvas(obj.x, obj.y, pageHeightPt, scale)
-          const width = obj.width * scale
-          const height = obj.height * scale
-          // pos.y is already the top-left corner
-          ctx.drawImage(img, pos.x, pos.y, width, height)
-        }
-      }
-    } else if (obj.type === 'pixelate') {
-      if (obj.pixelatedImageData) {
-        const img = imageCache.get(obj.pixelatedImageData)
         if (img) {
           const pos = pdfToCanvas(obj.x, obj.y, pageHeightPt, scale)
           const width = obj.width * scale

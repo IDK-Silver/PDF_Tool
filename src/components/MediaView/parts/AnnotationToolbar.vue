@@ -57,7 +57,6 @@ const keyBindings: Record<string, ToolType> = {
   'l': 'line',
   'a': 'arrow',
   't': 'text',
-  'm': 'pixelate',
   'n': 'counter',
   'p': 'pen',
   'h': 'highlighter',
@@ -344,20 +343,7 @@ onBeforeUnmount(() => {
 
     <div class="divider"></div>
 
-    <!-- Effect Tools -->
-    <button
-      @click="selectTool('pixelate')"
-      :class="['tool-btn', { active: isActive('pixelate') }]"
-      :title="t('annotation.toolbar.pixelate')"
-    >
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <rect x="3" y="3" width="7" height="7" />
-        <rect x="14" y="3" width="7" height="7" />
-        <rect x="3" y="14" width="7" height="7" />
-        <rect x="14" y="14" width="7" height="7" />
-      </svg>
-    </button>
-
+    <!-- Counter Tool -->
     <button
       @click="selectTool('counter')"
       :class="['tool-btn', { active: isActive('counter') }]"
@@ -817,7 +803,7 @@ input[type="color"]::-webkit-color-swatch {
   z-index: -1;
 }
 
-/* Tool setting button (for pixelate/counter) */
+/* Tool setting button (for counter) */
 .tool-setting-btn {
   height: 2rem;
   padding: 0 0.5rem;

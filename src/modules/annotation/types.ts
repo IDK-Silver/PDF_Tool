@@ -20,7 +20,6 @@ export type AnnotationType =
   | 'line'
   | 'arrow'
   | 'text'
-  | 'pixelate'
   | 'counter'
   | 'path'       // pen/highlighter produce this type
   | 'image'
@@ -33,7 +32,6 @@ export type ToolType =
   | 'line'
   | 'arrow'
   | 'text'
-  | 'pixelate'
   | 'counter'
   | 'pen'
   | 'highlighter'
@@ -88,10 +86,6 @@ export interface AnnotationObject {
 
   // Counter specific
   counterValue?: number         // The number displayed in badge
-
-  // Pixelate specific
-  pixelatedImageData?: string   // Base64 of pixelated region
-  pixelateSize?: number         // Block size used for pixelation
 }
 
 export interface ToolSettings {
