@@ -1472,7 +1472,7 @@ function handleWheelZoom(e: WheelEvent) {
   zoomHandleWheel(e, ctx, () => triggerRerender(300))
 }
 
-const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
+const shouldInvertColors = computed(() => settings.actualTheme === 'dark' && settings.s.invertColorsInDarkMode)
 
 function imgStyle(idx: number) {
   const styles: Record<string, string> = {}

@@ -64,7 +64,7 @@ const clampZoomMax = (v: number | null | undefined) => {
 const zoomMax = computed(() => clampZoomMax(settings.s.zoomMaxPercent))
 watch(zoomMax, (v) => setEffectiveMax(v), { immediate: true })
 
-const shouldInvertColors = computed(() => settings.s.theme === 'dark' && settings.s.invertColorsInDarkMode)
+const shouldInvertColors = computed(() => settings.actualTheme === 'dark' && settings.s.invertColorsInDarkMode)
 
 // 計算圖片卡片樣式 - 直接使用 zoomTarget 確保響應式更新
 const imageCardStyle = computed(() => {
