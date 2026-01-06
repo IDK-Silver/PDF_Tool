@@ -6,7 +6,7 @@
 
 | Light Theme | Dark Theme |
 |:-----------:|:----------:|
-| ![Light Theme](../website/asset/image/app_light_theme.jpg) | ![Dark Theme](../website/asset/image/app_dark_theme.jpg) |
+| ![Light Theme](https://github-static-object.yuufeng.com/PDF-Tool/zh-tw/app-cover-light.jpg) | ![Dark Theme](https://github-static-object.yuufeng.com/PDF-Tool/zh-tw/app-cover-dark.jpg) |
 
 ## 主要功能
 

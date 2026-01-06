@@ -6,7 +6,7 @@ A powerful cross-platform PDF editing and reading tool.
 
 | Light Theme | Dark Theme |
 |:-----------:|:----------:|
-| ![Light Theme](docs/website/asset/image/app_light_theme.jpg) | ![Dark Theme](docs/website/asset/image/app_dark_theme.jpg) |
+| ![Light Theme](https://github-static-object.yuufeng.com/PDF-Tool/en/app-cover-light.jpg) | ![Dark Theme](https://github-static-object.yuufeng.com/PDF-Tool/en/app-cover-dark.jpg) |
 
 ## Features
 

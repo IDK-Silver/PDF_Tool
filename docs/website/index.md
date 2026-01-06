@@ -11,8 +11,8 @@ title: Kano PDF Tool
     <td><strong>Dark Theme</strong></td>
   </tr>
   <tr>
-    <td><img src="asset/image/app_light_theme.jpg" alt="Light Theme"></td>
-    <td><img src="asset/image/app_dark_theme.jpg" alt="Dark Theme"></td>
+    <td><img src="https://github-static-object.yuufeng.com/PDF-Tool/en/app-cover-light.jpg" alt="Light Theme"></td>
+    <td><img src="https://github-static-object.yuufeng.com/PDF-Tool/en/app-cover-dark.jpg" alt="Dark Theme"></td>
   </tr>
 </table>
 
