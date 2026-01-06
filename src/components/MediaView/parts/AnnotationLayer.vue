@@ -381,6 +381,10 @@ function onSvgMouseDown(e: MouseEvent) {
       x: finalX,
       y: finalY,
     })
+    // Record signature page for persistence
+    if (tool === 'signature') {
+      annotation.recordSignaturePlacement(props.pageIndex)
+    }
     annotation.setPendingObject(null)
     pendingPreviewPosition.value = null
     annotation.setActiveTool('select')

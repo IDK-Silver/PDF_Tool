@@ -1,10 +1,14 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import type { AnnotationObject, AnnotationState, ToolType, ToolSettings, Point } from './types'
-import { defaultToolSettings } from './types'
+import { ref, computed, watch } from 'vue'
+import type { AnnotationObject, AnnotationState, ToolType, ToolSettings, Point, PersistedToolSettings } from './types'
+import { defaultToolSettings, defaultPersistedToolSettings } from './types'
 import { useMediaStore } from '@/modules/media/store'
 import { simplifyPath, pointsToPathData, calculateBoundingBox } from './pathUtils'
 import { visualSizeToPt } from './sizeUtils'
+import { readLocalJson, writeLocalJson } from '@/modules/persist/local'
+
+const TOOL_SETTINGS_KEY = 'annotation-tool-settings'
+const SIGNATURE_PAGE_KEY = 'annotation-signature-page'
 
 function generateId(): string {
   return crypto.randomUUID()
@@ -30,6 +34,63 @@ export const useAnnotationStore = defineStore('annotation', () => {
 
   // Counter auto-increment state
   const nextCounterValue = ref(toolSettings.value.counterStart)
+
+  // Signature placement tracking (persisted)
+  const lastSignaturePageIndex = ref<number | null>(null)
+
+  // Initial load from localStorage
+  ;(async () => {
+    const savedTools = await readLocalJson<PersistedToolSettings>(
+      TOOL_SETTINGS_KEY,
+      defaultPersistedToolSettings
+    )
+    toolSettings.value = {
+      ...toolSettings.value,
+      strokeWidth: savedTools.strokeWidth,
+      strokeStyle: savedTools.strokeStyle,
+      color: savedTools.color,
+      fontFamily: savedTools.fontFamily,
+    }
+
+    const savedPage = await readLocalJson<{ pageIndex: number | null }>(
+      SIGNATURE_PAGE_KEY,
+      { pageIndex: null }
+    )
+    lastSignaturePageIndex.value = savedPage.pageIndex
+  })()
+
+  // Debounced persistence for tool settings
+  let toolPersistTimer: number | null = null
+  function scheduleToolPersist() {
+    if (toolPersistTimer) {
+      clearTimeout(toolPersistTimer)
+      toolPersistTimer = null
+    }
+    toolPersistTimer = window.setTimeout(() => {
+      const toPersist: PersistedToolSettings = {
+        strokeWidth: toolSettings.value.strokeWidth,
+        strokeStyle: toolSettings.value.strokeStyle,
+        color: toolSettings.value.color,
+        fontFamily: toolSettings.value.fontFamily,
+      }
+      void writeLocalJson(TOOL_SETTINGS_KEY, toPersist)
+      toolPersistTimer = null
+    }, 200)
+  }
+
+  // Watch tool settings changes and persist
+  watch(
+    () => ({
+      strokeWidth: toolSettings.value.strokeWidth,
+      strokeStyle: toolSettings.value.strokeStyle,
+      color: toolSettings.value.color,
+      fontFamily: toolSettings.value.fontFamily,
+    }),
+    () => {
+      scheduleToolPersist()
+    },
+    { deep: true }
+  )
 
   // History for undo/redo
   const history = ref<AnnotationState[]>([])
@@ -258,6 +319,12 @@ export const useAnnotationStore = defineStore('annotation', () => {
 
   function updateToolSettings(updates: Partial<ToolSettings>) {
     toolSettings.value = { ...toolSettings.value, ...updates }
+  }
+
+  // Record signature placement page for persistence
+  function recordSignaturePlacement(pageIndex: number) {
+    lastSignaturePageIndex.value = pageIndex
+    void writeLocalJson(SIGNATURE_PAGE_KEY, { pageIndex })
   }
 
   // Counter actions
@@ -519,5 +586,9 @@ export const useAnnotationStore = defineStore('annotation', () => {
     startEditingText,
     stopEditingText,
     updateTextContent,
+
+    // Signature placement tracking
+    lastSignaturePageIndex,
+    recordSignaturePlacement,
   }
 })

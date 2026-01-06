@@ -122,6 +122,21 @@ export const defaultToolSettings: ToolSettings = {
   fontFamily: 'system-ui',
 }
 
+// Subset of tool settings persisted to localStorage
+export interface PersistedToolSettings {
+  strokeWidth: number       // 1, 2, 4, 8
+  strokeStyle: StrokeStyle  // 'solid' | 'dashed' | 'dotted'
+  color: string             // hex color
+  fontFamily: string        // font family
+}
+
+export const defaultPersistedToolSettings: PersistedToolSettings = {
+  strokeWidth: 2,
+  strokeStyle: 'solid',
+  color: '#000000',
+  fontFamily: 'system-ui',
+}
+
 export interface AnnotationState {
   // Annotation objects indexed by page
   objects: Record<number, AnnotationObject[]>
