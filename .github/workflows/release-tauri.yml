@@ -203,7 +203,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
 
     env:
       TAURI_SKIP_ISOLATION: true
@@ -217,6 +217,12 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install npm dependencies
         run: |
@@ -239,6 +245,12 @@ jobs:
         run: |
           # Windows x64
           npm run pdfium:fetch -- --targets x86_64-pc-windows-msvc
+
+      - name: Fetch PDFium binaries (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # Linux x64
+          npm run pdfium:fetch -- --targets x86_64-unknown-linux-gnu
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -486,11 +498,17 @@ jobs:
             WIN_URL=$(echo "$ASSETS" | jq -r '[.[] | select(.name | endswith("_x64-setup.exe"))] | first | .browser_download_url // empty')
             WIN_SIG=$(echo "$ASSETS" | jq -r '[.[] | select(.name | endswith("_x64-setup.exe.sig"))] | first | .browser_download_url // empty')
 
+            # Linux x64 AppImage
+            LINUX_URL=$(echo "$ASSETS" | jq -r '[.[] | select(.name | endswith("_amd64.AppImage"))] | first | .browser_download_url // empty')
+            LINUX_SIG=$(echo "$ASSETS" | jq -r '[.[] | select(.name | endswith("_amd64.AppImage.sig"))] | first | .browser_download_url // empty')
+
             # Check if we have all required assets
             if [ -n "$MAC_URL" ] && [ "$MAC_URL" != "null" ] && \
                [ -n "$WIN_URL" ] && [ "$WIN_URL" != "null" ] && \
+               [ -n "$LINUX_URL" ] && [ "$LINUX_URL" != "null" ] && \
                [ -n "$MAC_SIG" ] && [ "$MAC_SIG" != "null" ] && \
-               [ -n "$WIN_SIG" ] && [ "$WIN_SIG" != "null" ]; then
+               [ -n "$WIN_SIG" ] && [ "$WIN_SIG" != "null" ] && \
+               [ -n "$LINUX_SIG" ] && [ "$LINUX_SIG" != "null" ]; then
               echo "All assets found!"
               break
             fi
@@ -501,6 +519,8 @@ jobs:
               echo "MAC_SIG: $MAC_SIG"
               echo "WIN_URL: $WIN_URL"
               echo "WIN_SIG: $WIN_SIG"
+              echo "LINUX_URL: $LINUX_URL"
+              echo "LINUX_SIG: $LINUX_SIG"
               echo ""
               echo "Available assets:"
               echo "$ASSETS" | jq -r '.[].name'
@@ -520,6 +540,7 @@ jobs:
           # Download signatures
           MAC_SIG_CONTENT=""
           WIN_SIG_CONTENT=""
+          LINUX_SIG_CONTENT=""
 
           if [ -n "$MAC_SIG" ] && [ "$MAC_SIG" != "null" ]; then
             MAC_SIG_CONTENT=$(curl -sL "$MAC_SIG")
@@ -527,6 +548,10 @@ jobs:
 
           if [ -n "$WIN_SIG" ] && [ "$WIN_SIG" != "null" ]; then
             WIN_SIG_CONTENT=$(curl -sL "$WIN_SIG")
+          fi
+
+          if [ -n "$LINUX_SIG" ] && [ "$LINUX_SIG" != "null" ]; then
+            LINUX_SIG_CONTENT=$(curl -sL "$LINUX_SIG")
           fi
 
           # Generate latest.json
@@ -551,6 +576,10 @@ jobs:
               "windows-x86_64": {
                 "signature": "${WIN_SIG_CONTENT}",
                 "url": "${WIN_URL}"
+              },
+              "linux-x86_64": {
+                "signature": "${LINUX_SIG_CONTENT}",
+                "url": "${LINUX_URL}"
               }
             }
           }
@@ -574,6 +603,8 @@ jobs:
           validate_field '.platforms["darwin-universal"].signature'
           validate_field '.platforms["windows-x86_64"].url'
           validate_field '.platforms["windows-x86_64"].signature'
+          validate_field '.platforms["linux-x86_64"].url'
+          validate_field '.platforms["linux-x86_64"].signature'
 
       - name: Upload latest.json to release
         env:
@@ -618,6 +649,9 @@ jobs:
 
             # Update Windows download link
             sed -E -i "s#(releases/download/)v?[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_x64-setup\.exe)#\1v${VERSION}\2${VERSION}\3#g" "$file"
+
+            # Update Linux download link (AppImage)
+            sed -E -i "s#(releases/download/)v?[0-9.]+(/Kano\.PDF\.Tool_)[0-9.]+(_amd64\.AppImage)#\1v${VERSION}\2${VERSION}\3#g" "$file"
           done
 
         shell: bash

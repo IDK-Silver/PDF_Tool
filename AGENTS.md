@@ -11,6 +11,7 @@
 - 變更前先對齊 `docs/design.md` 與相關文件
 - 修改聚焦且最小，避免牽動不相關部分
 - 架構/API/流程變更時，更新 `docs/` 文件
+- 功能新增或變更時，必要時更新 README（`README.md`、`docs/readme/zh-TW.md`）與官網（`docs/website/`）
 
 ## 程式碼標準
 
