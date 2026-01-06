@@ -310,9 +310,28 @@ function onResizeMove(e: MouseEvent) {
     newHeight = Math.max(10, origHeight - pdfDy)
   }
 
-  // For text annotations, also scale fontSize
+  // For text annotations, enforce aspect ratio and scale fontSize
   if (resizeState.value.isText && resizeState.value.origFontSize) {
-    const scaleRatio = newHeight / origHeight
+    // Determine scale ratio from the dominant axis
+    let scaleRatio: number
+    if (handle.includes('e') || handle.includes('w')) {
+      // Width changed, adjust height to match
+      scaleRatio = newWidth / origWidth
+      newHeight = origHeight * scaleRatio
+    } else {
+      // Height changed, adjust width to match
+      scaleRatio = newHeight / origHeight
+      newWidth = origWidth * scaleRatio
+    }
+
+    // Recalculate position for handles that move origin
+    if (handle.includes('w')) {
+      newX = origX + origWidth - newWidth
+    }
+    if (handle.includes('n')) {
+      newY = origY + origHeight - newHeight
+    }
+
     const newFontSize = Math.max(8, Math.min(200, resizeState.value.origFontSize * scaleRatio))
     annotation.updateAnnotation(resizeState.value.id, {
       x: newX,
@@ -712,11 +731,16 @@ function getResizeHandles(obj: AnnotationObject) {
   const size = getSvgSize(obj)
   const handleSize = 8
 
+  // Text annotations need Y offset due to SVG text baseline positioning
+  const yOffset = obj.type === 'text'
+    ? (obj.fontSize || 14) * (props.displayWidth / props.pageWidthPt) - size.height
+    : 0
+
   return [
-    { id: 'nw', x: pos.x - handleSize / 2, y: pos.y - handleSize / 2 },
-    { id: 'ne', x: pos.x + size.width - handleSize / 2, y: pos.y - handleSize / 2 },
-    { id: 'sw', x: pos.x - handleSize / 2, y: pos.y + size.height - handleSize / 2 },
-    { id: 'se', x: pos.x + size.width - handleSize / 2, y: pos.y + size.height - handleSize / 2 },
+    { id: 'nw', x: pos.x - handleSize / 2, y: pos.y + yOffset - handleSize / 2 },
+    { id: 'ne', x: pos.x + size.width - handleSize / 2, y: pos.y + yOffset - handleSize / 2 },
+    { id: 'sw', x: pos.x - handleSize / 2, y: pos.y + yOffset + size.height - handleSize / 2 },
+    { id: 'se', x: pos.x + size.width - handleSize / 2, y: pos.y + yOffset + size.height - handleSize / 2 },
   ]
 }
 </script>
@@ -968,7 +992,9 @@ function getResizeHandles(obj: AnnotationObject) {
       <template v-if="isSelected(obj.id) && obj.type !== 'line' && obj.type !== 'arrow'">
         <rect
           :x="getSvgPosition(obj).x"
-          :y="getSvgPosition(obj).y"
+          :y="obj.type === 'text'
+              ? getSvgPosition(obj).y + (obj.fontSize || 14) * (displayWidth / pageWidthPt) - getSvgSize(obj).height
+              : getSvgPosition(obj).y"
           :width="getSvgSize(obj).width"
           :height="getSvgSize(obj).height"
           fill="none"
