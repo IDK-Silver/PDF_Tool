@@ -1937,19 +1937,17 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                 }
                                 "Courier" | "Courier New" => record.doc.fonts_mut().courier(),
                                 _ => {
-                                    // Load system font and embed into PDF
-                                    let font_data = crate::font::load_font_data(family)
-                                        .map_err(|e| MediaError::new("font_error", e))?;
-                                    record
-                                        .doc
-                                        .fonts_mut()
-                                        .load_true_type_from_bytes(&font_data, true)
-                                        .map_err(|e| {
-                                            MediaError::new(
-                                                "font_error",
-                                                format!("Failed to embed font: {e}"),
-                                            )
-                                        })?
+                                    // Try loading system font, fallback to Helvetica on failure
+                                    match crate::font::load_font_data(family) {
+                                        Ok(font_data) => record
+                                            .doc
+                                            .fonts_mut()
+                                            .load_true_type_from_bytes(&font_data, true)
+                                            .unwrap_or_else(|_| {
+                                                record.doc.fonts_mut().helvetica()
+                                            }),
+                                        Err(_) => record.doc.fonts_mut().helvetica(),
+                                    }
                                 }
                             }
                         } else {
