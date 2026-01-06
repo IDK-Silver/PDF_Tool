@@ -34,8 +34,8 @@ Or scan the QR Code:
 
 | Platform | Version | Link |
 |----------|---------|------|
-| macOS | Universal Binary<br/>(Intel & Apple Silicon) | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.6/Kano.PDF.Tool_3.10.6_universal.dmg) |
-| Windows | x64 | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.6/Kano.PDF.Tool_3.10.6_x64-setup.exe) |
+| macOS | Universal Binary<br/>(Intel & Apple Silicon) | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.0/Kano.PDF.Tool_3.11.0_universal.dmg) |
+| Windows | x64 | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.0/Kano.PDF.Tool_3.11.0_x64-setup.exe) |
 | Linux | - | Build from source (see Development section) |
 
 > **macOS Note**: The Universal Binary includes both Intel (x86_64) and Apple Silicon (ARM64) architectures. The app is signed and notarized by Apple.

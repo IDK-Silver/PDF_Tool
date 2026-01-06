@@ -30,8 +30,8 @@ permalink: /zh-TW/
 ## 下載
 
 <p class="center">
-  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.6/Kano.PDF.Tool_3.10.6_universal.dmg" class="btn">下載 macOS 版</a>
-  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.10.6/Kano.PDF.Tool_3.10.6_x64-setup.exe" class="btn">下載 Windows 版</a>
+  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.0/Kano.PDF.Tool_3.11.0_universal.dmg" class="btn">下載 macOS 版</a>
+  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.0/Kano.PDF.Tool_3.11.0_x64-setup.exe" class="btn">下載 Windows 版</a>
 </p>
 
 <p class="center" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">
