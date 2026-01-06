@@ -640,6 +640,8 @@ jobs:
           FILES=(
             "README.md"
             "docs/readme/zh-TW.md"
+            "docs/website/index.md"
+            "docs/website/zh-TW.md"
           )
 
           for file in "${FILES[@]}"; do
