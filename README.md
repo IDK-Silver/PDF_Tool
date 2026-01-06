@@ -2,6 +2,10 @@
 
 <p align="center">English | <a href="docs/readme/zh-TW.md">繁體中文</a></p>
 
+<p align="center">
+  <a href="https://kano-pdf-tool.yuufeng.com">Website</a>
+</p>
+
 A powerful cross-platform PDF editing and reading tool.
 
 | Light Theme | Dark Theme |
