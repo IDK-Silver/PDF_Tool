@@ -119,7 +119,7 @@ export const defaultToolSettings: ToolSettings = {
   stroke: '#000000',
   counterStart: 1,
   fontSize: 14,
-  fontFamily: 'system-ui',
+  fontFamily: 'Helvetica',
 }
 
 // Subset of tool settings persisted to localStorage
@@ -134,7 +134,7 @@ export const defaultPersistedToolSettings: PersistedToolSettings = {
   strokeWidth: 2,
   strokeStyle: 'solid',
   color: '#000000',
-  fontFamily: 'system-ui',
+  fontFamily: 'Helvetica',
 }
 
 export interface AnnotationState {

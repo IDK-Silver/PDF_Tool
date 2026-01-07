@@ -78,7 +78,7 @@ const textInputWidth = computed(() => {
 
   const scale = props.displayWidth / props.pageWidthPt
   const fontSize = (editingAnnotationInfo.value.fontSize || 14) * scale
-  const fontFamily = editingAnnotationInfo.value.fontFamily || 'system-ui'
+  const fontFamily = editingAnnotationInfo.value.fontFamily || 'Helvetica'
   const textWidth = measureTextWidth(text, fontSize, fontFamily)
   // Add padding and minimum width
   return Math.max(100, textWidth + 30)
@@ -95,7 +95,7 @@ watch(() => annotation.editingTextId, (newId) => {
         editingTextValue.value = obj.text || ''
         editingAnnotationInfo.value = {
           fontSize: obj.fontSize || 14,
-          fontFamily: obj.fontFamily || 'system-ui',
+          fontFamily: obj.fontFamily || 'Helvetica',
         }
         break
       }
@@ -944,7 +944,7 @@ function getResizeHandles(obj: AnnotationObject) {
           :y="getSvgPosition(obj).y + (obj.fontSize || 14) * (displayWidth / pageWidthPt)"
           :fill="obj.stroke"
           :font-size="(obj.fontSize || 14) * (displayWidth / pageWidthPt)"
-          :font-family="obj.fontFamily || 'system-ui'"
+          :font-family="obj.fontFamily || 'Helvetica'"
           :opacity="obj.opacity"
           :class="{ selected: isSelected(obj.id) }"
           :style="{ pointerEvents: 'all', cursor: annotation.activeTool === 'select' ? 'move' : 'pointer' }"
@@ -967,7 +967,7 @@ function getResizeHandles(obj: AnnotationObject) {
               width: '100%',
               height: '100%',
               fontSize: ((obj.fontSize || 14) * (displayWidth / pageWidthPt)) + 'px',
-              fontFamily: obj.fontFamily || 'system-ui',
+              fontFamily: obj.fontFamily || 'Helvetica',
               color: obj.stroke,
               border: '1px solid #0066ff',
               borderRadius: '2px',

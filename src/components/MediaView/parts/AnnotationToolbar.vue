@@ -9,7 +9,7 @@ import SignaturePicker, { type SignatureItem } from './SignaturePicker.vue'
 
 const { t } = useI18n()
 const annotation = useAnnotationStore()
-const { cjkFonts, latinFonts, builtinFonts, loadFonts, loaded: fontsLoaded } = useSystemFonts()
+const { cjkFonts, latinFonts, builtinFonts, loadFonts, loaded: fontsLoaded, getRecommendedDefault } = useSystemFonts()
 
 const activeTool = computed(() => annotation.activeTool)
 
@@ -182,11 +182,19 @@ function setStrokeStyle(style: StrokeStyle) {
   annotation.updateToolSettings({ strokeStyle: style })
 }
 
-function toggleFontPicker() {
+async function toggleFontPicker() {
   closePopovers()
   showFontPicker.value = !showFontPicker.value
   if (showFontPicker.value && !fontsLoaded.value) {
-    loadFonts()
+    await loadFonts()
+    // Auto-update to CJK font if current font is default (Helvetica or legacy system-ui)
+    const currentFont = annotation.toolSettings.fontFamily
+    if (currentFont === 'Helvetica' || currentFont === 'system-ui') {
+      const recommended = getRecommendedDefault()
+      if (recommended !== 'Helvetica') {
+        annotation.updateToolSettings({ fontFamily: recommended })
+      }
+    }
   }
 }
 

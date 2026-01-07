@@ -44,12 +44,16 @@ export const useAnnotationStore = defineStore('annotation', () => {
       TOOL_SETTINGS_KEY,
       defaultPersistedToolSettings
     )
+    // Migrate legacy 'system-ui' to 'Helvetica'
+    const fontFamily = savedTools.fontFamily === 'system-ui'
+      ? 'Helvetica'
+      : savedTools.fontFamily
     toolSettings.value = {
       ...toolSettings.value,
       strokeWidth: savedTools.strokeWidth,
       strokeStyle: savedTools.strokeStyle,
       color: savedTools.color,
-      fontFamily: savedTools.fontFamily,
+      fontFamily,
     }
 
     const savedPage = await readLocalJson<{ pageIndex: number | null }>(
@@ -457,7 +461,7 @@ export const useAnnotationStore = defineStore('annotation', () => {
       if (obj) {
         // Measure actual text width
         const fontSize = obj.fontSize || toolSettings.value.fontSize
-        const fontFamily = obj.fontFamily || 'system-ui'
+        const fontFamily = obj.fontFamily || 'Helvetica'
         const newWidth = measureTextWidth(text, fontSize, fontFamily)
         updateAnnotation(id, { text, width: newWidth })
         break

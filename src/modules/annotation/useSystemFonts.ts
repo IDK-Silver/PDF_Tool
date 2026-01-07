@@ -33,6 +33,14 @@ export function useSystemFonts() {
     { family: 'Courier', isCjk: false },
   ]
 
+  // Get recommended default font (first CJK font or Helvetica)
+  function getRecommendedDefault(): string {
+    if (cjkFonts.value.length > 0) {
+      return cjkFonts.value[0].family
+    }
+    return 'Helvetica'
+  }
+
   return {
     systemFonts,
     cjkFonts,
@@ -41,5 +49,6 @@ export function useSystemFonts() {
     loadFonts,
     loaded,
     loading,
+    getRecommendedDefault,
   }
 }
