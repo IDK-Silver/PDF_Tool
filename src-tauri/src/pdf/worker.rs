@@ -72,7 +72,7 @@ enum HistoryEvent {
     Rotate { index: u32, from: u16, to: u16 },
     InsertBlank { index: u32, count: usize, width_pt: f32, height_pt: f32 },
     InsertFromPdf { index: u32, count: usize, temp_path: PathBuf },
-    Delete { index: u32, count: usize, temp_path: PathBuf },
+    Delete { index: u32, count: usize, temp_path: PathBuf, tokens: Vec<u64>, rotations: Vec<u16> },
 }
 
 #[derive(Clone)]
@@ -200,7 +200,8 @@ fn capture_pages_to_temp(
     let mut tmp = pdfium.create_new_pdf().map_err(|e| {
         MediaError::new("io_error", format!("建立暫存 PDF 失敗: {e}"))
     })?;
-    let spec = build_ranges(indices);
+    let indices_1: Vec<u32> = indices.iter().map(|&i| i + 1).collect();
+    let spec = build_ranges(&indices_1);
     tmp.pages_mut()
         .copy_pages_from_document(doc, &spec, 0)
         .map_err(|e| MediaError::new("io_error", format!("複製頁面到暫存 PDF 失敗: {e}")))?;
@@ -448,13 +449,44 @@ fn apply_history_event<'a>(
             index,
             count,
             temp_path,
+            tokens,
+            rotations,
         } => {
             if forward {
                 let start = *index;
                 let inds: Vec<u32> = (start..start + (*count as u32)).collect();
                 delete_indices(pdfium, record, inds)?;
             } else {
-                insert_from_pdf_path(pdfium, record, *index, temp_path)?;
+                // Restore pages from temp PDF
+                let idx_dest_u16: u16 = (*index)
+                    .try_into()
+                    .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+                let insert_at: usize = (*index)
+                    .try_into()
+                    .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+                let src_doc = pdfium.load_pdf_from_file(temp_path, None).map_err(|e| {
+                    MediaError::new("io_error", format!("載入暫存 PDF 失敗以便插入：{e}"))
+                })?;
+                let page_count: usize = src_doc.pages().len() as usize;
+                let spec = if page_count == 1 {
+                    "1".to_string()
+                } else {
+                    format!("1-{}", page_count)
+                };
+                record
+                    .doc
+                    .pages_mut()
+                    .copy_pages_from_document(&src_doc, &spec, idx_dest_u16)
+                    .map_err(|e| MediaError::new("io_error", format!("插入頁面失敗: {e}")))?;
+                // Restore original tokens and rotations
+                for (i, (&tok, &rot)) in tokens.iter().zip(rotations.iter()).enumerate() {
+                    record.current_tokens.insert(insert_at + i, tok);
+                    record.current_rot.insert(insert_at + i, rot);
+                }
+                record.file_hash = None;
+                record.file_size = None;
+                record.revision = record.revision.saturating_add(1);
+                recompute_dirty(record);
             }
             Ok(())
         }
@@ -1036,6 +1068,9 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                             .first()
                             .ok_or_else(|| MediaError::new("invalid_input", "缺少要刪除的頁索引"))?;
                         let count = indices.len();
+                        // Save original tokens and rotations before deletion
+                        let tokens: Vec<u64> = indices.iter().map(|&i| record.current_tokens[i as usize]).collect();
+                        let rotations: Vec<u16> = indices.iter().map(|&i| record.current_rot[i as usize]).collect();
                         let temp_path = capture_pages_to_temp(&pdfium, &record.doc, &indices)?;
                         delete_indices(&pdfium, record, indices)?;
                         push_undo(
@@ -1044,6 +1079,8 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                 index: first,
                                 count,
                                 temp_path,
+                                tokens,
+                                rotations,
                             },
                         );
                         Ok(make_mutation_result(record))
