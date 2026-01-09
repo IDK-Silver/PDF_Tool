@@ -62,6 +62,10 @@ const editingTextValue = ref('')
 // Store current editing annotation info for width calculation
 const editingAnnotationInfo = ref<{ fontSize: number; fontFamily: string } | null>(null)
 
+// Track IME composition so Enter does not prematurely commit on Windows.
+const isComposingText = ref(false)
+const commitAfterComposition = ref<string | null>(null)
+
 // Measure text width for dynamic input sizing
 function measureTextWidth(text: string, fontSize: number, fontFamily: string): number {
   const canvas = document.createElement('canvas')
@@ -743,6 +747,49 @@ function getResizeHandles(obj: AnnotationObject) {
     { id: 'se', x: pos.x + size.width - handleSize / 2, y: pos.y + yOffset + size.height - handleSize / 2 },
   ]
 }
+
+function commitEditingText(id: string) {
+  if (annotation.editingTextId !== id) return
+  annotation.updateTextContent(id, editingTextValue.value)
+}
+
+function onTextInputCompositionStart() {
+  isComposingText.value = true
+}
+
+function onTextInputCompositionEnd(id: string) {
+  isComposingText.value = false
+  if (commitAfterComposition.value === id) {
+    commitAfterComposition.value = null
+    commitEditingText(id)
+  }
+}
+
+function onTextInputEnter(e: KeyboardEvent, id: string) {
+  if (e.isComposing || isComposingText.value) {
+    commitAfterComposition.value = id
+    return
+  }
+  e.preventDefault()
+  commitEditingText(id)
+}
+
+function onTextInputEnterKeyup(e: KeyboardEvent, id: string) {
+  if (e.isComposing || isComposingText.value) return
+  if (commitAfterComposition.value === id) return
+  if (annotation.editingTextId !== id) return
+  e.preventDefault()
+  commitEditingText(id)
+}
+
+function onTextInputEscape(e: KeyboardEvent, id: string) {
+  if (e.isComposing || isComposingText.value) {
+    commitAfterComposition.value = null
+    return
+  }
+  e.preventDefault()
+  commitEditingText(id)
+}
 </script>
 
 <template>
@@ -975,12 +1022,15 @@ function getResizeHandles(obj: AnnotationObject) {
               outline: 'none',
               background: 'rgba(255,255,255,0.9)',
             }"
-            @blur="annotation.updateTextContent(obj.id, editingTextValue)"
+            @blur="commitEditingText(obj.id)"
+            @compositionstart="onTextInputCompositionStart"
+            @compositionend="onTextInputCompositionEnd(obj.id)"
             @keydown.stop
             @keyup.stop
             @keypress.stop
-            @keydown.enter="annotation.updateTextContent(obj.id, editingTextValue)"
-            @keydown.escape="annotation.updateTextContent(obj.id, editingTextValue)"
+            @keydown.enter="onTextInputEnter($event, obj.id)"
+            @keyup.enter="onTextInputEnterKeyup($event, obj.id)"
+            @keydown.escape="onTextInputEscape($event, obj.id)"
             @mousedown.stop
             @click.stop
             @vue:mounted="(e: any) => { e.el?.focus(); e.el?.select(); }"
