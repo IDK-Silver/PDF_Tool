@@ -1,3 +1,4 @@
+mod bookmark;
 mod error;
 mod font;
 mod image;
@@ -215,6 +216,9 @@ pub fn run() {
             signature::signature_add,
             signature::signature_delete,
             font::list_system_fonts,
+            bookmark::bookmark_create,
+            bookmark::bookmark_resolve,
+            bookmark::bookmark_stop_access,
         ]);
 
     let app = builder

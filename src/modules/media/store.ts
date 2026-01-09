@@ -148,20 +148,85 @@ export const useMediaStore = defineStore('media', () => {
   }
 
   async function select(item: FileItem) {
-    const path = item.path
-    if (!(await ensureCanSwitch(path))) return
+    if (!(await ensureCanSwitch(item.path))) return
+    // Resolve security-scoped bookmark before accessing file (macOS sandbox)
+    const filelist = useFileListStore()
+    const previousPath = selected.value?.path
+    const accessPath = await filelist.ensureAccess(item)
+    if (previousPath && previousPath !== accessPath) {
+      await filelist.stopAccess(previousPath)
+    }
     selected.value = item
-    await loadDescriptor(path)
+    const result = await loadDescriptor(accessPath)
+
+    // If load failed with permission error, remove from recent files
+    if (result === 'permission_error') {
+      filelist.remove(item.path)
+      await filelist.stopAccess(accessPath)
+      selected.value = null
+      error.value = null
+      return
+    }
+
+    // Create bookmark only on success
+    if (result === 'success') {
+      await filelist.createBookmarkFor(item)
+    }
   }
 
   async function selectPath(path: string) {
     if (!(await ensureCanSwitch(path))) return
-    try { useFileListStore().add(path) } catch {}
-    selected.value = { id: path, name: path.split('/').pop() || path, path }
-    await loadDescriptor(path)
+    const filelist = useFileListStore()
+    const previousPath = selected.value?.path
+    filelist.add(path)
+    const item = filelist.items.find(i => i.path === path)
+    if (item) {
+      const accessPath = await filelist.ensureAccess(item)
+      if (previousPath && previousPath !== accessPath) {
+        await filelist.stopAccess(previousPath)
+      }
+      selected.value = item
+      const result = await loadDescriptor(accessPath)
+      if (result === 'permission_error') {
+        filelist.remove(item.path)
+        await filelist.stopAccess(accessPath)
+        selected.value = null
+        error.value = null
+        return
+      }
+      if (result === 'success') {
+        // Create bookmark after successful load
+        await filelist.createBookmarkFor(item)
+      }
+    } else {
+      if (previousPath && previousPath !== path) {
+        await filelist.stopAccess(previousPath)
+      }
+      selected.value = { id: path, name: path.split('/').pop() || path, path }
+      await loadDescriptor(path)
+    }
   }
 
-  async function loadDescriptor(path: string) {
+  type LoadResult = 'success' | 'permission_error' | 'error'
+
+  function isPermissionError(err: unknown): boolean {
+    const anyErr = err as { code?: unknown; message?: unknown }
+    const code = typeof anyErr?.code === 'string' ? anyErr.code.toLowerCase() : ''
+    const msgRaw = typeof anyErr?.message === 'string' ? anyErr.message : String(err)
+    const message = msgRaw.toLowerCase()
+    if (code === 'permission_denied') return true
+    if (code === 'access_denied') return true
+    if (code === 'permission') return true
+    if (message.includes('permission denied')) return true
+    if (message.includes('permission')) return true
+    if (message.includes('not permitted')) return true
+    if (message.includes('operation not permitted')) return true
+    if (message.includes('access denied')) return true
+    if (message.includes('operation not allowed')) return true
+    return false
+  }
+
+  async function loadDescriptor(path: string): Promise<LoadResult> {
     loading.value = true
     error.value = null
     resetRenderPipeline()
@@ -212,8 +277,11 @@ export const useMediaStore = defineStore('media', () => {
         pdfFirstPage.value = pdfPages.value[0]
         highResPages.add(0)
       }
+      return 'success'
     } catch (e: any) {
-      error.value = e?.message || String(e)
+      const msg = e?.message || String(e)
+      error.value = msg
+      return isPermissionError(e) ? 'permission_error' : 'error'
     } finally {
       loading.value = false
     }
@@ -223,6 +291,11 @@ export const useMediaStore = defineStore('media', () => {
     if (docId.value != null) {
       try { await pdfClose(docId.value) } catch (_) {}
       docId.value = null
+    }
+    const activePath = selected.value?.path
+    if (activePath) {
+      const filelist = useFileListStore()
+      await filelist.stopAccess(activePath)
     }
   }
 
@@ -485,6 +558,11 @@ export const useMediaStore = defineStore('media', () => {
   }
 
   function clear() {
+    const activePath = selected.value?.path
+    if (activePath) {
+      const filelist = useFileListStore()
+      void filelist.stopAccess(activePath)
+    }
     selected.value = null
     descriptor.value = null
     setDirtyState(false, 0)

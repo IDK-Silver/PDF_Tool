@@ -6,4 +6,6 @@ export interface FileItem {
   lastPage?: number
   // File type hint: 'pdf' | 'image' | 'unknown'
   type?: 'pdf' | 'image' | 'unknown'
+  // Base64-encoded security-scoped bookmark data (macOS only)
+  bookmark?: string
 }

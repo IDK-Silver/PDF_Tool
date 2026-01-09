@@ -1,8 +1,8 @@
-#[cfg(not(feature = "app-store"))]
+#[cfg(all(feature = "self-update", not(feature = "app-store")))]
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "self-update")]
+#[cfg(all(feature = "self-update", not(feature = "app-store")))]
 use tauri_plugin_updater::UpdaterExt;
 
 #[cfg(not(feature = "app-store"))]
@@ -217,7 +217,7 @@ pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateCheckResult
 
 /// Download and install update (only called after user consent)
 /// This uses Tauri's built-in updater plugin
-#[cfg(feature = "self-update")]
+#[cfg(all(feature = "self-update", not(feature = "app-store")))]
 #[tauri::command]
 pub async fn download_and_install_update(app: tauri::AppHandle) -> Result<UpdateResult, String> {
     use tauri::Emitter;
@@ -291,7 +291,7 @@ pub async fn download_and_install_update(app: tauri::AppHandle) -> Result<Update
 }
 
 /// Stub for App Store builds (updater disabled)
-#[cfg(not(feature = "self-update"))]
+#[cfg(any(not(feature = "self-update"), feature = "app-store"))]
 #[tauri::command]
 pub async fn download_and_install_update(_app: tauri::AppHandle) -> Result<UpdateResult, String> {
     Ok(UpdateResult {

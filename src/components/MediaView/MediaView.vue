@@ -199,10 +199,9 @@ onBeforeUnmount(() => {
 async function onDiscardNow() {
   const p = media.selected?.path
   if (!p) return
-  try {
-    await media.loadDescriptor(p)
-  } catch (e: any) {
-    alert(e?.message || String(e))
+  const result = await media.loadDescriptor(p)
+  if (result !== 'success') {
+    alert(media.error || 'Failed to reload file.')
   }
 }
 
@@ -218,7 +217,7 @@ onBeforeRouteLeave(async (to) => {
     // 為了真正丟棄記憶體中的未儲存修改，重新自磁碟載入目前檔案
     const p = media.selected?.path
     if (p) {
-      try { await media.loadDescriptor(p) } catch (_) {}
+      await media.loadDescriptor(p)
     }
   }
   return true
