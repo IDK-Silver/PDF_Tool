@@ -62,9 +62,9 @@ const editingTextValue = ref('')
 // Store current editing annotation info for width calculation
 const editingAnnotationInfo = ref<{ fontSize: number; fontFamily: string } | null>(null)
 
-// Track IME composition so Enter does not prematurely commit on Windows.
+// Track IME composition state to avoid premature commit.
 const isComposingText = ref(false)
-const commitAfterComposition = ref<string | null>(null)
+const justEndedComposition = ref(false)
 
 // Measure text width for dynamic input sizing
 function measureTextWidth(text: string, fontSize: number, fontFamily: string): number {
@@ -755,36 +755,28 @@ function commitEditingText(id: string) {
 
 function onTextInputCompositionStart() {
   isComposingText.value = true
+  justEndedComposition.value = false
 }
 
-function onTextInputCompositionEnd(id: string) {
+function onTextInputCompositionEnd() {
   isComposingText.value = false
-  if (commitAfterComposition.value === id) {
-    commitAfterComposition.value = null
-    commitEditingText(id)
-  }
+  // Safari may fire compositionend before keydown; ignore Enter in same tick.
+  justEndedComposition.value = true
+  queueMicrotask(() => {
+    justEndedComposition.value = false
+  })
 }
 
 function onTextInputEnter(e: KeyboardEvent, id: string) {
-  if (e.isComposing || isComposingText.value) {
-    commitAfterComposition.value = id
-    return
-  }
-  e.preventDefault()
-  commitEditingText(id)
-}
-
-function onTextInputEnterKeyup(e: KeyboardEvent, id: string) {
-  if (e.isComposing || isComposingText.value) return
-  if (commitAfterComposition.value === id) return
-  if (annotation.editingTextId !== id) return
+  // Safari fires compositionend before keydown, so isComposing is false.
+  // Check keyCode 229 as a fallback indicator for IME composition.
+  if (e.isComposing || isComposingText.value || justEndedComposition.value || e.keyCode === 229) return
   e.preventDefault()
   commitEditingText(id)
 }
 
 function onTextInputEscape(e: KeyboardEvent, id: string) {
-  if (e.isComposing || isComposingText.value) {
-    commitAfterComposition.value = null
+  if (e.isComposing || isComposingText.value || e.keyCode === 229) {
     return
   }
   e.preventDefault()
@@ -1024,12 +1016,11 @@ function onTextInputEscape(e: KeyboardEvent, id: string) {
             }"
             @blur="commitEditingText(obj.id)"
             @compositionstart="onTextInputCompositionStart"
-            @compositionend="onTextInputCompositionEnd(obj.id)"
+            @compositionend="onTextInputCompositionEnd"
             @keydown.stop
             @keyup.stop
             @keypress.stop
             @keydown.enter="onTextInputEnter($event, obj.id)"
-            @keyup.enter="onTextInputEnterKeyup($event, obj.id)"
             @keydown.escape="onTextInputEscape($event, obj.id)"
             @mousedown.stop
             @click.stop
