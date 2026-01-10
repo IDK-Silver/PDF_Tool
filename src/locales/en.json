@@ -314,7 +314,9 @@
     "fonts": {
       "builtin": "Built-in",
       "cjk": "CJK Fonts",
-      "latin": "Latin Fonts"
+      "latin": "Latin Fonts",
+      "search": "Search fonts",
+      "noResults": "No matching fonts"
     },
     "strokeStyle": {
       "solid": "Solid",

@@ -314,7 +314,9 @@
     "fonts": {
       "builtin": "內建字體",
       "cjk": "中日韓字體",
-      "latin": "拉丁字體"
+      "latin": "拉丁字體",
+      "search": "搜尋字體",
+      "noResults": "沒有符合的字體"
     },
     "strokeStyle": {
       "solid": "實線",

@@ -24,11 +24,47 @@ fn scan_system_fonts() -> Vec<FontInfo> {
 
     // Keywords to identify CJK fonts
     let cjk_keywords = [
-        "TC", "SC", "JP", "KR", "CJK", "Hei", "Song", "Kai", "Ming", "Gothic",
-        "PingFang", "Hiragino", "Noto Sans", "Noto Serif", "Source Han",
-        "Microsoft YaHei", "Microsoft JhengHei", "SimSun", "SimHei", "MingLiU",
-        "Malgun", "Meiryo", "Yu Gothic", "Yu Mincho",
+        "tc", "sc", "jp", "kr", "cjk", "hei", "song", "kai", "ming", "gothic",
+        "pingfang", "hiragino", "noto sans", "noto serif", "source han",
+        "microsoft yahei", "microsoft jhenghei", "simsun", "simhei", "mingliu",
+        "malgun", "meiryo", "yu gothic", "yu mincho",
     ];
+
+    fn has_cjk_chars(name: &str) -> bool {
+        name.chars().any(|ch| {
+            let c = ch as u32;
+            matches!(
+                c,
+                0x3040..=0x30FF  // Hiragana + Katakana
+                    | 0x3400..=0x4DBF  // CJK Extension A
+                    | 0x4E00..=0x9FFF  // CJK Unified Ideographs
+                    | 0xF900..=0xFAFF  // CJK Compatibility Ideographs
+                    | 0x1100..=0x11FF  // Hangul Jamo
+                    | 0x3130..=0x318F  // Hangul Compatibility Jamo
+                    | 0xAC00..=0xD7AF  // Hangul Syllables
+            )
+        })
+    }
+
+    fn has_cjk_glyphs(handles: &[Handle]) -> bool {
+        const CJK_SAMPLE_CODEPOINTS: [u32; 4] = [0x4E2D, 0x3042, 0x30A2, 0xD55C];
+        for handle in handles {
+            let font = match handle.load() {
+                Ok(font) => font,
+                Err(_) => continue,
+            };
+            for code in CJK_SAMPLE_CODEPOINTS {
+                let ch = match char::from_u32(code) {
+                    Some(ch) => ch,
+                    None => continue,
+                };
+                if font.glyph_for_char(ch).is_some() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 
     let mut fonts: Vec<FontInfo> = families
         .into_iter()
@@ -40,9 +76,10 @@ fn scan_system_fonts() -> Vec<FontInfo> {
                 return None;
             }
 
-            let is_cjk = cjk_keywords
-                .iter()
-                .any(|kw| family.to_lowercase().contains(&kw.to_lowercase()));
+            let family_lower = family.to_lowercase();
+            let is_cjk = has_cjk_chars(&family)
+                || cjk_keywords.iter().any(|kw| family_lower.contains(kw))
+                || has_cjk_glyphs(&font_handles);
 
             Some(FontInfo {
                 family,

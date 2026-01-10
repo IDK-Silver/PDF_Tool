@@ -71,6 +71,31 @@ const showStrokePicker = ref(false)
 const showCounterPicker = ref(false)
 const showSignaturePicker = ref(false)
 const showFontPicker = ref(false)
+const fontQuery = ref('')
+
+const fontQueryRaw = computed(() => fontQuery.value.trim().toLowerCase())
+const fontQueryNormalized = computed(() => normalizeFontName(fontQuery.value))
+
+function normalizeFontName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+function matchesFontQuery(family: string): boolean {
+  const raw = fontQueryRaw.value
+  if (!raw) return true
+  const familyLower = family.toLowerCase()
+  if (familyLower.includes(raw)) return true
+  return normalizeFontName(familyLower).includes(fontQueryNormalized.value)
+}
+
+const filteredBuiltinFonts = computed(() => builtinFonts.filter((font) => matchesFontQuery(font.family)))
+const filteredCjkFonts = computed(() => cjkFonts.value.filter((font) => matchesFontQuery(font.family)))
+const filteredLatinFonts = computed(() => latinFonts.value.filter((font) => matchesFontQuery(font.family)))
+const hasFontResults = computed(() => (
+  filteredBuiltinFonts.value.length
+  + filteredCjkFonts.value.length
+  + filteredLatinFonts.value.length
+) > 0)
 
 // Close popovers when clicking outside
 function closePopovers() {
@@ -84,6 +109,12 @@ function closePopovers() {
 // Close counter picker when a counter is placed
 watch(() => annotation.nextCounterValue, () => {
   showCounterPicker.value = false
+})
+
+watch(showFontPicker, (show) => {
+  if (!show) {
+    fontQuery.value = ''
+  }
 })
 
 function isActive(tool: ToolType): boolean {
@@ -571,26 +602,44 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- Built-in PDF fonts -->
-          <div class="p-1.5 border-b border-border">
-            <div class="text-xs text-muted-foreground mb-1">{{ t('annotation.fonts.builtin') }}</div>
-            <button
-              v-for="font in builtinFonts"
-              :key="font.family"
-              @click="setFontFamily(font.family)"
-              :class="['font-option', { active: annotation.toolSettings.fontFamily === font.family }]"
-              :style="{ fontFamily: font.family }"
+          <div class="px-1.5 py-1 border-b border-border">
+            <input
+              v-model="fontQuery"
+              type="text"
+              class="font-search-input"
+              :placeholder="t('annotation.fonts.search')"
+              spellcheck="false"
             >
-              {{ font.family }}
-            </button>
+          </div>
+
+          <!-- Built-in PDF fonts -->
+          <div v-if="filteredBuiltinFonts.length > 0" class="p-1.5 border-b border-border">
+            <div class="text-xs text-muted-foreground mb-1 flex items-center justify-between">
+              <span>{{ t('annotation.fonts.builtin') }}</span>
+              <span class="font-count">{{ filteredBuiltinFonts.length }}</span>
+            </div>
+            <div class="max-h-32 overflow-y-auto">
+              <button
+                v-for="font in filteredBuiltinFonts"
+                :key="font.family"
+                @click="setFontFamily(font.family)"
+                :class="['font-option', { active: annotation.toolSettings.fontFamily === font.family }]"
+                :style="{ fontFamily: font.family }"
+              >
+                {{ font.family }}
+              </button>
+            </div>
           </div>
 
           <!-- CJK fonts -->
-          <div v-if="cjkFonts.length > 0" class="p-1.5 border-b border-border">
-            <div class="text-xs text-muted-foreground mb-1">{{ t('annotation.fonts.cjk') }}</div>
+          <div v-if="filteredCjkFonts.length > 0" class="p-1.5 border-b border-border">
+            <div class="text-xs text-muted-foreground mb-1 flex items-center justify-between">
+              <span>{{ t('annotation.fonts.cjk') }}</span>
+              <span class="font-count">{{ filteredCjkFonts.length }}</span>
+            </div>
             <div class="max-h-32 overflow-y-auto">
               <button
-                v-for="font in cjkFonts.slice(0, 20)"
+                v-for="font in filteredCjkFonts"
                 :key="font.family"
                 @click="setFontFamily(font.family)"
                 :class="['font-option', { active: annotation.toolSettings.fontFamily === font.family }]"
@@ -602,11 +651,14 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Latin fonts -->
-          <div v-if="latinFonts.length > 0" class="p-1.5">
-            <div class="text-xs text-muted-foreground mb-1">{{ t('annotation.fonts.latin') }}</div>
+          <div v-if="filteredLatinFonts.length > 0" class="p-1.5">
+            <div class="text-xs text-muted-foreground mb-1 flex items-center justify-between">
+              <span>{{ t('annotation.fonts.latin') }}</span>
+              <span class="font-count">{{ filteredLatinFonts.length }}</span>
+            </div>
             <div class="max-h-32 overflow-y-auto">
               <button
-                v-for="font in latinFonts.slice(0, 20)"
+                v-for="font in filteredLatinFonts"
                 :key="font.family"
                 @click="setFontFamily(font.family)"
                 :class="['font-option', { active: annotation.toolSettings.fontFamily === font.family }]"
@@ -615,6 +667,10 @@ onBeforeUnmount(() => {
                 {{ font.family }}
               </button>
             </div>
+          </div>
+
+          <div v-if="!hasFontResults" class="px-1.5 py-2 text-xs text-muted-foreground">
+            {{ t('annotation.fonts.noResults') }}
           </div>
 
           <div class="popover-backdrop" @click="closePopovers"></div>
@@ -867,6 +923,27 @@ input[type="color"]::-webkit-color-swatch {
   right: 0;
   min-width: 160px;
   max-width: 200px;
+}
+
+.font-search-input {
+  width: 100%;
+  padding: 0.25rem 0.375rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.25rem;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-size: 0.75rem;
+}
+
+.font-search-input:focus {
+  outline: none;
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.35);
+}
+
+.font-count {
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--muted-foreground));
 }
 
 /* Font option in dropdown */
