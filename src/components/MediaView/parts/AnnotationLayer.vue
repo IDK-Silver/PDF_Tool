@@ -58,6 +58,8 @@ const textInputRef = ref<HTMLInputElement | null>(null)
 
 // Track current editing text value for dynamic width calculation
 const editingTextValue = ref('')
+const editingMinWidth = ref(0)
+const minEditingChars = 2
 
 // Store current editing annotation info for width calculation
 const editingAnnotationInfo = ref<{ fontSize: number; fontFamily: string } | null>(null)
@@ -84,8 +86,8 @@ const textInputWidth = computed(() => {
   const fontSize = (editingAnnotationInfo.value.fontSize || 14) * scale
   const fontFamily = editingAnnotationInfo.value.fontFamily || 'Helvetica'
   const textWidth = measureTextWidth(text, fontSize, fontFamily)
-  // Add padding and minimum width
-  return Math.max(100, textWidth + 30)
+  const padding = 8
+  return Math.max(editingMinWidth.value, textWidth + padding)
 })
 
 // Watch for text editing changes to set initial value and info
@@ -101,12 +103,33 @@ watch(() => annotation.editingTextId, (newId) => {
           fontSize: obj.fontSize || 14,
           fontFamily: obj.fontFamily || 'Helvetica',
         }
+        const scale = props.displayWidth / props.pageWidthPt
+        const fontSize = (editingAnnotationInfo.value.fontSize || 14) * scale
+        const fontFamily = editingAnnotationInfo.value.fontFamily || 'Helvetica'
+        const padding = 8
+        const baseMinWidth = fontSize * minEditingChars + padding
+        const textWidth = measureTextWidth(editingTextValue.value, fontSize, fontFamily) + padding
+        editingMinWidth.value = Math.max(baseMinWidth, textWidth)
         break
       }
     }
   } else {
     editingTextValue.value = ''
     editingAnnotationInfo.value = null
+    editingMinWidth.value = 0
+  }
+})
+
+watch([editingTextValue, editingAnnotationInfo, () => props.displayWidth, () => props.pageWidthPt], () => {
+  if (!editingAnnotationInfo.value) return
+  const scale = props.displayWidth / props.pageWidthPt
+  const fontSize = (editingAnnotationInfo.value.fontSize || 14) * scale
+  const fontFamily = editingAnnotationInfo.value.fontFamily || 'Helvetica'
+  const padding = 8
+  const baseMinWidth = fontSize * minEditingChars + padding
+  const width = Math.max(baseMinWidth, measureTextWidth(editingTextValue.value, fontSize, fontFamily) + padding)
+  if (width > editingMinWidth.value) {
+    editingMinWidth.value = width
   }
 })
 
@@ -758,6 +781,13 @@ function onTextInputCompositionStart() {
   justEndedComposition.value = false
 }
 
+function onTextInputCompositionUpdate(e: CompositionEvent) {
+  const target = e.target as HTMLInputElement | null
+  if (!target) return
+  // Keep width in sync during IME composition.
+  editingTextValue.value = target.value
+}
+
 function onTextInputCompositionEnd() {
   isComposingText.value = false
   // Safari may fire compositionend before keydown; ignore Enter in same tick.
@@ -1016,6 +1046,7 @@ function onTextInputEscape(e: KeyboardEvent, id: string) {
             }"
             @blur="commitEditingText(obj.id)"
             @compositionstart="onTextInputCompositionStart"
+            @compositionupdate="onTextInputCompositionUpdate"
             @compositionend="onTextInputCompositionEnd"
             @keydown.stop
             @keyup.stop
