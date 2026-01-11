@@ -454,7 +454,7 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
     ctx: ZoomContext,
     onZoomChange?: () => void
   ): void {
-    if (!e.ctrlKey && !e.metaKey) return
+    if (!e.ctrlKey) return
     e.preventDefault()
 
     wheelAccumulator += e.deltaY
