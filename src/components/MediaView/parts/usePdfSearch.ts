@@ -309,12 +309,19 @@ export function usePdfSearch(options: PdfSearchOptions) {
   }
 
   async function scrollToMatch(match: SearchMatch) {
-    await gotoPage(match.pageIndex + 1)
-    await nextTick()
     if (pendingScrollAnimation !== null) {
       cancelAnimationFrame(pendingScrollAnimation)
       pendingScrollAnimation = null
     }
+    const root = scrollRootEl.value
+    const directPageEl = root?.querySelector(`[data-pdf-page="${match.pageIndex}"]`) as HTMLElement | null
+    const canDirectScroll = !!(root && directPageEl)
+
+    if (!canDirectScroll) {
+      await gotoPage(match.pageIndex + 1)
+      await nextTick()
+    }
+
     pendingScrollAnimation = requestAnimationFrame(() => {
       pendingScrollAnimation = null
       const { root, pageEl, charEl } = ensurePageElement(match)
