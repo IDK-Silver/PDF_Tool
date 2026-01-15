@@ -470,7 +470,9 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="flex-1 flex min-h-0">
-      <div v-if="media.loading" class="p-4">{{ t('common.loading') }}</div>
+      <div v-if="media.loading" class="flex-1 flex items-center justify-center">
+        <div class="text-xl text-muted-foreground">{{ t('common.loading') }}</div>
+      </div>
       <div v-else-if="isFileMissing" class="flex-1 flex items-center justify-center">
         <img :src="missingFile" alt="File not found" class="max-w-[60%] max-h-[60%] opacity-80 select-none" />
       </div>

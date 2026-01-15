@@ -90,6 +90,8 @@ function createZoomContext(): ZoomContext | null {
 }
 
 const isLayoutResizing = ref(false)
+const isRestoringLastPage = ref(true)
+let restoreToken = 0
 
 function getRenderFormat() {
   return settings.s.renderFormat
@@ -249,74 +251,153 @@ async function gotoPage(page: number) {
   const root = scrollRootEl.value
   if (!root) return
 
-  const tryScroll = async (retries = 5) => {
-    const el = root.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
+  const tryScroll = (): Promise<void> => {
+    return new Promise((resolve) => {
+      const attempt = (retries: number) => {
+        const el = root.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
 
-    if (el) {
-      const cardEl = el.querySelector('.bg-card') as HTMLElement | null
+        if (el) {
+          const cardEl = el.querySelector('.bg-card') as HTMLElement | null
 
-      // 若 Card 還沒渲染出來，繼續重試
-      if (!cardEl && retries > 0) {
-        requestAnimationFrame(() => tryScroll(retries - 1))
-        return
+          // 若 Card 還沒渲染出來，繼續重試
+          if (!cardEl && retries > 0) {
+            requestAnimationFrame(() => attempt(retries - 1))
+            return
+          }
+
+          const targetEl = cardEl || el
+          const elTop = targetEl.offsetTop
+          const elHeight = targetEl.offsetHeight
+          const elWidth = targetEl.offsetWidth
+          const containerHeight = root.clientHeight
+
+          // 安全檢查：尺寸異常小代表 CSS 未載入，重試
+          if ((elHeight < 10 || elWidth < 10) && retries > 0) {
+            requestAnimationFrame(() => attempt(retries - 1))
+            return
+          }
+
+          let targetTop = 0
+          // Case A: 頁面小於視窗 -> 垂直置中
+          if (elHeight < containerHeight) {
+            targetTop = elTop - (containerHeight / 2) + (elHeight / 2)
+          }
+          // Case B: 頁面大於視窗 -> 靠上對齊，並保留視覺留白
+          else {
+            const rootRect = root.getBoundingClientRect()
+            const cardRect = targetEl.getBoundingClientRect()
+            const cardTopRelativeToRoot = cardRect.top - rootRect.top + root.scrollTop
+            targetTop = cardTopRelativeToRoot - VISUAL_PADDING
+          }
+
+          // 執行垂直捲動
+          root.scrollTop = Math.max(0, targetTop)
+
+          pendingIdx.add(idx)
+          scheduleProcess()
+
+          // [水平修正核心] 多段式確保置中，處理各種非同步佈局情況
+          // 1. 立即嘗試置中
+          centerPageHorizontally(idx)
+
+          // 2. AnimationFrame: 等待渲染層更新
+          requestAnimationFrame(() => {
+            centerPageHorizontally(idx)
+          })
+
+          // 3. setTimeout 50ms: [關鍵] 等待 Scrollbar 出現導致的 Layout Shift 穩定
+          setTimeout(() => {
+            centerPageHorizontally(idx)
+          }, 50)
+
+          // 4. setTimeout 150ms: 確保在 Fit 模式計算完成後再次置中，然後 resolve
+          setTimeout(() => {
+            centerPageHorizontally(idx)
+            resolve()
+          }, 150)
+
+        } else if (retries > 0) {
+          requestAnimationFrame(() => attempt(retries - 1))
+        } else {
+          resolve()
+        }
       }
-
-      const targetEl = cardEl || el
-      const elTop = targetEl.offsetTop
-      const elHeight = targetEl.offsetHeight
-      const elWidth = targetEl.offsetWidth
-      const containerHeight = root.clientHeight
-
-      // 安全檢查：尺寸異常小代表 CSS 未載入，重試
-      if ((elHeight < 10 || elWidth < 10) && retries > 0) {
-        requestAnimationFrame(() => tryScroll(retries - 1))
-        return
-      }
-
-      let targetTop = 0
-      // Case A: 頁面小於視窗 -> 垂直置中
-      if (elHeight < containerHeight) {
-        targetTop = elTop - (containerHeight / 2) + (elHeight / 2)
-      }
-      // Case B: 頁面大於視窗 -> 靠上對齊，並保留視覺留白
-      else {
-        const rootRect = root.getBoundingClientRect()
-        const cardRect = targetEl.getBoundingClientRect()
-        const cardTopRelativeToRoot = cardRect.top - rootRect.top + root.scrollTop
-        targetTop = cardTopRelativeToRoot - VISUAL_PADDING
-      }
-
-      // 執行垂直捲動
-      root.scrollTop = Math.max(0, targetTop)
-
-      pendingIdx.add(idx)
-      scheduleProcess()
-
-      // [水平修正核心] 多段式確保置中，處理各種非同步佈局情況
-      // 1. 立即嘗試置中
-      centerPageHorizontally(idx)
-
-      // 2. AnimationFrame: 等待渲染層更新
-      requestAnimationFrame(() => {
-        centerPageHorizontally(idx)
-      })
-
-      // 3. setTimeout 50ms: [關鍵] 等待 Scrollbar 出現導致的 Layout Shift 穩定
-      setTimeout(() => {
-        centerPageHorizontally(idx)
-      }, 50)
-
-      // 4. setTimeout 150ms: 確保在 Fit 模式計算完成後再次置中
-      setTimeout(() => {
-        centerPageHorizontally(idx)
-      }, 150)
-
-    } else if (retries > 0) {
-      requestAnimationFrame(() => tryScroll(retries - 1))
-    }
+      attempt(5)
+    })
   }
 
-  tryScroll()
+  await tryScroll()
+}
+
+async function restoreLastPage(path: string, d: { pages?: number }) {
+  const token = ++restoreToken
+  if (media.loading) {
+    await new Promise<void>((resolve) => {
+      const checkLoading = () => {
+        if (!media.loading) resolve()
+        else requestAnimationFrame(checkLoading)
+      }
+      checkLoading()
+    })
+  }
+  const ready = filelist.ready
+  const cachedLast = ready ? filelist.getLastPage(path) : undefined
+  if (!ready || (typeof cachedLast === 'number' && cachedLast > 1)) {
+    isRestoringLastPage.value = true
+  } else {
+    isRestoringLastPage.value = false
+  }
+
+  try { await filelist.whenReady() } catch { }
+  if (token !== restoreToken) return
+
+  const last = filelist.getLastPage(path)
+  if (typeof last !== 'number' || last < 1) {
+    displayPageIndex.value = 0
+    centerIndex.value = 0
+    isRestoringLastPage.value = false
+    return
+  }
+
+  const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
+  displayPageIndex.value = targetIdx
+  centerIndex.value = targetIdx
+
+  if (last <= 1) {
+    isRestoringLastPage.value = false
+    return
+  }
+
+  try {
+    try {
+      await media.getPageSizePt(targetIdx)
+    } catch (e) {
+      console.warn('[PdfViewport] Failed to preload page size:', e)
+    }
+
+    await waitForLayout()
+
+    await new Promise<void>((resolve) => {
+      const checkDOM = () => {
+        const root = scrollRootEl.value
+        if (root && root.clientWidth > 0) {
+          const el = root.querySelector(`[data-pdf-page="${targetIdx}"]`)
+          if (el) {
+            resolve()
+            return
+          }
+        }
+        requestAnimationFrame(checkDOM)
+      }
+      checkDOM()
+    })
+
+    await gotoPage(last)
+  } finally {
+    if (token === restoreToken) {
+      isRestoringLastPage.value = false
+    }
+  }
 }
 
 watch(
@@ -325,59 +406,7 @@ watch(
     const d = media.descriptor
     if (!p || !d || d.type !== 'pdf') return
 
-    displayPageIndex.value = 0
-    centerIndex.value = 0
-
-    try { await filelist.whenReady() } catch { }
-    const last = filelist.getLastPage(p)
-
-    if (typeof last === 'number' && last >= 1) {
-      // 1. 等待 PDF 載入完成
-      await new Promise<void>((resolve) => {
-        const checkLoading = () => {
-          if (!media.loading) resolve()
-          else requestAnimationFrame(checkLoading)
-        }
-        checkLoading()
-      })
-
-      const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
-
-      // 2. 預載目標頁面尺寸（提前優化，gotoPage 內部也會確保所有需要的頁面尺寸都載入）
-      try {
-        await media.getPageSizePt(targetIdx)
-      } catch (e) {
-        console.warn('[PdfViewport] Failed to preload page size:', e)
-      }
-
-      // 3. 等待 Layout 準備
-      await waitForLayout()
-
-      // 4. 等待 DOM 元素渲染
-      await new Promise<void>((resolve) => {
-        displayPageIndex.value = targetIdx
-        centerIndex.value = targetIdx
-        const checkDOM = () => {
-          const root = scrollRootEl.value
-          if (root && root.clientWidth > 0) {
-            const el = root.querySelector(`[data-pdf-page="${targetIdx}"]`)
-            if (el) {
-              resolve()
-              return
-            }
-          }
-          requestAnimationFrame(checkDOM)
-        }
-        checkDOM()
-      })
-
-      // 5. 跳轉到目標頁面
-      try {
-        await gotoPage(last)
-      } catch (e) {
-        console.error('[PdfViewport] gotoPage failed:', e)
-      }
-    }
+    await restoreLastPage(p, d)
   },
 )
 
@@ -1214,44 +1243,9 @@ onMounted(async () => {
   // 初始計算 Fit
   scheduleUpdateFitPercent()
 
-  const p = media.descriptor?.path
   const d = media.descriptor
-  if (p && d && d.type === 'pdf') {
-    try { await filelist.whenReady() } catch { }
-    const last = filelist.getLastPage(p)
-    console.log('[PdfViewport] onMounted - last page from storage:', last)
-
-    if (typeof last === 'number' && last >= 1) {
-      const targetIdx = Math.min((d.pages || 1) - 1, Math.max(0, Math.floor(last) - 1))
-
-      // [新增] 同樣預載目標頁面尺寸
-      try {
-        await media.getPageSizePt(targetIdx)
-      } catch (e) {
-        console.warn('[PdfViewport] onMounted - Failed to preload page size:', e)
-      }
-
-      // [Fix] 即使是 onMounted，也要確保 Layout 準備好
-      await waitForLayout()
-
-      // 設定 index 觸發虛擬渲染
-      displayPageIndex.value = targetIdx
-      centerIndex.value = targetIdx
-
-      await nextTick()
-
-      // 簡單的 retry 機制
-      const attemptScroll = async (retries = 0) => {
-        const el = scrollRootEl.value?.querySelector(`[data-pdf-page="${targetIdx}"]`)
-        if (el) {
-          await gotoPage(last)
-        } else if (retries < 20) {
-          // 增加重試次數
-          requestAnimationFrame(() => attemptScroll(retries + 1))
-        }
-      }
-      attemptScroll()
-    }
+  if (d && d.type === 'pdf' && d.path) {
+    await restoreLastPage(d.path, d)
   }
 
   scrollRootEl.value?.addEventListener('scroll', onScroll, { passive: true })
@@ -1620,19 +1614,21 @@ defineExpose({
 </script>
 
 <template>
-  <div
-    ref="scrollRootEl"
-    class="flex-1 scrollbar-visible overscroll-y-contain bg-muted min-h-0"
-    :style="{
-      'will-change': 'scroll-position',
-      'overflow-anchor': 'none',
-      '--zoom-factor': currentRenderingZoom / 100,
-      'overflow-x': viewMode === 'fit' ? 'hidden' : 'auto',
-      'overflow-y': 'scroll'
-    }"
-  >
-    <div v-if="!totalPages" class="p-4">{{ t('mediaView.noPages') }}</div>
-    <div v-else class="flex flex-col items-center min-w-full w-fit py-10 px-4 space-y-3">
+  <div class="relative flex-1 min-h-0">
+    <div
+      ref="scrollRootEl"
+      class="absolute inset-0 scrollbar-visible overscroll-y-contain bg-muted"
+      :class="isRestoringLastPage ? 'opacity-0 pointer-events-none' : 'opacity-100'"
+      :style="{
+        'will-change': 'scroll-position',
+        'overflow-anchor': 'none',
+        '--zoom-factor': currentRenderingZoom / 100,
+        'overflow-x': viewMode === 'fit' ? 'hidden' : 'auto',
+        'overflow-y': 'scroll'
+      }"
+    >
+      <div v-if="!totalPages" class="p-4">{{ t('mediaView.noPages') }}</div>
+      <div v-else class="flex flex-col items-center min-w-full w-fit py-10 px-4 space-y-3">
       <div
         v-for="idx in renderIndices"
         :key="idx"
@@ -1708,28 +1704,32 @@ defineExpose({
         </div>
       </div>
     </div>
-    <PdfSearchPanel
-      ref="searchPanelRef"
-      v-model="searchTerm"
-      :visible="searchVisible"
-      :busy="searchBusy"
-      :error="searchError"
-      :summary="searchSummary"
-      :has-matches="searchMatches.length > 0"
-      :panel-style="searchPanelStyle"
-      @prev="showPrevMatch"
-      @next="showNextMatch"
-      @close="closeSearch"
-    />
-    <PdfPageContextMenu
-      :menu="menu"
-      :shift-down="shiftDown"
-      @delete="deletePageFromMenu"
-      @insert-blank="insertBlankQuick"
-      @insert-file="insertFileQuick"
-      @rotate="rotatePlus90"
-      @export-image="exportPageAsImage"
-      @export-pdf="exportPageAsPdf"
-    />
+      <PdfSearchPanel
+        ref="searchPanelRef"
+        v-model="searchTerm"
+        :visible="searchVisible"
+        :busy="searchBusy"
+        :error="searchError"
+        :summary="searchSummary"
+        :has-matches="searchMatches.length > 0"
+        :panel-style="searchPanelStyle"
+        @prev="showPrevMatch"
+        @next="showNextMatch"
+        @close="closeSearch"
+      />
+      <PdfPageContextMenu
+        :menu="menu"
+        :shift-down="shiftDown"
+        @delete="deletePageFromMenu"
+        @insert-blank="insertBlankQuick"
+        @insert-file="insertFileQuick"
+        @rotate="rotatePlus90"
+        @export-image="exportPageAsImage"
+        @export-pdf="exportPageAsPdf"
+      />
+    </div>
+    <div v-if="isRestoringLastPage" class="absolute inset-0 flex items-center justify-center text-xl text-muted-foreground">
+      {{ t('common.loading') }}
+    </div>
   </div>
 </template>
