@@ -242,7 +242,8 @@ async function onSaveNow() {
 
     // Embed annotations before saving
     const annotations = annotationStore.getAllAnnotations()
-    if (annotations.length > 0) {
+    const hasAnnotations = annotations.length > 0
+    if (hasAnnotations) {
       // Build page sizes map
       const pageSizes = new Map<number, PageSize>()
       for (const ann of annotations) {
@@ -255,11 +256,15 @@ async function onSaveNow() {
       }
 
       await embedAllAnnotations(docId, annotations, pageSizes)
-      // Clear annotations after embedding (they are now part of the PDF)
-      annotationStore.reset()
+      // Don't reset here - wait until save succeeds
     }
 
     await media.saveCurrentIfNeeded()
+
+    // Only clear annotations AFTER successful save
+    if (hasAnnotations) {
+      annotationStore.reset()
+    }
     const path = media.descriptor?.path
     if (path) {
       try { filelist.setLastPage(path, Math.max(1, currentPage.value)) } catch {}
@@ -328,11 +333,16 @@ async function saveImageWithAnnotations() {
     const defaultName = `${baseName}_annotated.${ext}`
     const defaultPath = await join(await dirname(d.path), defaultName)
 
+    // Capture path before showing dialog to detect any changes
+    const pathBeforeSave = media.descriptor?.path
+
     const destPath = await saveDialog({
       defaultPath,
       filters: [{ name: 'Image', extensions: [ext, 'png', 'jpg', 'jpeg', 'webp'] }]
     })
-    if (!destPath) return
+
+    // If cancelled OR if file changed during dialog, preserve annotations
+    if (!destPath || media.descriptor?.path !== pathBeforeSave) return
 
     // Determine mime type
     const destExt = destPath.split('.').pop()?.toLowerCase() || ext
