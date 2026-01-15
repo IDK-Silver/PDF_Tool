@@ -39,7 +39,7 @@ const emit = defineEmits<{
 
 const textContent = shallowRef<PageTextContent | null>(null)
 // 緩存處理過的 spans 樣式，避免每次 render 重算
-const renderedSpans = shallowRef<Array<{ text: string, style: any, idx: number }>>([])
+const renderedSpans = shallowRef<Array<{ text: string; style: Record<string, string>; idx: number; start: number; end: number }>>([])
 const loading = shallowRef(false)
 const error = shallowRef<string | null>(null)
 let fetchToken = 0
@@ -63,23 +63,32 @@ const layerStyle = computed(() => {
 // 這些樣式只依賴 PDF 原始資料，縮放時**不會**重新計算
 function precomputeSpans(content: PageTextContent) {
   const pageH = props.pageHeightPt
-  return content.spans.map((span, idx) => {
+  const list: Array<{ text: string; style: Record<string, string>; idx: number; start: number; end: number }> = []
+  let charOffset = 0
+  for (let idx = 0; idx < content.spans.length; idx++) {
+    const span = content.spans[idx]
     const left = span.x
     // PDF 原點在左下，HTML 在左上，這裡用原始 pt 計算
     const top = pageH - span.y - span.height
     const fontSize = Math.max(0, span.height)
     const width = Math.max(0, span.width)
+    const text = span.text || ''
+    const textLen = text.length
+    const start = charOffset
+    const end = textLen > 0 ? charOffset + textLen - 1 : charOffset - 1
 
     // 計算水平拉伸 (解決字型差異)
-    const measuredW = getMeasuredWidth(span.text, fontSize)
+    const measuredW = getMeasuredWidth(text, fontSize)
     let scaleX = 1
     if (measuredW > 0 && width > 0) {
       scaleX = width / measuredW
     }
 
-    return {
-      text: span.text,
+    list.push({
+      text,
       idx,
+      start,
+      end,
       style: {
         left: `${left}px`,
         top: `${top}px`,
@@ -89,8 +98,10 @@ function precomputeSpans(content: PageTextContent) {
         transform: `scaleX(${scaleX})`,
         transformOrigin: '0 0'
       }
-    }
-  })
+    })
+    charOffset += textLen
+  }
+  return list
 }
 
 watch(
@@ -111,7 +122,7 @@ watch(
       const result = await media.getPageTextContent(props.pageIndex)
       if (token !== fetchToken) return
       if (result) {
-        textContent.value = Object.freeze(result)
+        textContent.value = result
         // 收到資料後，計算一次樣式並快取起來
         renderedSpans.value = precomputeSpans(result)
         readyEmitted.value = false
@@ -271,6 +282,8 @@ function getSpanClass(idx: number) {
       :class="getSpanClass(item.idx)"
       :style="item.style"
       :data-span-index="item.idx"
+      :data-char-start="item.start"
+      :data-char-end="item.end"
     >{{ item.text }}</span>
   </div>
 </template>

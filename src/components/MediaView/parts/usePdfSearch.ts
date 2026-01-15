@@ -289,11 +289,22 @@ export function usePdfSearch(options: PdfSearchOptions) {
     await scrollToMatch(match)
   }
 
+  function findSpanForChar(pageEl: HTMLElement, charIndex: number): HTMLElement | null {
+    const spans = pageEl.querySelectorAll('.text-span[data-char-start][data-char-end]') as NodeListOf<HTMLElement>
+    for (const span of spans) {
+      const start = Number(span.dataset.charStart)
+      const end = Number(span.dataset.charEnd)
+      if (!Number.isFinite(start) || !Number.isFinite(end)) continue
+      if (charIndex >= start && charIndex <= end) return span
+    }
+    return null
+  }
+
   function ensurePageElement(match: SearchMatch) {
     const root = scrollRootEl.value
     if (!root) return { root: null, pageEl: null, charEl: null }
     const pageEl = root.querySelector(`[data-pdf-page="${match.pageIndex}"]`) as HTMLElement | null
-    const charEl = pageEl?.querySelector(`.text-char[data-char-index="${match.startCharIndex}"]`) as HTMLElement | null
+    const charEl = pageEl ? findSpanForChar(pageEl, match.startCharIndex) : null
     return { root, pageEl, charEl }
   }
 
@@ -308,12 +319,16 @@ export function usePdfSearch(options: PdfSearchOptions) {
       pendingScrollAnimation = null
       const { root, pageEl, charEl } = ensurePageElement(match)
       if (!root || !pageEl) return
+      const rootRect = root.getBoundingClientRect()
       if (!charEl) {
-        pageEl.scrollIntoView({ block: 'center' })
+        const pageRect = pageEl.getBoundingClientRect()
+        const isVisible = pageRect.bottom >= rootRect.top && pageRect.top <= rootRect.bottom
+        if (!isVisible) pageEl.scrollIntoView({ block: 'center' })
         return
       }
-      const rootRect = root.getBoundingClientRect()
       const charRect = charEl.getBoundingClientRect()
+      const isVisible = charRect.top >= rootRect.top && charRect.bottom <= rootRect.bottom
+      if (isVisible) return
       const offsetTop = charRect.top - rootRect.top
       const targetTop = root.scrollTop + offsetTop - root.clientHeight / 2 + charRect.height
       root.scrollTo({ top: Math.max(0, targetTop) })
