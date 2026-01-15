@@ -137,7 +137,7 @@ function handlePageMouseDown(e: MouseEvent) {
           :disabled="!props.hasFile"
           class="rounded w-8 h-8 flex items-center justify-center transition-colors"
           :class="!props.hasFile ? 'opacity-40 cursor-not-allowed' : annotation.activeTool !== null ? 'bg-blue-400 text-white hover:bg-blue-700' : 'hover:bg-hover'"
-          title="Annotate">
+          :title="t('toolbar.annotate')">
           <PencilIcon class="w-4 h-4" />
         </button>
       </div>

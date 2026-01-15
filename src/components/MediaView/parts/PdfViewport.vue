@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog'
 import { tempDir, join } from '@tauri-apps/api/path'
 
@@ -31,6 +32,7 @@ import {
 // console.log 必須移到所有 import 之後
 console.log('[PdfViewport] Component script setup executed')
 
+const { t } = useI18n()
 const media = useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
@@ -1629,7 +1631,7 @@ defineExpose({
       'overflow-y': 'scroll'
     }"
   >
-    <div v-if="!totalPages" class="p-4">尚未載入頁面</div>
+    <div v-if="!totalPages" class="p-4">{{ t('mediaView.noPages') }}</div>
     <div v-else class="flex flex-col items-center min-w-full w-fit py-10 px-4 space-y-3">
       <div
         v-for="idx in renderIndices"
@@ -1697,7 +1699,7 @@ defineExpose({
                 <!-- 未掛載的頁面：空白占位，保持高度 -->
                 <div v-else class="w-full aspect-[1/1.414] bg-muted/30"></div>
               </div>
-            <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">第 {{ idx + 1 }} 頁</div>
+            <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">{{ t('mediaView.pageNumber', { page: idx + 1 }) }}</div>
           </div>
         </template>
         <div v-else :class="viewMode === 'fit' ? 'px-6 max-w-none' : 'px-6'">

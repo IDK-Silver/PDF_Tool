@@ -4,7 +4,9 @@
     "cancel": "取消",
     "close": "關閉",
     "confirm": "確認",
-    "reset": "重設"
+    "reset": "重設",
+    "discard": "捨棄",
+    "loading": "讀取中…"
   },
   "nav": {
     "view": "檢視",
@@ -22,7 +24,15 @@
     "dropHint": "點擊 + 或拖曳檔案至此"
   },
   "mediaView": {
-    "selectFileHint": "請在左側選擇 PDF 或圖片檔案以開始檢視"
+    "selectFileHint": "請在左側選擇 PDF 或圖片檔案以開始檢視",
+    "reloadFailed": "重新載入檔案失敗",
+    "unsavedChangesConfirm": "此文件有未儲存變更，是否放棄並前往壓縮？",
+    "discardChangesTitle": "放棄變更",
+    "cannotFindImage": "無法找到圖片元素",
+    "canvasContextError": "無法建立 canvas context",
+    "exportFailed": "匯出圖片失敗",
+    "noPages": "尚未載入頁面",
+    "pageNumber": "第 {page} 頁"
   },
   "contextMenu": {
     "deletePage": "刪除此頁",
@@ -41,13 +51,21 @@
     "discard": "捨棄變更",
     "search": "搜尋 (Ctrl/Cmd + F)",
     "revealInFinder": "在檔案管理器顯示",
+    "revealError": "無法在檔案管理器顯示該檔案",
     "pageInputHint": "輸入頁碼後按 Enter 跳轉",
     "zoomIn": "放大",
     "zoomOut": "縮小",
     "zoomInDisabled": "已達最大縮放",
     "zoomOutDisabled": "已達最小縮放",
     "actualSize": "實際大小",
-    "fitWidth": "符合寬度"
+    "fitWidth": "符合寬度",
+    "annotate": "標註",
+    "searchPlaceholder": "搜尋...",
+    "searching": "搜尋中",
+    "noResults": "無",
+    "searchPrevious": "上一個 (Shift+Enter)",
+    "searchNext": "下一個 (Enter)",
+    "searchClose": "關閉 (Esc)"
   },
   "compression": {
     "mode": "模式：",

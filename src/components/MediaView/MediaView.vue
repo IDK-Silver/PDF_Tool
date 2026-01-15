@@ -201,17 +201,17 @@ async function onDiscardNow() {
   if (!p) return
   const result = await media.loadDescriptor(p)
   if (result !== 'success') {
-    alert(media.error || 'Failed to reload file.')
+    alert(media.error || t('mediaView.reloadFailed'))
   }
 }
 
 // 當從媒體檢視切換到「壓縮」頁面且目前文件有未儲存變更時，提示是否放棄
 onBeforeRouteLeave(async (to) => {
   if (to.name === 'compress' && media.dirty) {
-    const ok = await confirmDialog('此文件有未儲存變更，是否放棄並前往壓縮？', {
-      title: '放棄變更',
-      okLabel: '捨棄',
-      cancelLabel: '取消',
+    const ok = await confirmDialog(t('mediaView.unsavedChangesConfirm'), {
+      title: t('mediaView.discardChangesTitle'),
+      okLabel: t('common.discard'),
+      cancelLabel: t('common.cancel'),
     })
     if (!ok) return false
     // 為了真正丟棄記憶體中的未儲存修改，重新自磁碟載入目前檔案
@@ -283,7 +283,7 @@ async function saveImageWithAnnotations() {
     // Get the image element
     const imgEl = document.querySelector('[data-image-card] img') as HTMLImageElement | null
     if (!imgEl) {
-      alert('Cannot find image element')
+      alert(t('mediaView.cannotFindImage'))
       return
     }
 
@@ -303,7 +303,7 @@ async function saveImageWithAnnotations() {
     canvas.height = naturalHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) {
-      alert('Cannot create canvas context')
+      alert(t('mediaView.canvasContextError'))
       return
     }
 
@@ -345,7 +345,7 @@ async function saveImageWithAnnotations() {
     const dataUrl = canvas.toDataURL(mimeType, 0.92)
     const base64Data = dataUrl.split(',')[1]
     if (!base64Data) {
-      alert('Failed to export image')
+      alert(t('mediaView.exportFailed'))
       return
     }
 
@@ -375,7 +375,7 @@ async function onReveal() {
   if (!p) return
   try { await openInFileManager(p) } catch (err) {
     console.error('openInFileManager failed', err)
-    alert('無法在檔案管理器顯示該檔案')
+    alert(t('toolbar.revealError'))
   }
 }
 
@@ -470,7 +470,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="flex-1 flex min-h-0">
-      <div v-if="media.loading" class="p-4">讀取中…</div>
+      <div v-if="media.loading" class="p-4">{{ t('common.loading') }}</div>
       <div v-else-if="isFileMissing" class="flex-1 flex items-center justify-center">
         <img :src="missingFile" alt="File not found" class="max-w-[60%] max-h-[60%] opacity-80 select-none" />
       </div>

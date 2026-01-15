@@ -4,7 +4,9 @@
     "cancel": "Cancel",
     "close": "Close",
     "confirm": "Confirm",
-    "reset": "Reset"
+    "reset": "Reset",
+    "discard": "Discard",
+    "loading": "Loading..."
   },
   "nav": {
     "view": "View",
@@ -22,7 +24,15 @@
     "dropHint": "Click + or drag files here"
   },
   "mediaView": {
-    "selectFileHint": "Select a PDF or image file from the left panel to start viewing"
+    "selectFileHint": "Select a PDF or image file from the left panel to start viewing",
+    "reloadFailed": "Failed to reload file.",
+    "unsavedChangesConfirm": "This document has unsaved changes. Discard and go to compression?",
+    "discardChangesTitle": "Discard changes",
+    "cannotFindImage": "Cannot find image element",
+    "canvasContextError": "Cannot create canvas context",
+    "exportFailed": "Failed to export image",
+    "noPages": "No pages loaded",
+    "pageNumber": "Page {page}"
   },
   "contextMenu": {
     "deletePage": "Delete this page",
@@ -41,13 +51,21 @@
     "discard": "Discard changes",
     "search": "Search (Ctrl/Cmd + F)",
     "revealInFinder": "Show in file manager",
+    "revealError": "Cannot reveal file in file manager",
     "pageInputHint": "Enter page number and press Enter to jump",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "zoomInDisabled": "Already at maximum zoom",
     "zoomOutDisabled": "Already at minimum zoom",
     "actualSize": "Actual size",
-    "fitWidth": "Fit to width"
+    "fitWidth": "Fit to width",
+    "annotate": "Annotate",
+    "searchPlaceholder": "Search...",
+    "searching": "Searching",
+    "noResults": "None",
+    "searchPrevious": "Previous (Shift+Enter)",
+    "searchNext": "Next (Enter)",
+    "searchClose": "Close (Esc)"
   },
   "compression": {
     "mode": "Mode:",

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, type CSSProperties } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -45,14 +48,14 @@ defineExpose({
         ref="inputEl"
         :value="props.modelValue"
         type="text"
-        placeholder="搜尋..."
+        :placeholder="t('toolbar.searchPlaceholder')"
         class="px-2 py-1 rounded border border-border focus:outline-none focus:ring-1 focus:ring-primary/60 bg-background text-foreground flex-1 min-w-0"
         style="width: 0;"
         @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
       />
       <span class="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 min-w-[48px] text-center">
-        <template v-if="props.busy">搜尋中</template>
-        <template v-else-if="props.error">無</template>
+        <template v-if="props.busy">{{ t('toolbar.searching') }}</template>
+        <template v-else-if="props.error">{{ t('toolbar.noResults') }}</template>
         <template v-else>{{ props.summary }}</template>
       </span>
       <div class="flex items-center gap-1 flex-shrink-0">
@@ -61,7 +64,7 @@ defineExpose({
           type="button"
           :disabled="!props.hasMatches || props.busy"
           @click="emit('prev')"
-          title="上一個 (Shift+Enter)"
+          :title="t('toolbar.searchPrevious')"
         >
           ↑
         </button>
@@ -70,7 +73,7 @@ defineExpose({
           type="button"
           :disabled="!props.hasMatches || props.busy"
           @click="emit('next')"
-          title="下一個 (Enter)"
+          :title="t('toolbar.searchNext')"
         >
           ↓
         </button>
@@ -79,7 +82,7 @@ defineExpose({
         class="px-2 py-1 rounded border border-transparent hover:bg-hover text-muted-foreground flex-shrink-0"
         type="button"
         @click="emit('close')"
-        title="關閉 (Esc)"
+        :title="t('toolbar.searchClose')"
       >
         ✕
       </button>
