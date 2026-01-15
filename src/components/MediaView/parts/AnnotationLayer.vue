@@ -155,6 +155,7 @@ const resizeState = ref<{
   origHeight: number
   // For text annotations
   isText?: boolean
+  isSignature?: boolean
   origFontSize?: number
 } | null>(null)
 
@@ -164,6 +165,7 @@ const drawState = ref<{
   startY: number
   currentX: number
   currentY: number
+  shiftKey?: boolean
 } | null>(null)
 
 function getSvgPosition(obj: AnnotationObject) {
@@ -293,6 +295,7 @@ function onResizeMouseDown(obj: AnnotationObject, handle: string, e: MouseEvent)
     origHeight: obj.height,
     // For text annotations, save original fontSize
     isText: obj.type === 'text',
+    isSignature: obj.type === 'signature',
     origFontSize: obj.fontSize,
   }
 
@@ -337,8 +340,11 @@ function onResizeMove(e: MouseEvent) {
     newHeight = Math.max(10, origHeight - pdfDy)
   }
 
-  // For text annotations, enforce aspect ratio and scale fontSize
-  if (resizeState.value.isText && resizeState.value.origFontSize) {
+  // Enforce aspect ratio for: text, signature, or when Shift is held
+  const needsAspectRatio =
+    resizeState.value.isText || resizeState.value.isSignature || e.shiftKey
+
+  if (needsAspectRatio) {
     // Determine scale ratio from the dominant axis
     let scaleRatio: number
     if (handle.includes('e') || handle.includes('w')) {
@@ -359,22 +365,26 @@ function onResizeMove(e: MouseEvent) {
       newY = origY + origHeight - newHeight
     }
 
-    const newFontSize = Math.max(8, Math.min(200, resizeState.value.origFontSize * scaleRatio))
-    annotation.updateAnnotation(resizeState.value.id, {
-      x: newX,
-      y: newY,
-      width: newWidth,
-      height: newHeight,
-      fontSize: Math.round(newFontSize),
-    })
-  } else {
-    annotation.updateAnnotation(resizeState.value.id, {
-      x: newX,
-      y: newY,
-      width: newWidth,
-      height: newHeight,
-    })
+    // For text annotations, also scale fontSize
+    if (resizeState.value.isText && resizeState.value.origFontSize) {
+      const newFontSize = Math.max(8, Math.min(200, resizeState.value.origFontSize * scaleRatio))
+      annotation.updateAnnotation(resizeState.value.id, {
+        x: newX,
+        y: newY,
+        width: newWidth,
+        height: newHeight,
+        fontSize: Math.round(newFontSize),
+      })
+      return
+    }
   }
+
+  annotation.updateAnnotation(resizeState.value.id, {
+    x: newX,
+    y: newY,
+    width: newWidth,
+    height: newHeight,
+  })
 }
 
 function onResizeEnd() {
@@ -583,15 +593,26 @@ function onDrawMove(e: MouseEvent) {
   const rect = svg.getBoundingClientRect()
   drawState.value.currentX = e.clientX - rect.left
   drawState.value.currentY = e.clientY - rect.top
+  drawState.value.shiftKey = e.shiftKey
 }
 
-function onDrawEnd(_e: MouseEvent) {
+function onDrawEnd(e: MouseEvent) {
   if (!drawState.value) return
   window.removeEventListener('mousemove', onDrawMove)
   window.removeEventListener('mouseup', onDrawEnd)
 
-  const { startX, startY, currentX, currentY } = drawState.value
+  const { startX, startY } = drawState.value
+  let { currentX, currentY } = drawState.value
   const tool = annotation.activeTool
+
+  // Shift key: constrain to square/circle
+  if (e.shiftKey && (tool === 'rect' || tool === 'ellipse')) {
+    const dx = currentX - startX
+    const dy = currentY - startY
+    const size = Math.max(Math.abs(dx), Math.abs(dy))
+    currentX = startX + (dx >= 0 ? size : -size)
+    currentY = startY + (dy >= 0 ? size : -size)
+  }
 
   // Convert to PDF coordinates
   const start = svgToPdf(startX, startY, coordCtx.value)
@@ -676,7 +697,8 @@ function isShapePreview(p: LinePreview | ShapePreview | null): p is ShapePreview
 
 const drawPreview = computed<LinePreview | ShapePreview | null>(() => {
   if (!drawState.value) return null
-  const { startX, startY, currentX, currentY } = drawState.value
+  const { startX, startY, shiftKey } = drawState.value
+  let { currentX, currentY } = drawState.value
   const tool = annotation.activeTool
 
   if (tool === 'line' || tool === 'arrow') {
@@ -687,6 +709,15 @@ const drawPreview = computed<LinePreview | ShapePreview | null>(() => {
       x2: currentX,
       y2: currentY,
     }
+  }
+
+  // Shift key: constrain to square/circle
+  if (shiftKey && (tool === 'rect' || tool === 'ellipse')) {
+    const dx = currentX - startX
+    const dy = currentY - startY
+    const size = Math.max(Math.abs(dx), Math.abs(dy))
+    currentX = startX + (dx >= 0 ? size : -size)
+    currentY = startY + (dy >= 0 ? size : -size)
   }
 
   const x = Math.min(startX, currentX)
