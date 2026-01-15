@@ -39,7 +39,10 @@ const emit = defineEmits<{
 
 const textContent = shallowRef<PageTextContent | null>(null)
 // 緩存處理過的 spans 樣式，避免每次 render 重算
-const renderedSpans = shallowRef<Array<{ text: string; style: Record<string, string>; idx: number; start: number; end: number }>>([])
+type TextSegment = { text: string; className: string }
+type RenderedSpan = { text: string; style: Record<string, string>; idx: number; start: number; end: number }
+
+const renderedSpans = shallowRef<RenderedSpan[]>([])
 const loading = shallowRef(false)
 const error = shallowRef<string | null>(null)
 let fetchToken = 0
@@ -63,7 +66,7 @@ const layerStyle = computed(() => {
 // 這些樣式只依賴 PDF 原始資料，縮放時**不會**重新計算
 function precomputeSpans(content: PageTextContent) {
   const pageH = props.pageHeightPt
-  const list: Array<{ text: string; style: Record<string, string>; idx: number; start: number; end: number }> = []
+  const list: RenderedSpan[] = []
   let charOffset = 0
   for (let idx = 0; idx < content.spans.length; idx++) {
     const span = content.spans[idx]
@@ -209,61 +212,82 @@ watch(renderedSpans, (spans) => {
   }
 })
 
-// 高亮邏輯
-const highlightedSpanIndices = computed<Set<number>>(() => {
-  const set = new Set<number>()
-  const ranges = props.highlightRanges ?? []
-  if (!ranges.length || !textContent.value) return set
-
-  const content = textContent.value
-  let charOffset = 0
-  for (let spanIdx = 0; spanIdx < content.spans.length; spanIdx++) {
-    const span = content.spans[spanIdx]
-    const spanEnd = charOffset + span.text.length - 1
-    for (const range of ranges) {
-      if (!range) continue
-      const start = Math.min(range.start, range.end)
-      const end = Math.max(range.start, range.end)
-      if (charOffset <= end && spanEnd >= start) {
-        set.add(spanIdx)
-        break
-      }
-    }
-    charOffset += span.text.length
-  }
-  return set
-})
-
-const activeSpanIndices = computed<Set<number>>(() => {
-  const set = new Set<number>()
-  const ranges = props.highlightRanges ?? []
-  const activeRanges = ranges.filter(r => r?.active)
-  if (!activeRanges.length || !textContent.value) return set
-
-  const content = textContent.value
-  let charOffset = 0
-  for (let spanIdx = 0; spanIdx < content.spans.length; spanIdx++) {
-    const span = content.spans[spanIdx]
-    const spanEnd = charOffset + span.text.length - 1
-    for (const range of activeRanges) {
-      if (!range) continue
-      const start = Math.min(range.start, range.end)
-      const end = Math.max(range.start, range.end)
-      if (charOffset <= end && spanEnd >= start) {
-        set.add(spanIdx)
-        break
-      }
-    }
-    charOffset += span.text.length
-  }
-  return set
-})
-
-function getSpanClass(idx: number) {
-  if (activeSpanIndices.value.has(idx)) return 'match-active'
-  if (highlightedSpanIndices.value.has(idx)) return 'match-highlight'
-  return ''
+function normalizeRange(range: { start: number; end: number; active?: boolean }) {
+  const start = Math.min(range.start, range.end)
+  const end = Math.max(range.start, range.end)
+  return { start, end, active: !!range.active }
 }
+
+function buildSegmentsForSpan(span: RenderedSpan, ranges: Array<{ start: number; end: number; active: boolean }>): TextSegment[] | null {
+  if (!ranges.length) return null
+  const text = span.text
+  if (!text) return null
+
+  const spanStart = span.start
+  const spanEnd = span.end
+  const activeIntervals: Array<{ start: number; end: number }> = []
+  const highlightIntervals: Array<{ start: number; end: number }> = []
+
+  for (const range of ranges) {
+    const overlapStart = Math.max(spanStart, range.start)
+    const overlapEnd = Math.min(spanEnd, range.end)
+    if (overlapStart > overlapEnd) continue
+    if (range.active) activeIntervals.push({ start: overlapStart, end: overlapEnd })
+    else highlightIntervals.push({ start: overlapStart, end: overlapEnd })
+  }
+
+  if (!activeIntervals.length && !highlightIntervals.length) return null
+
+  const boundarySet = new Set<number>()
+  boundarySet.add(spanStart)
+  boundarySet.add(spanEnd + 1)
+  for (const interval of activeIntervals) {
+    boundarySet.add(interval.start)
+    boundarySet.add(interval.end + 1)
+  }
+  for (const interval of highlightIntervals) {
+    boundarySet.add(interval.start)
+    boundarySet.add(interval.end + 1)
+  }
+  const boundaries = Array.from(boundarySet).sort((a, b) => a - b)
+
+  const contains = (list: Array<{ start: number; end: number }>, pos: number) => {
+    for (const interval of list) {
+      if (pos >= interval.start && pos <= interval.end) return true
+    }
+    return false
+  }
+
+  const segments: TextSegment[] = []
+  for (let i = 0; i < boundaries.length - 1; i++) {
+    const segStart = boundaries[i]
+    const segEnd = boundaries[i + 1]
+    if (segStart >= segEnd) continue
+    if (segStart < spanStart || segStart > spanEnd) continue
+    const className = contains(activeIntervals, segStart)
+      ? 'match-active'
+      : (contains(highlightIntervals, segStart) ? 'match-highlight' : '')
+    const localStart = segStart - spanStart
+    const localEnd = segEnd - spanStart
+    const segmentText = text.slice(localStart, localEnd)
+    if (!segmentText) continue
+    segments.push({ text: segmentText, className })
+  }
+
+  return segments.length ? segments : null
+}
+
+const spanSegments = computed(() => {
+  const ranges = props.highlightRanges ?? []
+  if (!ranges.length) return null
+  const normalized = ranges.map(normalizeRange)
+  const map = new Map<number, TextSegment[]>()
+  for (const span of renderedSpans.value) {
+    const segments = buildSegmentsForSpan(span, normalized)
+    if (segments) map.set(span.idx, segments)
+  }
+  return map
+})
 </script>
 
 <template>
@@ -279,12 +303,20 @@ function getSpanClass(idx: number) {
       v-for="item in renderedSpans"
       :key="item.idx"
       class="text-span"
-      :class="getSpanClass(item.idx)"
       :style="item.style"
       :data-span-index="item.idx"
       :data-char-start="item.start"
       :data-char-end="item.end"
-    >{{ item.text }}</span>
+    >
+      <template v-if="spanSegments && spanSegments.get(item.idx)">
+        <span
+          v-for="(segment, segIdx) in spanSegments.get(item.idx)"
+          :key="`${item.idx}-${segIdx}`"
+          :class="segment.className"
+        >{{ segment.text }}</span>
+      </template>
+      <template v-else>{{ item.text }}</template>
+    </span>
   </div>
 </template>
 
