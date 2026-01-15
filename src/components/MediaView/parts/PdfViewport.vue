@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { save as saveDialog, open as openDialog } from '@tauri-apps/plugin-dialog'
-import { tempDir, join } from '@tauri-apps/api/path'
+import { tempDir, join, dirname } from '@tauri-apps/api/path'
 
 import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
@@ -626,7 +626,8 @@ async function exportPageAsImage(pageIndex: number) {
   if (sz) targetWidth = Math.max(1, Math.round((sz.widthPt * dpi) / 72))
   const page1 = String(pageIndex + 1).padStart(3, '0')
   const base = (d.name?.replace(/\.pdf$/i, '') || 'page') + ` - page ${page1}.${fmt}`
-  const picked = await saveDialog({ defaultPath: base, filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }] })
+  const suggested = await join(await dirname(d.path), base)
+  const picked = await saveDialog({ defaultPath: suggested, filters: [{ name: fmt.toUpperCase(), extensions: [fmt] }] })
   if (!picked) return
   try {
     await pdfExportPageImage({
@@ -650,7 +651,8 @@ async function exportPageAsPdf(pageIndex: number) {
   if (!d || d.type !== 'pdf' || id == null) return
   const page1 = String(pageIndex + 1).padStart(3, '0')
   const base = (d.name?.replace(/\.pdf$/i, '') || 'page') + ` - page ${page1}.pdf`
-  const picked = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+  const suggested = await join(await dirname(d.path), base)
+  const picked = await saveDialog({ defaultPath: suggested, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
   if (!picked) return
   try {
     await pdfExportPagePdf({ docId: id, pageIndex, destPath: picked })

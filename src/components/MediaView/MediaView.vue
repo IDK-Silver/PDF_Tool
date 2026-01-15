@@ -16,6 +16,7 @@ import { useFileListStore } from '@/modules/filelist/store'
 import missingFile from '@/assets/placeholders/missing-file.jpg'
 import { openInFileManager } from '@/modules/media/openInFileManager'
 import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
+import { dirname, join } from '@tauri-apps/api/path'
 // save handled inside media store via saveCurrentIfNeeded
 
 const { t } = useI18n()
@@ -324,7 +325,8 @@ async function saveImageWithAnnotations() {
     const { save: saveDialog } = await import('@tauri-apps/plugin-dialog')
     const ext = d.name?.split('.').pop()?.toLowerCase() || 'png'
     const baseName = d.name?.replace(/\.[^.]+$/, '') || 'image'
-    const defaultPath = `${baseName}_annotated.${ext}`
+    const defaultName = `${baseName}_annotated.${ext}`
+    const defaultPath = await join(await dirname(d.path), defaultName)
 
     const destPath = await saveDialog({
       defaultPath,

@@ -4,6 +4,7 @@ import { useMediaStore } from '@/modules/media/store'
 import { useSettingsStore } from '@/modules/settings/store'
 import { imageToPdf } from '@/modules/media/service'
 import { save as saveDialog } from '@tauri-apps/plugin-dialog'
+import { dirname, join } from '@tauri-apps/api/path'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useZoom, type ZoomContext } from '@/modules/media/useZoom'
 import AnnotationLayer from './AnnotationLayer.vue'
@@ -106,7 +107,8 @@ async function convertImageToPdfFromMenu() {
   const d = media.descriptor
   if (!d || d.type !== 'image') return
   const base = (d.name?.replace(/\.(png|jpe?g|webp|gif|bmp|tiff?)$/i, '') || 'image') + '.pdf'
-  const picked = await saveDialog({ defaultPath: base, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+  const suggested = await join(await dirname(d.path), base)
+  const picked = await saveDialog({ defaultPath: suggested, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
   if (!picked) return
   try {
     const res = await imageToPdf({ srcPath: d.path, destPath: picked })
