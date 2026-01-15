@@ -291,8 +291,8 @@ defineExpose({
     data-image-view
     @contextmenu.prevent="onImageContextMenu"
   >
-    <div 
-      :class="viewMode === 'fit' ? 'w-full px-6 py-10 flex justify-center' : 'px-6 py-10 inline-flex min-w-full justify-center flex-shrink-0'"
+    <div
+      :class="viewMode === 'fit' ? 'w-full px-6 py-10 flex justify-center items-center min-h-full' : 'px-6 py-10 inline-flex min-w-full justify-center flex-shrink-0 items-center min-h-full'"
       :style="viewMode === 'actual' ? { marginBottom: 'calc(40px * var(--zoom-factor))' } : undefined"
       data-image-container
       data-pdf-page="0"
