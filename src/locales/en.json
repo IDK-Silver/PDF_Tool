@@ -128,6 +128,7 @@
     "nav": {
       "title": "Settings navigation",
       "language": "Language",
+      "update": "Updates",
       "appearance": "Appearance",
       "highResRendering": "High-res rendering",
       "performance": "Performance",
@@ -272,6 +273,11 @@
       "title": "Debug & assistance",
       "perfOverlay": "Show performance overlay (bottom-right inflight/queued)",
       "perfOverlayDescription": "Shows current render queue and in-flight count for easy parameter tuning."
+    },
+    "update": {
+      "title": "Updates",
+      "checkOnStartup": "Check for updates on startup",
+      "checkOnStartupDescription": "Automatically check for new versions when the application starts."
     }
   },
   "update": {

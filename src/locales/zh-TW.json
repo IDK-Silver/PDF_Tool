@@ -128,6 +128,7 @@
     "nav": {
       "title": "設定導覽",
       "language": "語言",
+      "update": "更新",
       "appearance": "外觀",
       "highResRendering": "高畫質渲染",
       "performance": "效能控制",
@@ -272,6 +273,11 @@
       "title": "除錯與輔助",
       "perfOverlay": "顯示效能浮層（右下角 inflight/queued）",
       "perfOverlayDescription": "提供當前渲染佇列與進行中數量，方便調整參數。"
+    },
+    "update": {
+      "title": "更新",
+      "checkOnStartup": "啟動時自動檢查更新",
+      "checkOnStartupDescription": "應用程式啟動時自動檢查是否有新版本可用。"
     }
   },
   "update": {

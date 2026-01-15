@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useSettingsStore } from '@/modules/settings/store'
 import { useUiStore } from '@/modules/ui/store'
-import { onMounted, watch } from 'vue'
+import { onMounted, watch, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import ExportSettings from './parts/ExportSettings.vue'
@@ -9,6 +9,7 @@ import InsertDefaults from './parts/InsertDefaults.vue'
 import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
 import { useCompressSettings } from '@/modules/compress/settings'
 import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
+import { isAppStoreBuild } from '@/modules/updater/service'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -22,6 +23,10 @@ const number = (e: Event, fallback: number) => {
   return Number.isFinite(v) ? v : fallback
 }
 const clampZoomMax = (v: number) => Math.min(800, Math.max(50, Math.round(v)))
+
+// App Store build detection (hide update settings for App Store)
+const isAppStore = ref(true) // default true to hide until we know for sure
+isAppStoreBuild().then(v => { isAppStore.value = v }).catch(() => { isAppStore.value = true })
 
 async function resetToDefaults() {
   const confirmed = await confirmDialog(t('settings.resetConfirm'))
@@ -97,6 +102,21 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
               {{ $t('settings.language.description') }}
             </p>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="!isAppStore" id="update" class="space-y-3">
+        <h2 class="font-medium text-base">{{ $t('settings.update.title') }}</h2>
+        <div class="rounded-md border p-4 space-y-3">
+          <div class="flex items-start gap-2">
+            <input type="checkbox" id="checkUpdateOnStartup" v-model="s.checkUpdateOnStartup" class="mt-1 w-4 h-4" />
+            <label for="checkUpdateOnStartup" class="flex-1">
+              <span class="font-medium">{{ $t('settings.update.checkOnStartup') }}</span>
+              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                {{ $t('settings.update.checkOnStartupDescription') }}
+              </p>
+            </label>
           </div>
         </div>
       </section>

@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { ref } from 'vue'
+import { isAppStoreBuild } from '@/modules/updater/service'
+
 const router = useRouter()
+
+// App Store build detection (hide update nav for App Store)
+const isAppStore = ref(true)
+isAppStoreBuild().then(v => { isAppStore.value = v }).catch(() => { isAppStore.value = true })
 
 function scrollToId(hash: string) {
   const target = hash.startsWith('#') ? hash : `#${hash}`
@@ -27,6 +34,7 @@ function go(hash: string) {
   <nav class="p-3 text-sm space-y-2">
     <div class="text-xs text-[hsl(var(--muted-foreground))] mb-2">{{ $t('settings.nav.title') }}</div>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#language" @click.prevent="go('#language')">{{ $t('settings.nav.language') }}</a>
+    <a v-if="!isAppStore" class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#update" @click.prevent="go('#update')">{{ $t('settings.nav.update') }}</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#appearance" @click.prevent="go('#appearance')">{{ $t('settings.nav.appearance') }}</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#high-res-rendering" @click.prevent="go('#high-res-rendering')">{{ $t('settings.nav.highResRendering') }}</a>
     <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#performance" @click.prevent="go('#performance')">{{ $t('settings.nav.performance') }}</a>

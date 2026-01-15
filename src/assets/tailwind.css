@@ -6,6 +6,8 @@
     :root {
         --background: 0 0% 100%;
         --foreground: 0 0% 9%;
+        --primary: 0 0% 10%;
+        --primary-foreground: 0 0% 100%;
         --muted: 0 0% 96%;
         --muted-foreground: 0 0% 45%;
         --accent: 0 0% 90%;
@@ -13,6 +15,7 @@
         --border: 0 0% 89%;
         --card: 0 0% 100%;
         --input: 0 0% 100%;
+        --ring: 0 0% 70%;
         --selection: 0 0% 90%;
         --hover: 0 0% 96%;
     }
@@ -20,6 +23,8 @@
     .dark {
         --background: 0 0% 15%;
         --foreground: 0 0% 85%;
+        --primary: 0 0% 90%;
+        --primary-foreground: 0 0% 10%;
         --muted: 0 0% 22%;
         --muted-foreground: 0 0% 60%;
         --accent: 0 0% 28%;
@@ -27,6 +32,7 @@
         --border: 0 0% 26%;
         --card: 0 0% 18%;
         --input: 0 0% 20%;
+        --ring: 0 0% 45%;
         --selection: 0 0% 26%;
         --hover: 0 0% 24%;
         

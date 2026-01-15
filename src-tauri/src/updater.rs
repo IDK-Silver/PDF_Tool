@@ -257,11 +257,19 @@ pub async fn download_and_install_update(app: tauri::AppHandle) -> Result<Update
 
     // Download with progress reporting
     let app_handle = app.clone();
+    // The updater callback reports chunk size, not cumulative bytes.
+    let mut downloaded_total: u64 = 0;
     let result = update
         .download_and_install(
-            |downloaded, total| {
+            |chunk_size, total| {
+                downloaded_total = downloaded_total.saturating_add(chunk_size as u64);
+                if let Some(total) = total {
+                    if downloaded_total > total {
+                        downloaded_total = total;
+                    }
+                }
                 let progress = DownloadProgress {
-                    downloaded: downloaded as u64,
+                    downloaded: downloaded_total,
                     total,
                 };
                 let _ = app_handle.emit("update-download-progress", &progress);
@@ -345,7 +353,8 @@ pub fn is_self_update_enabled() -> bool {
 }
 
 /// Check if this is an App Store build
+/// Also checks SIMULATE_APP_STORE env var for dev testing
 #[tauri::command]
 pub fn is_app_store_build() -> bool {
-    cfg!(feature = "app-store")
+    cfg!(feature = "app-store") || std::env::var("SIMULATE_APP_STORE").is_ok()
 }

@@ -85,9 +85,14 @@ function formatBytes(bytes: number): string {
               <!-- Progress bar -->
               <div class="space-y-2">
                 <div class="h-2 bg-[hsl(var(--muted))] rounded-full overflow-hidden">
+                  <!-- Single element: avoids DOM recreation that breaks transitions -->
                   <div
-                    class="h-full bg-[hsl(var(--primary))] transition-all duration-300"
-                    :style="{ width: `${updater.downloadPercent ?? 0}%` }"
+                    class="h-full bg-[hsl(var(--primary))]"
+                    :class="{
+                      'animate-indeterminate': updater.downloadPercent === null,
+                      'transition-all duration-300 ease-out': updater.downloadPercent !== null
+                    }"
+                    :style="{ width: updater.downloadPercent !== null ? `${updater.downloadPercent}%` : '33.33%' }"
                   ></div>
                 </div>
                 <div class="flex justify-between text-xs text-[hsl(var(--muted-foreground))]">
@@ -95,6 +100,7 @@ function formatBytes(bytes: number): string {
                     {{ formatBytes(updater.state.downloadProgress.downloaded) }}
                   </span>
                   <span v-if="updater.downloadPercent !== null">{{ updater.downloadPercent }}%</span>
+                  <span v-else class="text-[hsl(var(--muted-foreground))]">—</span>
                   <span v-if="updater.state.downloadProgress?.total">
                     {{ formatBytes(updater.state.downloadProgress.total) }}
                   </span>
@@ -201,6 +207,20 @@ function formatBytes(bytes: number): string {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Indeterminate progress bar animation */
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+.animate-indeterminate {
+  animation: indeterminate 1.5s ease-in-out infinite;
 }
 
 .changelog-content :deep(h1),

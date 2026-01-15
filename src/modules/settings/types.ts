@@ -58,6 +58,9 @@ export interface SettingsState {
   // === 縮放互動 ===
   zoomMaxPercent: number                // PDF/圖片共用的最大縮放百分比
   zoomSensitivity: number                // 滾輪縮放敏感度（建議 0.002–0.006，預設 0.0045）
+
+  // === 更新 ===
+  checkUpdateOnStartup: boolean          // 啟動時自動檢查更新
 }
 
 export const defaultSettings: SettingsState = {
@@ -118,4 +121,7 @@ export const defaultSettings: SettingsState = {
   // 縮放互動
   zoomMaxPercent: 400,                // 預設最大縮放 400%，適用於 PDF 與圖片
   zoomSensitivity: 0.0045,            // 預設：0.0045（較快的滾輪縮放）
+
+  // 更新
+  checkUpdateOnStartup: true,         // 預設：啟動時自動檢查更新
 }
