@@ -446,6 +446,10 @@ const {
   focusSearchInput,
 })
 
+type UndoSource = 'annotation' | 'pdf'
+type UndoRouteEntry = { source: UndoSource; pageIndex: number }
+const redoRouteStack: UndoRouteEntry[] = []
+
 function handleGlobalKeyDown(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null
   const tag = target?.tagName
@@ -453,28 +457,76 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
   const meta = e.metaKey || e.ctrlKey
   if (meta && e.key.toLowerCase() === 'z') {
     if (isTextInput) return
-    e.preventDefault()
-    if (e.shiftKey) {
+    const pageIndexBefore = displayPageIndex.value
+    const wantsRedo = e.shiftKey
+    if (wantsRedo) {
+      e.preventDefault()
+      e.stopPropagation()
+      let routed: UndoRouteEntry | null = null
+      while (redoRouteStack.length > 0) {
+        const entry = redoRouteStack.pop() as UndoRouteEntry
+        if (entry.source === 'annotation') {
+          if (annotationStore.canRedo) {
+            routed = entry
+            break
+          }
+          continue
+        }
+        routed = entry
+        break
+      }
+      if (routed?.source === 'annotation') {
+        annotationStore.redo()
+        void gotoPage(routed.pageIndex + 1)
+        return
+      }
+      if (routed?.source === 'pdf') {
+        media.redo().then((res) => {
+          if (!res) return
+          const pages = res.pages || 0
+          pendingIdx.clear()
+          const target = Math.max(0, Math.min(routed.pageIndex, Math.max(0, pages - 1)))
+          void gotoPage(target + 1).then(() => {
+            scheduleHiResRerender(0)
+          })
+        }).catch(() => {})
+        return
+      }
+      if (annotationStore.canRedo) {
+        annotationStore.redo()
+        void gotoPage(pageIndexBefore + 1)
+        return
+      }
       media.redo().then((res) => {
         if (!res) return
         const pages = res.pages || 0
-        const clamped = Math.max(0, Math.min(centerIndex.value, Math.max(0, pages - 1)))
-        centerIndex.value = clamped
-        displayPageIndex.value = clamped
         pendingIdx.clear()
-        scheduleHiResRerender(0)
+        const target = Math.max(0, Math.min(pageIndexBefore, Math.max(0, pages - 1)))
+        void gotoPage(target + 1).then(() => {
+          scheduleHiResRerender(0)
+        })
       }).catch(() => {})
-    } else {
-      media.undo().then((res) => {
-        if (!res) return
-        const pages = res.pages || 0
-        const clamped = Math.max(0, Math.min(centerIndex.value, Math.max(0, pages - 1)))
-        centerIndex.value = clamped
-        displayPageIndex.value = clamped
-        pendingIdx.clear()
-        scheduleHiResRerender(0)
-      }).catch(() => {})
+      return
     }
+
+    if (annotationStore.canUndo) {
+      e.preventDefault()
+      e.stopPropagation()
+      annotationStore.undo()
+      redoRouteStack.push({ source: 'annotation', pageIndex: pageIndexBefore })
+      return
+    }
+    e.preventDefault()
+    media.undo().then((res) => {
+      if (!res) return
+      redoRouteStack.push({ source: 'pdf', pageIndex: pageIndexBefore })
+      const pages = res.pages || 0
+      const clamped = Math.max(0, Math.min(centerIndex.value, Math.max(0, pages - 1)))
+      centerIndex.value = clamped
+      displayPageIndex.value = clamped
+      pendingIdx.clear()
+      scheduleHiResRerender(0)
+    }).catch(() => {})
     return
   }
   onGlobalKeyDown(e)
@@ -496,6 +548,7 @@ watch(
   () => media.descriptor?.path,
   () => {
     lastSelection.value = null
+    redoRouteStack.length = 0
   },
 )
 
