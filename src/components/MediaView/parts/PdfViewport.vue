@@ -1457,7 +1457,8 @@ let fitTimer: number | null = null
 async function updateFitPercent() {
   const d = media.descriptor
   if (!d || d.type !== 'pdf') return
-  const cW = containerW.value || 800
+  if (containerW.value <= 0) return  // Wait for valid container width
+  const cW = containerW.value
   const idx = centerIndex.value
 
   // Helper
