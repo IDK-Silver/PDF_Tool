@@ -30,7 +30,7 @@ function onRemove(item: FileItem) {
 
 <template>
 
-  <nav class="w-full flex flex-col gap-[4px]">
+  <nav class="w-full flex flex-col gap-[4px] pb-4">
     <FileListItem v-for="item in items" :key="item.id" :item="item" :selected="item.id === props.selectedId" :removable="props.removable === true"
       @select="onSelect" @remove="onRemove" />
   </nav>
