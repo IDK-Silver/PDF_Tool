@@ -401,7 +401,7 @@ export function useZoom(options: ZoomOptions = {}): ZoomState {
   }
 
   async function setFitMode(ctx?: ZoomContext | null, anchor?: AnchorPoint): Promise<void> {
-    if (viewMode.value === 'fit') return
+    // Removed early return - allow re-entering fit mode to recalculate
 
     if (!ctx) {
       viewMode.value = 'fit'

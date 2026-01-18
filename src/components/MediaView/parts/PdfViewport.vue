@@ -160,23 +160,18 @@ async function handleResetZoom() {
 }
 
 async function handleSetFitMode() {
-  if (viewMode.value === 'fit') return
   const ctx = createZoomContext()
-  await setFitMode(ctx, { type: 'viewport-center' })
+  // Always recalculate fit percent based on current page width
+  await updateFitPercent()
+  if (viewMode.value !== 'fit') {
+    await setFitMode(ctx, { type: 'viewport-center' })
+  }
   triggerRerender(300)
 
-  // 多次嘗試置中，確保在 Fit 模式計算完成後置中
-  const idx = displayPageIndex.value
-  centerPageHorizontally(idx)
-  requestAnimationFrame(() => {
-    centerPageHorizontally(idx)
-  })
+  // CSS handles centering via margin:auto, just reset scrollLeft after layout settles
   setTimeout(() => {
-    centerPageHorizontally(idx)
+    centerPageHorizontally(displayPageIndex.value)
   }, 100)
-  setTimeout(() => {
-    centerPageHorizontally(idx)
-  }, 300)
 }
 
 function triggerRerender(delay: number = 0) {
@@ -296,25 +291,12 @@ async function gotoPage(page: number) {
           pendingIdx.add(idx)
           scheduleProcess()
 
-          // [水平修正核心] 多段式確保置中，處理各種非同步佈局情況
-          // 1. 立即嘗試置中
+          // CSS handles centering via margin:auto, just reset scrollLeft after layout settles
           centerPageHorizontally(idx)
-
-          // 2. AnimationFrame: 等待渲染層更新
-          requestAnimationFrame(() => {
-            centerPageHorizontally(idx)
-          })
-
-          // 3. setTimeout 50ms: [關鍵] 等待 Scrollbar 出現導致的 Layout Shift 穩定
-          setTimeout(() => {
-            centerPageHorizontally(idx)
-          }, 50)
-
-          // 4. setTimeout 150ms: 確保在 Fit 模式計算完成後再次置中，然後 resolve
           setTimeout(() => {
             centerPageHorizontally(idx)
             resolve()
-          }, 150)
+          }, 100)
 
         } else if (retries > 0) {
           requestAnimationFrame(() => attempt(retries - 1))
@@ -1003,10 +985,8 @@ async function rotatePlus90(pageIndex: number) {
     await nextTick()
     scheduleHiResRerender(0)
 
-    // 在 Fit 模式下需要重新計算 FitPercent
-    if (viewMode.value === 'fit') {
-      updateFitPercent()
-    }
+    // Removed: auto updateFitPercent after rotation
+    // User must manually re-click "fit width" to recalculate
   } catch (e: any) {
     media.setDirtyState(oldDirty, oldRevision)
     alert(e?.message || String(e))
@@ -1016,6 +996,14 @@ async function rotatePlus90(pageIndex: number) {
 const renderIndices = computed(() => {
   const tp = totalPages.value || 0
   return Array.from({ length: tp }, (_, i) => i)
+})
+
+// Max base CSS width across all pages - used to make all page wrappers the same width
+// This ensures pages with different widths all center correctly with a single scrollLeft
+const maxBaseCssWidth = computed(() => {
+  const indices = Object.keys(media.pageSizesPt).map(Number)
+  if (indices.length === 0) return 0
+  return Math.max(...indices.map((idx) => media.baseCssWidthAt100(idx) || 0))
 })
 
 // 在模式切換期間鎖住頁面虛擬化，避免 DOM 被卸載（保留選取）
@@ -1169,17 +1157,41 @@ function onTextLayerReady(pageIndex: number) {
   }
 }
 
+// Center all page wrappers horizontally in the viewport.
+// When maxBaseCssWidth is available, all wrappers have the same width so a single scrollLeft works.
+// Falls back to card-based centering during initial load when page sizes aren't loaded yet.
 function centerPageHorizontally(idx: number) {
   const root = scrollRootEl.value
-  if (!root || idx < 0) return
-  const pageEl = root.querySelector(`[data-pdf-page="${idx}"]`) as HTMLElement | null
-  const cardEl = pageEl?.querySelector('.bg-card') as HTMLElement | null
-  if (!cardEl) return
-  const rootRect = root.getBoundingClientRect()
-  const cardRect = cardEl.getBoundingClientRect()
-  const cardLeftInContent = cardRect.left - rootRect.left + root.scrollLeft
-  const targetScrollLeft = cardLeftInContent - Math.max(0, (root.clientWidth - cardEl.offsetWidth) / 2)
-  root.scrollLeft = Math.max(0, targetScrollLeft)
+  if (!root) return
+
+  const viewportWidth = root.clientWidth
+
+  // Fallback to card-based centering when maxBaseCssWidth is not yet computed
+  // (during initial load or restore when page sizes haven't been loaded)
+  if (maxBaseCssWidth.value <= 0) {
+    const cardEl = root.querySelector(`[data-pdf-page="${idx}"] .bg-card`) as HTMLElement | null
+    if (!cardEl) return
+
+    const cardWidth = cardEl.offsetWidth
+    const cardRect = cardEl.getBoundingClientRect()
+    const rootRect = root.getBoundingClientRect()
+    const cardCenterInViewport = cardRect.left - rootRect.left + cardWidth / 2
+    const viewportCenter = viewportWidth / 2
+    const adjustment = cardCenterInViewport - viewportCenter
+    const targetScrollLeft = root.scrollLeft + adjustment
+    const maxScrollLeft = root.scrollWidth - viewportWidth
+    root.scrollLeft = Math.max(0, Math.min(targetScrollLeft, maxScrollLeft))
+    return
+  }
+
+  // Normal case: all wrappers have same width, center using scrollWidth
+  const contentWidth = root.scrollWidth
+  if (contentWidth <= viewportWidth) {
+    root.scrollLeft = 0
+    return
+  }
+
+  root.scrollLeft = (contentWidth - viewportWidth) / 2
 }
 
 async function restoreSelectionIfNeeded() {
@@ -1224,11 +1236,19 @@ function onScroll() {
   if (scrollEndTimer) clearTimeout(scrollEndTimer)
   scrollRaf = requestAnimationFrame(() => {
     scrollRaf = null
+    const prevDisplayPage = displayPageIndex.value
     updateVisibleByScroll()
+
+    // Re-center when switching to a different page during scroll
+    if (displayPageIndex.value !== prevDisplayPage) {
+      centerPageHorizontally(displayPageIndex.value)
+    }
+
     if (scrollEndTimer) clearTimeout(scrollEndTimer)
     const endMs = Math.max(0, Number(settings.s.scrollEndDebounceMs) || 0)
     scrollEndTimer = window.setTimeout(() => {
       centerIndex.value = displayPageIndex.value
+      centerPageHorizontally(centerIndex.value)
       requestAnimationFrame(() => {
         scheduleHiResRerender()
       })
@@ -1327,13 +1347,12 @@ onMounted(async () => {
           const currentW = scrollRootEl.value?.clientWidth || 0
           if (currentW !== containerW.value && currentW > 0) {
             containerW.value = currentW
-            // [關鍵] 當容器寬度改變時，若在 Fit 模式，立即更新 FitPercent
-            // 這樣 currentRenderingZoom 會立刻反應，文字層與圖片層會同步縮放
-            updateFitPercent()
-            // [修復] Scrollbar 出現/消失時也需要重新置中
-            requestAnimationFrame(() => {
-              centerPageHorizontally(centerIndex.value)
-            })
+            // Update fit percent when container size changes (only in fit mode)
+            if (viewMode.value === 'fit') {
+              updateFitPercent()
+            }
+            // Reset scrollLeft when scrollbar appears/disappears
+            centerPageHorizontally(centerIndex.value)
           }
         }, 100)
         return
@@ -1345,7 +1364,10 @@ onMounted(async () => {
         const savedScrollTop = root?.scrollTop || 0
 
         containerW.value = w
-        updateFitPercent() // [關鍵] 立即同步
+        // Update fit percent when container size changes (only in fit mode)
+        if (viewMode.value === 'fit') {
+          updateFitPercent()
+        }
 
         if (searchVisible.value) setSearchAnchor(true)
 
@@ -1367,7 +1389,7 @@ onMounted(async () => {
                 root.scrollTop = elementTop - containerHeight / 2 + elementHeight / 2
               }
 
-              // [修復] 容器寬度變化後重新計算水平置中
+              // Reset scrollLeft after container width change
               centerPageHorizontally(centerIndex.value)
             }
           })
@@ -1381,18 +1403,16 @@ onMounted(async () => {
         }
       } else {
         containerW.value = w
-        updateFitPercent()
+        // Update fit percent when container size changes (only in fit mode)
+        if (viewMode.value === 'fit') {
+          updateFitPercent()
+        }
         if (searchVisible.value) setSearchAnchor(true)
 
-        // [修復] 初次載入時也需要置中
+        // CSS handles centering via margin:auto, reset scrollLeft on initial load
         if (oldW === 0 && w > 0) {
           nextTick(() => {
-            requestAnimationFrame(() => {
-              centerPageHorizontally(centerIndex.value)
-            })
-            setTimeout(() => {
-              centerPageHorizontally(centerIndex.value)
-            }, 100)
+            centerPageHorizontally(centerIndex.value)
           })
         }
       }
@@ -1442,15 +1462,22 @@ watch(viewMode, () => {
     await restoreSelectionIfNeeded()
     lockPagesDuringModeSwitch.value = false
 
-    // [修復] 模式切換後多次嘗試置中，確保佈局完全穩定後置中
+    // CSS handles centering via margin:auto, just reset scrollLeft
     centerPageHorizontally(lockedPage)
-    requestAnimationFrame(() => {
-      centerPageHorizontally(lockedPage)
-    })
-    setTimeout(() => {
-      centerPageHorizontally(lockedPage)
-    }, 50)
   }, 200)
+})
+
+// When maxBaseCssWidth changes (new wider page sizes loaded), recenter to account for new layout
+watch(maxBaseCssWidth, (newVal, oldVal) => {
+  if (newVal > 0 && newVal !== oldVal) {
+    // Page sizes changed (initial load or wider page discovered), recenter after layout updates
+    // Use nextTick + rAF to ensure DOM has updated with new wrapper widths
+    nextTick(() => {
+      requestAnimationFrame(() => {
+        centerPageHorizontally(displayPageIndex.value)
+      })
+    })
+  }
 })
 
 let fitTimer: number | null = null
@@ -1499,8 +1526,31 @@ function scheduleUpdateFitPercent() {
     updateFitPercent()
   }, 150)
 }
-watch([centerIndex, () => settings.s.maxOutputWidth, () => settings.s.dprCap], () => {
-  scheduleUpdateFitPercent()
+
+// Reset horizontal scroll when images load (CSS handles centering via margin:auto)
+function onPageImageLoad() {
+  centerPageHorizontally(centerIndex.value)
+}
+// Check if current page's optimal fit percent differs from current zoom
+// If different, switch to 'actual' mode so button becomes enabled
+watch(centerIndex, () => {
+  const idx = centerIndex.value
+
+  if (viewMode.value !== 'fit') return
+
+  const baseWidth = media.baseCssWidthAt100(idx)
+  if (!baseWidth || baseWidth <= 0) return
+
+  const currentFitPercent = displayFitPercent.value ?? 100
+  const availableWidth = Math.max(100, containerW.value - 48)
+  const optimalFitPercent = (availableWidth / baseWidth) * 100
+
+  // If current fit percent differs from optimal (page is wider OR narrower than optimal)
+  // Switch to 'actual' mode so user can click button to re-fit
+  if (Math.abs(currentFitPercent - optimalFitPercent) > 2) {
+    zoomTarget.value = currentFitPercent  // Keep the same zoom level
+    viewMode.value = 'actual'
+  }
 })
 
 onMounted(() => {
@@ -1540,6 +1590,19 @@ function imgStyle(idx: number) {
   }
 
   return Object.keys(styles).length > 0 ? styles : undefined
+}
+
+// All page wrappers use the same width (= max page width) so they align in the same position.
+// This allows a single scrollLeft to center all pages regardless of individual page widths.
+// The actual page content (card) will be centered within the wrapper.
+function pageWrapperStyle(_idx: number) {
+  const maxWidth = maxBaseCssWidth.value
+  return {
+    marginBottom: 'calc(32px * var(--zoom-factor))',
+    width: maxWidth ? `calc(${maxWidth}px * var(--zoom-factor))` : 'auto',
+    marginLeft: 'auto',
+    marginRight: 'auto'
+  }
 }
 
 function pageCardStyle(idx: number) {
@@ -1679,17 +1742,16 @@ defineExpose({
         'will-change': 'scroll-position',
         'overflow-anchor': 'none',
         '--zoom-factor': currentRenderingZoom / 100,
-        'overflow-x': viewMode === 'fit' ? 'hidden' : 'auto',
+        'overflow-x': 'auto',
         'overflow-y': 'scroll'
       }"
     >
       <div v-if="!totalPages" class="p-4">{{ t('mediaView.noPages') }}</div>
-      <div v-else class="flex flex-col items-center min-w-full w-fit py-10 px-4 space-y-3">
+      <div v-else class="flex flex-col items-center w-full py-10 px-4 space-y-3">
       <div
         v-for="idx in renderIndices"
         :key="idx"
-        class="flex justify-center"
-        :style="{ marginBottom: 'calc(32px * var(--zoom-factor))' }"
+        :style="pageWrapperStyle(idx)"
         :data-pdf-page="idx"
         @contextmenu.prevent="onPageContextMenu(idx, $event)"
       >
@@ -1711,6 +1773,7 @@ defineExpose({
                     decoding="async"
                     loading="lazy"
                     draggable="false"
+                    @load="onPageImageLoad"
                   />
                   <canvas
                     v-else-if="isRawPage(idx)"
