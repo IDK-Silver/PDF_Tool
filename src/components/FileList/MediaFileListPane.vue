@@ -54,6 +54,8 @@ function onRemove(item: FileItem) {
   }
 }
 
+const isSearching = computed(() => q.value.trim().length > 0)
+
 const filtered = computed(() => {
   const keyword = q.value.trim().toLowerCase()
   if (!keyword) return filelist.items
@@ -75,6 +77,7 @@ const filtered = computed(() => {
   <!-- 檔案列表可滾動區域 -->
   <div class="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
     <FileList :items="filtered" :selected-id="selectedId" :removable="true"
+      :draggable="!isSearching"
       @item-click="onItemClick" @remove="onRemove" />
   </div>
 </template>

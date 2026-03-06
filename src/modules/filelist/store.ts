@@ -191,6 +191,10 @@ export const useFileListStore = defineStore('filelist', () => {
     return it?.lastPage
   }
 
+  function reorder(newItems: FileItem[]) {
+    items.value = newItems
+  }
+
   return {
     items,
     ready,
@@ -199,6 +203,7 @@ export const useFileListStore = defineStore('filelist', () => {
     addPaths,
     remove,
     clear,
+    reorder,
     setLastPage,
     getLastPage,
     ensureAccess,
