@@ -12,7 +12,7 @@ export interface SettingsState {
   deleteBehavior: 'saveAsNew' | 'overwrite'
 
   // === 插入空白頁預設 ===
-  insertPaper: 'A4' | 'Letter' | 'A5' | 'Legal' | 'Tabloid' | 'Custom'
+  insertPaper: 'CurrentPage' | 'A4' | 'Letter' | 'A5' | 'Legal' | 'Tabloid' | 'Custom'
   insertOrientation: 'portrait' | 'landscape'
   insertCustomWidthMm: number
   insertCustomHeightMm: number
@@ -75,7 +75,7 @@ export const defaultSettings: SettingsState = {
   deleteBehavior: 'saveAsNew',
 
   // 插入空白頁預設
-  insertPaper: 'A4',
+  insertPaper: 'CurrentPage',
   insertOrientation: 'portrait',
   insertCustomWidthMm: 210,
   insertCustomHeightMm: 297,

@@ -699,9 +699,18 @@ async function exportPageAsPdf(pageIndex: number) {
 function mmToPt(mm: number): number {
   return Math.round((mm * 72) / 25.4)
 }
-function insertDefaultDimsPt(): { widthPt: number; heightPt: number } {
+async function insertDefaultDimsPt(pageIndex: number): Promise<{ widthPt: number; heightPt: number }> {
   const p = settings.s.insertPaper
   const orient = settings.s.insertOrientation
+  if (p === 'CurrentPage') {
+    const currentSize = media.pageSizesPt[pageIndex] || await media.getPageSizePt(pageIndex)
+    if (currentSize) {
+      return {
+        widthPt: currentSize.widthPt,
+        heightPt: currentSize.heightPt,
+      }
+    }
+  }
   let wmm = 210
   let hmm = 297
   if (p === 'Letter') {
@@ -735,7 +744,7 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
   const d = media.descriptor
   const id = media.docId
   if (!d || d.type !== 'pdf' || id == null) return
-  const { widthPt, heightPt } = insertDefaultDimsPt()
+  const { widthPt, heightPt } = await insertDefaultDimsPt(pageIndex)
   const insertIndex = before ? pageIndex : pageIndex + 1
   const oldPagesArr = media.pdfPages.slice()
   const oldDescriptor = { ...d }
@@ -856,7 +865,7 @@ async function insertFileAt(pageIndex: number, before: boolean) {
         if (idx < insertIndex) shifted[idx] = v
         else shifted[idx + inserted] = v
       }
-      const def = insertDefaultDimsPt()
+      const def = await insertDefaultDimsPt(pageIndex)
       for (let i = 0; i < inserted; i++) shifted[insertIndex + i] = def
       media.pageSizesPt = shifted as any
       media.descriptor = { ...d, pages: Math.max(0, (d.pages || 0) + inserted) } as any

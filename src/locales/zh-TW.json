@@ -216,6 +216,7 @@
     "insertDefaults": {
       "title": "插入空白頁預設",
       "paper": "預設紙張",
+      "paperCurrentPage": "根據當前頁",
       "paperA4": "A4（210 × 297 mm）",
       "paperLetter": "Letter（216 × 279.4 mm）",
       "paperA5": "A5（148 × 210 mm）",
@@ -225,6 +226,7 @@
       "orientation": "方向",
       "portrait": "直向",
       "landscape": "橫向",
+      "orientationCurrentPageDescription": "選擇「根據當前頁」時，會直接沿用目前頁面的尺寸與方向。",
       "customSize": "自訂寬 × 高（mm）",
       "customSizeDescription": "僅在選擇「自訂尺寸」時生效。"
     },
