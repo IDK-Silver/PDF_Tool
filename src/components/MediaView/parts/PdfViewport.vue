@@ -9,6 +9,7 @@ import { useSettingsStore } from '@/modules/settings/store'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useExportSettings } from '@/modules/export/settings'
 import { useZoom, type ZoomContext } from '@/modules/media/useZoom'
+import type { MediaSession } from '@/modules/media/session'
 
 import PdfTextLayer from './PdfTextLayer.vue'
 import PdfSearchPanel from './PdfSearchPanel.vue'
@@ -29,11 +30,28 @@ import {
   imageToPdf,
 } from '@/modules/media/service'
 
-// console.log 必須移到所有 import 之後
-console.log('[PdfViewport] Component script setup executed')
+const props = withDefaults(defineProps<{
+  media?: MediaSession
+  contextMenuMode?: 'default' | 'disabled' | 'custom'
+  annotationsEnabled?: boolean
+  scrollbarMode?: 'visible' | 'hidden'
+  fitStrategy?: 'width' | 'contain'
+  layoutDensity?: 'default' | 'compact'
+}>(), {
+  media: undefined,
+  contextMenuMode: 'default',
+  annotationsEnabled: true,
+  scrollbarMode: 'visible',
+  fitStrategy: 'width',
+  layoutDensity: 'default',
+})
+
+const emit = defineEmits<{
+  (e: 'context-menu', payload: { pageIndex: number; x: number; y: number; filePath: string | null; aboveHalf: boolean }): void
+}>()
 
 const { t } = useI18n()
-const media = useMediaStore()
+const media = props.media ?? useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
 const exportSettings = useExportSettings()
@@ -71,6 +89,24 @@ const clampZoomMax = (v: number | null | undefined) => {
 }
 const zoomMax = computed(() => clampZoomMax(settings.s.zoomMaxPercent))
 watch(zoomMax, (v) => setEffectiveMax(v), { immediate: true })
+const isCompactLayout = computed(() => props.layoutDensity === 'compact')
+const fitHorizontalPadding = computed(() => isCompactLayout.value ? 8 : 48)
+const fitVerticalPadding = computed(() => isCompactLayout.value ? 8 : 80)
+const pagesContainerClass = computed(() =>
+  isCompactLayout.value
+    ? 'flex flex-col items-center w-full py-1 px-1 space-y-1'
+    : 'flex flex-col items-center w-full py-10 px-4 space-y-3'
+)
+const pageInnerClass = computed(() =>
+  isCompactLayout.value
+    ? 'px-1 max-w-none flex flex-col items-center'
+    : 'px-6 max-w-none flex flex-col items-center'
+)
+const pagePlaceholderClass = computed(() =>
+  isCompactLayout.value
+    ? 'px-1 max-w-none'
+    : 'px-6 max-w-none'
+)
 
 function createZoomContext(): ZoomContext | null {
   const root = scrollRootEl.value
@@ -161,11 +197,9 @@ async function handleResetZoom() {
 
 async function handleSetFitMode() {
   const ctx = createZoomContext()
-  // Always recalculate fit percent based on current page width
+  // Always recalculate fit percent and re-enter fit mode so workspace reflows immediately.
   await updateFitPercent()
-  if (viewMode.value !== 'fit') {
-    await setFitMode(ctx, { type: 'viewport-center' })
-  }
+  await setFitMode(ctx, { type: 'viewport-center' })
   triggerRerender(300)
 
   // CSS handles centering via margin:auto, just reset scrollLeft after layout settles
@@ -448,7 +482,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
       while (redoRouteStack.length > 0) {
         const entry = redoRouteStack.pop() as UndoRouteEntry
         if (entry.source === 'annotation') {
-          if (annotationStore.canRedo) {
+          if (props.annotationsEnabled && annotationStore.canRedo) {
             routed = entry
             break
           }
@@ -457,7 +491,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
         routed = entry
         break
       }
-      if (routed?.source === 'annotation') {
+      if (routed?.source === 'annotation' && props.annotationsEnabled) {
         annotationStore.redo()
         void gotoPage(routed.pageIndex + 1)
         return
@@ -474,7 +508,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
         }).catch(() => {})
         return
       }
-      if (annotationStore.canRedo) {
+      if (props.annotationsEnabled && annotationStore.canRedo) {
         annotationStore.redo()
         void gotoPage(pageIndexBefore + 1)
         return
@@ -491,7 +525,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
       return
     }
 
-    if (annotationStore.canUndo) {
+    if (props.annotationsEnabled && annotationStore.canUndo) {
       e.preventDefault()
       e.stopPropagation()
       annotationStore.undo()
@@ -563,6 +597,18 @@ function onPageContextMenu(idx: number, e: MouseEvent) {
   }
   x = Math.max(12, x)
   y = Math.max(12, y)
+
+  if (props.contextMenuMode === 'disabled') return
+  if (props.contextMenuMode === 'custom') {
+    emit('context-menu', {
+      pageIndex: idx,
+      x,
+      y,
+      filePath: media.selected?.path ?? null,
+      aboveHalf,
+    })
+    return
+  }
 
   menu.value = { open: true, x, y, pageIndex: idx, aboveHalf }
 }
@@ -1493,24 +1539,34 @@ let fitTimer: number | null = null
 async function updateFitPercent() {
   const d = media.descriptor
   if (!d || d.type !== 'pdf') return
-  if (containerW.value <= 0) return  // Wait for valid container width
-  const cW = containerW.value
+  const root = scrollRootEl.value
+  const currentWidth = root?.clientWidth || containerW.value
+  if (currentWidth <= 0) return
+  containerW.value = currentWidth
+  const cW = currentWidth
   const idx = centerIndex.value
 
   // Helper
-  const apply = (widthPt: number) => {
+  const apply = (widthPt: number, heightPt?: number) => {
     const base = widthPt * (96 / 72)
     if (base > 0) {
-      const availableW = Math.max(100, cW - 48)
-      const newPercent = Math.max(5, Math.min(400, (availableW / base) * 100))
+      const availableW = Math.max(100, cW - fitHorizontalPadding.value)
+      let newPercent = (availableW / base) * 100
+      if (props.fitStrategy === 'contain' && root && heightPt && heightPt > 0) {
+        const baseHeight = heightPt * (96 / 72)
+        const availableH = Math.max(100, root.clientHeight - fitVerticalPadding.value)
+        newPercent = Math.min(newPercent, (availableH / baseHeight) * 100)
+      }
+      newPercent = Math.max(5, Math.min(400, newPercent))
       displayFitPercent.value = newPercent
     }
   }
 
   // 1. 嘗試快取
   const cachedBase = media.baseCssWidthAt100(idx)
+  const cachedSize = media.pageSizesPt[idx]
   if (cachedBase && cachedBase > 0) {
-    apply(cachedBase * (72 / 96))
+    apply(cachedBase * (72 / 96), cachedSize?.heightPt)
     return
   }
 
@@ -1518,7 +1574,7 @@ async function updateFitPercent() {
   try {
     const sz = await media.getPageSizePt(idx)
     if (sz) {
-      apply(sz.widthPt)
+      apply(sz.widthPt, sz.heightPt)
     }
   } catch (e) {
     console.error('[PdfViewport] updateFitPercent error', e)
@@ -1545,14 +1601,28 @@ function onPageImageLoad() {
 watch(centerIndex, () => {
   const idx = centerIndex.value
 
+  if (viewMode.value === 'fit' && props.fitStrategy === 'contain') {
+    scheduleUpdateFitPercent()
+  }
+
   if (viewMode.value !== 'fit') return
 
   const baseWidth = media.baseCssWidthAt100(idx)
   if (!baseWidth || baseWidth <= 0) return
 
-  const currentFitPercent = displayFitPercent.value ?? 100
-  const availableWidth = Math.max(100, containerW.value - 48)
-  const optimalFitPercent = (availableWidth / baseWidth) * 100
+  // Skip if fit percent hasn't been calculated yet (during initialization)
+  if (displayFitPercent.value == null) return
+
+  const currentFitPercent = displayFitPercent.value
+  const currentSize = media.pageSizesPt[idx]
+  const liveWidth = scrollRootEl.value?.clientWidth || containerW.value
+  const availableWidth = Math.max(100, liveWidth - fitHorizontalPadding.value)
+  let optimalFitPercent = (availableWidth / baseWidth) * 100
+  if (props.fitStrategy === 'contain' && currentSize && scrollRootEl.value) {
+    const baseHeight = currentSize.heightPt * (96 / 72)
+    const availableHeight = Math.max(100, scrollRootEl.value.clientHeight - fitVerticalPadding.value)
+    optimalFitPercent = Math.min(optimalFitPercent, (availableHeight / baseHeight) * 100)
+  }
 
   // If current fit percent differs from optimal (page is wider OR narrower than optimal)
   // Switch to 'actual' mode so user can click button to re-fit
@@ -1718,7 +1788,7 @@ function getAnnotationLayerProps(idx: number) {
 }
 
 function shouldRenderAnnotationLayer(idx: number): boolean {
-  // Render annotation layer if tool is active or there are annotations on this page
+  if (!props.annotationsEnabled) return false
   return annotationStore.activeTool !== null || annotationStore.getPageAnnotations(idx).length > 0
 }
 
@@ -1745,8 +1815,11 @@ defineExpose({
   <div class="relative flex-1 min-h-0">
     <div
       ref="scrollRootEl"
-      class="absolute inset-0 scrollbar-visible overscroll-y-contain bg-muted"
-      :class="isRestoringLastPage ? 'opacity-0 pointer-events-none' : 'opacity-100'"
+      class="absolute inset-0 overscroll-y-contain bg-muted"
+      :class="[
+        props.scrollbarMode === 'hidden' ? 'scrollbar-hidden' : 'scrollbar-visible',
+        isRestoringLastPage ? 'opacity-0 pointer-events-none' : 'opacity-100',
+      ]"
       :style="{
         'will-change': 'scroll-position',
         'overflow-anchor': 'none',
@@ -1756,7 +1829,7 @@ defineExpose({
       }"
     >
       <div v-if="!totalPages" class="p-4">{{ t('mediaView.noPages') }}</div>
-      <div v-else class="flex flex-col items-center w-full py-10 px-4 space-y-3">
+      <div v-else :class="pagesContainerClass">
       <div
         v-for="idx in renderIndices"
         :key="idx"
@@ -1765,7 +1838,7 @@ defineExpose({
         @contextmenu.prevent="onPageContextMenu(idx, $event)"
       >
         <template v-if="shouldRenderStructure(idx)">
-          <div class="px-6 max-w-none flex flex-col items-center">
+          <div :class="pageInnerClass">
               <div
                 :class="['bg-card rounded-md shadow border border-border relative inline-block overflow-visible']"
                 :style="pageCardStyle(idx)"
@@ -1826,7 +1899,7 @@ defineExpose({
             <div class="mt-3 text-xs text-[hsl(var(--muted-foreground))] text-center">{{ t('mediaView.pageNumber', { page: idx + 1 }) }}</div>
           </div>
         </template>
-        <div v-else :class="viewMode === 'fit' ? 'px-6 max-w-none' : 'px-6'">
+        <div v-else :class="pagePlaceholderClass">
           <div :style="pageCardStyle(idx)"></div>
           <div style="height: 28px"></div>
         </div>
@@ -1846,6 +1919,7 @@ defineExpose({
         @close="closeSearch"
       />
       <PdfPageContextMenu
+        v-if="props.contextMenuMode === 'default'"
         :menu="menu"
         :shift-down="shiftDown"
         @delete="deletePageFromMenu"

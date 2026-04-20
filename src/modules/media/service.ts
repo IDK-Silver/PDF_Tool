@@ -22,6 +22,17 @@ export interface ImageReadResult {
   mimeType: string
 }
 
+export interface ImageProbeResult {
+  width: number
+  height: number
+  mimeType: string
+}
+
+export async function imageProbe(path: string): Promise<ImageProbeResult> {
+  const res = await invoke<ImageProbeResult>('image_probe', { path })
+  return res
+}
+
 export async function imageRead(path: string): Promise<ImageReadResult> {
   const res = await invoke<ImageReadResult>('image_read', { path })
   return res

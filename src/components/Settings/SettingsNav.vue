@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { isAppStoreBuild } from '@/modules/updater/service'
+import { SETTINGS_SECTIONS } from '@/modules/settings/sections'
 
 const router = useRouter()
 
 // App Store build detection (hide update nav for App Store)
 const isAppStore = ref(true)
 isAppStoreBuild().then(v => { isAppStore.value = v }).catch(() => { isAppStore.value = true })
+
+const sections = computed(() =>
+  SETTINGS_SECTIONS.filter(section => !section.hiddenOnAppStore || !isAppStore.value),
+)
 
 function scrollToId(hash: string) {
   const target = hash.startsWith('#') ? hash : `#${hash}`
@@ -33,18 +38,14 @@ function go(hash: string) {
 <template>
   <nav class="p-3 text-sm space-y-2">
     <div class="text-xs text-[hsl(var(--muted-foreground))] mb-2">{{ $t('settings.nav.title') }}</div>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#language" @click.prevent="go('#language')">{{ $t('settings.nav.language') }}</a>
-    <a v-if="!isAppStore" class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#update" @click.prevent="go('#update')">{{ $t('settings.nav.update') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#appearance" @click.prevent="go('#appearance')">{{ $t('settings.nav.appearance') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#high-res-rendering" @click.prevent="go('#high-res-rendering')">{{ $t('settings.nav.highResRendering') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#performance" @click.prevent="go('#performance')">{{ $t('settings.nav.performance') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#zoom-interaction" @click.prevent="go('#zoom-interaction')">{{ $t('settings.nav.zoomInteraction') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#fileops" @click.prevent="go('#fileops')">{{ $t('settings.nav.fileOps') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#compression-save" @click.prevent="go('#compression-save')">{{ $t('settings.nav.compressionSave') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#insert-defaults" @click.prevent="go('#insert-defaults')">{{ $t('settings.nav.insertDefaults') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#text-layer" @click.prevent="go('#text-layer')">{{ $t('settings.nav.textLayer') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#export" @click.prevent="go('#export')">{{ $t('settings.nav.export') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#encoding" @click.prevent="go('#encoding')">{{ $t('settings.nav.encoding') }}</a>
-    <a class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]" href="#debug" @click.prevent="go('#debug')">{{ $t('settings.nav.debug') }}</a>
+    <a
+      v-for="section in sections"
+      :key="section.key"
+      class="block px-2 py-1 rounded hover:bg-[hsl(var(--accent))]"
+      :href="`#${section.id}`"
+      @click.prevent="go(section.id)"
+    >
+      {{ $t(section.navLabelKey) }}
+    </a>
   </nav>
 </template>

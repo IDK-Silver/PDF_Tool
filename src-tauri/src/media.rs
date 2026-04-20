@@ -279,10 +279,9 @@ pub fn pdf_rotate_page(
             reply: rtx,
         })
         .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
-    Ok(
-        rrx.recv()
-            .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))??,
-    )
+    Ok(rrx
+        .recv()
+        .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))??)
 }
 
 #[tauri::command]
@@ -304,10 +303,9 @@ pub fn pdf_rotate_page_relative(
             reply: rtx,
         })
         .map_err(|e| MediaError::new("io_error", format!("worker 傳送失敗: {e}")))?;
-    Ok(
-        rrx.recv()
-            .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))??,
-    )
+    Ok(rrx
+        .recv()
+        .map_err(|e| MediaError::new("io_error", format!("worker 回應失敗: {e}")))??)
 }
 
 #[tauri::command]
@@ -455,7 +453,10 @@ pub fn pdf_export_page_pdf(
 }
 
 #[tauri::command]
-pub async fn image_to_pdf(src_path: String, dest_path: String) -> Result<ImageToPdfResult, MediaError> {
+pub async fn image_to_pdf(
+    src_path: String,
+    dest_path: String,
+) -> Result<ImageToPdfResult, MediaError> {
     tokio::task::spawn_blocking(move || -> Result<ImageToPdfResult, MediaError> {
         let (rtx, rrx) = mpsc::channel();
         WORKER_TX

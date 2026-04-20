@@ -18,6 +18,7 @@ const emit = defineEmits<{
   (e: 'update:selectedId', id: string | null): void
   (e: 'item-click', item: FileItem): void
   (e: 'remove', item: FileItem): void
+  (e: 'reorder', items: FileItem[]): void
 }>()
 
 const dragModel = computed({
@@ -57,6 +58,7 @@ function onDragStart() {
 
 function onDragEnd() {
   isDragging.value = false
+  emit('reorder', props.items)
 }
 </script>
 
@@ -68,6 +70,7 @@ function onDragEnd() {
     :disabled="!draggable"
     :animation="150"
     :force-fallback="true"
+    :fallback-tolerance="4"
     ghost-class="filelist-drag-ghost"
     :class="[
       'w-full flex flex-col gap-[4px] pb-4',

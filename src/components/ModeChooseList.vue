@@ -3,14 +3,15 @@
 import { computed } from 'vue';
 import { useRoute, useRouter, isNavigationFailure } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { DocumentMagnifyingGlassIcon, ArchiveBoxIcon } from '@heroicons/vue/24/outline';
+import { DocumentMagnifyingGlassIcon, ArchiveBoxIcon, RectangleStackIcon } from '@heroicons/vue/24/outline';
 
 const { t } = useI18n();
 
-type Mode = 'media_view' | 'compress' | 'pdf_editor';
+type Mode = 'media_view' | 'compress' | 'workspace_view' | 'pdf_editor';
 
 const modes = computed(() => [
 	{ key: 'media_view' as Mode, label: t('nav.view'), icon: DocumentMagnifyingGlassIcon },
+	{ key: 'workspace_view' as Mode, label: t('nav.workspace'), icon: RectangleStackIcon },
 	{ key: 'compress' as Mode, label: t('nav.compress'), icon: ArchiveBoxIcon },
 ]);
 
@@ -26,7 +27,14 @@ async function setMode(mode: Mode) {
     // 若為導航守衛中止/取消等預期情況，不做任何 fallback 以尊重守衛
     if (!isNavigationFailure(err)) {
       // 非預期錯誤時才採用保守 fallback（理論上很少發生）
-      const toHash = mode === 'media_view' ? '#/media' : (mode === 'compress' ? '#/compress' : '#/editor')
+      const toHash =
+        mode === 'media_view'
+          ? '#/media'
+          : mode === 'workspace_view'
+            ? '#/workspace'
+            : mode === 'compress'
+              ? '#/compress'
+              : '#/editor'
       window.location.hash = toHash
     }
   }

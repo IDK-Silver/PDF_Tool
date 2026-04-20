@@ -2,42 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
 import { readLocalJson, writeLocalJson } from '@/modules/persist/local'
-import { invoke } from '@tauri-apps/api/core'
+import { createBookmark, ensureBookmarkedAccess, stopAccess } from '@/modules/bookmark/service'
 
-// Persist file list in localStorage to restore previous behavior
 const STORAGE_KEY = 'recent-files'
-
-// Bookmark service (macOS only)
-interface BookmarkResolveResult {
-  path: string
-  is_stale: boolean
-}
-
-async function createBookmark(path: string): Promise<string | null> {
-  try {
-    return await invoke<string>('bookmark_create', { path })
-  } catch (e) {
-    console.warn('[filelist] Failed to create bookmark:', e)
-    return null
-  }
-}
-
-async function resolveBookmark(bookmarkData: string): Promise<BookmarkResolveResult | null> {
-  try {
-    return await invoke<BookmarkResolveResult>('bookmark_resolve', { bookmarkData })
-  } catch (e) {
-    console.warn('[filelist] Failed to resolve bookmark:', e)
-    return null
-  }
-}
-
-async function stopAccess(path: string): Promise<void> {
-  try {
-    await invoke('bookmark_stop_access', { path })
-  } catch (e) {
-    console.warn('[filelist] Failed to stop bookmark access:', e)
-  }
-}
 
 function baseName(p: string) {
   const parts = p.split(/[\\\/]/)
@@ -128,37 +95,15 @@ export const useFileListStore = defineStore('filelist', () => {
   // Ensure file access via security-scoped bookmark (macOS sandbox)
   // Returns the accessible path (may differ if file was moved)
   async function ensureAccess(item: FileItem): Promise<string> {
-    if (!item.bookmark) {
-      // No bookmark, try direct access (will work if file was just selected via dialog)
-      return item.path
-    }
-
-    const result = await resolveBookmark(item.bookmark)
-    if (!result) {
-      // Bookmark invalid, clear it and try direct access
-      item.bookmark = undefined
-      schedulePersist()
-      return item.path
-    }
-
-    // Update path if file was moved
-    if (result.path !== item.path) {
-      item.path = result.path
-      item.name = baseName(result.path)
-      item.id = result.path
+    const nextPath = await ensureBookmarkedAccess(item)
+    if (nextPath !== item.path || nextPath !== item.id) {
+      item.path = nextPath
+      item.name = baseName(nextPath)
+      item.id = nextPath
+      item.type = guessFileType(nextPath)
       schedulePersist()
     }
-
-    // Refresh stale bookmark
-    if (result.is_stale) {
-      const newBm = await createBookmark(result.path)
-      if (newBm) {
-        item.bookmark = newBm
-        schedulePersist()
-      }
-    }
-
-    return result.path
+    return nextPath
   }
 
   function addPaths(paths: string[]) {

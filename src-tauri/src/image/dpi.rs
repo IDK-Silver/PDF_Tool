@@ -77,8 +77,8 @@ fn jpeg_dpi_from_bytes(bytes: &[u8]) -> Option<f32> {
         return None;
     }
     match unit {
-        1 => Some(density as f32),                // DPI
-        2 => Some(density as f32 * 2.54),         // DPCM → DPI
+        1 => Some(density as f32),        // DPI
+        2 => Some(density as f32 * 2.54), // DPCM → DPI
         _ => None,
     }
 }

@@ -10,6 +10,7 @@
   },
   "nav": {
     "view": "View",
+    "workspace": "Workspace",
     "compress": "Compress"
   },
   "sidebar": {
@@ -119,6 +120,29 @@
       "stripMetadataDesc": "Remove EXIF, GPS, camera info and other metadata to reduce file size and protect privacy"
     }
   },
+  "workspace": {
+    "title": "Workspace",
+    "empty": "Double-click this pane to set a folder",
+    "emptyFolder": "No supported PDF or image files in this folder",
+    "capture": "Capture",
+    "captureFailed": "Failed to capture workspace",
+    "captureImageOnly": "Capture currently supports only image pairs",
+    "captureImageMissing": "Could not read the displayed image size. Wait for the images to finish loading.",
+    "rename": "Rename",
+    "renamePrompt": "Enter a new workspace name",
+    "leftPane": "Left pane",
+    "rightPane": "Right pane",
+    "activePane": "Active pane",
+    "moveToOther": "Move to other folder",
+    "moveOverwriteConfirm": "A file with the same name already exists. Overwrite it?",
+    "trashFile": "Move to Trash",
+    "files": "Files",
+    "prev": "Previous",
+    "next": "Next",
+    "addWorkspace": "Add workspace",
+    "noWorkspaces": "No workspaces",
+    "dropHint": "Create a workspace, then choose folders for both panes"
+  },
   "settings": {
     "title": "Settings",
     "subtitle": "Adjust rendering experience and performance parameters. Changes apply in real-time to the main view.",
@@ -130,6 +154,7 @@
       "language": "Language",
       "update": "Updates",
       "appearance": "Appearance",
+      "workspace": "Workspace",
       "highResRendering": "High-res rendering",
       "performance": "Performance",
       "zoomInteraction": "Zoom interaction",
@@ -157,6 +182,11 @@
       "invertColors": "Invert document colors in dark mode",
       "invertColorsDescription": "In dark mode, invert PDF/image colors so white-on-black documents become black-on-white, better for night reading.",
       "invertColorsDisabled": "Dark mode is not currently active."
+    },
+    "workspace": {
+      "title": "Workspace",
+      "captureBaseWidth": "Capture base width (px)",
+      "captureBaseWidthDescription": "When capturing the workspace, the larger of the two images will be exported at at least this width while preserving the current on-screen ratio. Range 400-4000, default 1200."
     },
     "highRes": {
       "title": "High-resolution rendering",

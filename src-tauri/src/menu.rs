@@ -41,10 +41,17 @@ pub fn build_menu_with_lang<R: Runtime>(app: &AppHandle<R>, lang: &str) -> tauri
     let strings = get_menu_strings(lang);
 
     // File menu items
-    let open_file_item = MenuItem::with_id(app, OPEN_FILE_ID, strings.open, true, Some("CmdOrCtrl+O"))?;
-    let save_file_item = MenuItem::with_id(app, SAVE_FILE_ID, strings.save, true, Some("CmdOrCtrl+S"))?;
-    let remove_file_item =
-        MenuItem::with_id(app, REMOVE_FILE_ID, strings.close_file, true, Some("CmdOrCtrl+W"))?;
+    let open_file_item =
+        MenuItem::with_id(app, OPEN_FILE_ID, strings.open, true, Some("CmdOrCtrl+O"))?;
+    let save_file_item =
+        MenuItem::with_id(app, SAVE_FILE_ID, strings.save, true, Some("CmdOrCtrl+S"))?;
+    let remove_file_item = MenuItem::with_id(
+        app,
+        REMOVE_FILE_ID,
+        strings.close_file,
+        true,
+        Some("CmdOrCtrl+W"),
+    )?;
 
     #[cfg(target_os = "macos")]
     let open_in_fm_item = MenuItem::with_id(
@@ -77,11 +84,27 @@ pub fn build_menu_with_lang<R: Runtime>(app: &AppHandle<R>, lang: &str) -> tauri
     let find_item = MenuItem::with_id(app, FIND_ID, strings.find, true, Some("CmdOrCtrl+F"))?;
 
     // View menu items
-    let zoom_in_item = MenuItem::with_id(app, ZOOM_IN_ID, strings.zoom_in, true, Some("CmdOrCtrl+Plus"))?;
-    let zoom_out_item =
-        MenuItem::with_id(app, ZOOM_OUT_ID, strings.zoom_out, true, Some("CmdOrCtrl+Minus"))?;
-    let fit_mode_item =
-        MenuItem::with_id(app, FIT_MODE_ID, strings.fit_to_window, true, Some("CmdOrCtrl+0"))?;
+    let zoom_in_item = MenuItem::with_id(
+        app,
+        ZOOM_IN_ID,
+        strings.zoom_in,
+        true,
+        Some("CmdOrCtrl+Plus"),
+    )?;
+    let zoom_out_item = MenuItem::with_id(
+        app,
+        ZOOM_OUT_ID,
+        strings.zoom_out,
+        true,
+        Some("CmdOrCtrl+Minus"),
+    )?;
+    let fit_mode_item = MenuItem::with_id(
+        app,
+        FIT_MODE_ID,
+        strings.fit_to_window,
+        true,
+        Some("CmdOrCtrl+0"),
+    )?;
     let actual_size_item = MenuItem::with_id(
         app,
         ACTUAL_SIZE_ID,
@@ -214,12 +237,7 @@ pub fn build_menu_with_lang<R: Runtime>(app: &AppHandle<R>, lang: &str) -> tauri
                 ],
             )?
         } else {
-            Submenu::with_items(
-                app,
-                strings.help,
-                true,
-                &[&about_item],
-            )?
+            Submenu::with_items(app, strings.help, true, &[&about_item])?
         };
 
         Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu, &help_menu])

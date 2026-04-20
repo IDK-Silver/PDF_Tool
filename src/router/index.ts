@@ -20,6 +20,14 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/workspace',
+    name: 'workspace_view',
+    components: {
+      default: () => import('../components/Workspace/WorkspaceView.vue'),
+      filelist: () => import('../components/Workspace/WorkspaceListPane.vue'),
+    },
+  },
+  {
     path: '/editor',
     name: 'pdf_editor',
     components: {

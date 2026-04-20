@@ -162,6 +162,26 @@ MediaView 組件支援兩種檢視模式：
 
 更多壓縮設計與策略詳見：`docs/compression.md`。
 
+### Workspace 模式
+
+- `Workspace/WorkspaceView.vue`：雙欄工作台，左欄與右欄各自綁定一個資料夾。
+- 左側側欄在此模式改為工作台清單，不顯示最近檔案。
+- 每一欄改為「上方 viewer + 底部水平 filmstrip」的版面（仿 Lightroom）；底部清單以縮圖呈現並用 primary 色框標示目前選取檔案。
+- 圖片以實際檔案縮圖呈現（透過 `convertFileSrc`），PDF 顯示文件圖示，提升一目了然程度。
+- 每一欄檔案清單可拖拉改變順序；← / → / ↑ / ↓ 方向鍵在目前作用欄內依此順序切換檔案，Shift + ← / → 則切換左右兩欄的聚焦。
+- 注意：底部 filmstrip 為 `src/components/Workspace/parts/WorkspaceFilmstrip.vue`，與一般檔案清單 `src/components/FileList/FileList.vue`（用於工作台清單）區分開，並以 `path` 而非 `id` 作為選取鍵，避免與後端回傳缺少 `id` 欄位產生不一致。
+- 資料夾不顯示工具列按鈕，改為雙擊欄位標題或空白區設定。
+- 右側 viewer 沿用既有 PDF / 圖片檢視元件，但關閉標註與原本的頁面編輯右鍵選單，改由工作台注入自訂右鍵動作。
+- 目前自訂右鍵動作包含：
+  - 將目前檔案實際搬移到另一欄資料夾
+  - 將目前檔案移到垃圾桶
+- 工具列支援將左右兩欄目前顯示的圖片依當下縮放比例合成單張 PNG 匯出（不包含工作台介面與檔案清單）。
+
+資料流：
+- `src/modules/workspace/store.ts`：管理工作台列表、左右資料夾、每欄排序、目前選取檔案與 runtime viewer session。
+- `src/modules/media/session.ts`：將原本單一 `media store` 的檢視 session 抽成可重用工廠，讓工作台左右兩欄各自擁有獨立 session。
+- `src-tauri/src/workspace.rs`：提供資料夾掃描、檔案搬移、檔案刪除指令。
+
 ### 導覽行為（Dirty State）
 
 - 從 `media_view` 切換到 `compress` 時，若 `media.dirty` 為 `true`，彈出確認對話框詢問是否放棄未儲存變更。

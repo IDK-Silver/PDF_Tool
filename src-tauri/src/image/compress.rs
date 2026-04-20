@@ -1,13 +1,13 @@
 //! 圖像壓縮功能
 
 use crate::error::AppError;
+use base64::{Engine as _, engine::general_purpose};
 use image::GenericImageView;
 use image::ImageEncoder;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
-use base64::{Engine as _, engine::general_purpose};
 
 /// 圖像壓縮參數
 #[derive(Deserialize)]
@@ -15,8 +15,8 @@ use base64::{Engine as _, engine::general_purpose};
 pub struct CompressImageArgs {
     pub src_path: String,
     pub dest_path: String,
-    pub format: Option<String>,   // 'jpeg' | 'png' | 'webp' | 'preserve'
-    pub quality: Option<u8>,      // 1-100 (jpeg/webp only)
+    pub format: Option<String>, // 'jpeg' | 'png' | 'webp' | 'preserve'
+    pub quality: Option<u8>,    // 1-100 (jpeg/webp only)
     pub max_width: Option<u32>,
     pub max_height: Option<u32>,
 }
@@ -53,13 +53,12 @@ fn compress_image_sync(args: CompressImageArgs) -> Result<CompressImageResult, A
         )));
     }
 
-    let before_meta = fs::metadata(src)
-        .map_err(|e| AppError::io_error(format!("讀取來源檔案資訊失敗: {e}")))?;
+    let before_meta =
+        fs::metadata(src).map_err(|e| AppError::io_error(format!("讀取來源檔案資訊失敗: {e}")))?;
     let before_size = before_meta.len();
 
     // decode
-    let bytes = fs::read(src)
-        .map_err(|e| AppError::io_error(format!("讀取來源檔案失敗: {e}")))?;
+    let bytes = fs::read(src).map_err(|e| AppError::io_error(format!("讀取來源檔案失敗: {e}")))?;
     let mut img = image::load_from_memory(&bytes)
         .map_err(|e| AppError::decode_error(format!("解碼影像失敗: {e}")))?;
     let (mut w, mut h) = img.dimensions();

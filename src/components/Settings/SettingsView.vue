@@ -10,6 +10,14 @@ import { ChevronDoubleRightIcon } from '@heroicons/vue/24/outline'
 import { useCompressSettings } from '@/modules/compress/settings'
 import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 import { isAppStoreBuild } from '@/modules/updater/service'
+import {
+  SETTINGS_SECTION_IDS,
+} from '@/modules/settings/sections'
+import {
+  WORKSPACE_CAPTURE_BASE_WIDTH_MAX_PX,
+  WORKSPACE_CAPTURE_BASE_WIDTH_MIN_PX,
+  clampWorkspaceCaptureBaseWidthPx,
+} from '@/modules/settings/types'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -17,6 +25,7 @@ const s = settings.s
 const ui = useUiStore()
 const route = useRoute()
 const compressSettings = useCompressSettings()
+const settingsSectionIds = SETTINGS_SECTION_IDS
 
 const number = (e: Event, fallback: number) => {
   const v = Number((e.target as HTMLInputElement).value)
@@ -80,7 +89,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         <p class="text-xs text-[hsl(var(--muted-foreground))]">{{ $t('settings.subtitle') }}</p>
       </header>
 
-      <section id="language" class="space-y-3">
+      <section :id="settingsSectionIds.language" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.language.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
@@ -106,7 +115,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section v-if="!isAppStore" id="update" class="space-y-3">
+      <section v-if="!isAppStore" :id="settingsSectionIds.update" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.update.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div class="flex items-start gap-2">
@@ -121,7 +130,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="appearance" class="space-y-3">
+      <section :id="settingsSectionIds.appearance" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.appearance.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
@@ -158,9 +167,28 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      
+      <section :id="settingsSectionIds.workspace" class="space-y-3">
+        <h2 class="font-medium text-base">{{ $t('settings.workspace.title') }}</h2>
+        <div class="rounded-md border p-4 space-y-3">
+          <div>
+            <label class="block mb-1">{{ $t('settings.workspace.captureBaseWidth') }}</label>
+            <input
+              type="number"
+              step="100"
+              :min="WORKSPACE_CAPTURE_BASE_WIDTH_MIN_PX"
+              :max="WORKSPACE_CAPTURE_BASE_WIDTH_MAX_PX"
+              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+              :value="s.workspaceCaptureBaseWidthPx"
+              @input="s.workspaceCaptureBaseWidthPx = clampWorkspaceCaptureBaseWidthPx(number($event, s.workspaceCaptureBaseWidthPx))"
+            />
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+              {{ $t('settings.workspace.captureBaseWidthDescription') }}
+            </p>
+          </div>
+        </div>
+      </section>
 
-      <section id="high-res-rendering" class="space-y-3">
+      <section :id="settingsSectionIds.highResRendering" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.highRes.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <p class="text-xs text-[hsl(var(--muted-foreground))]">
@@ -260,7 +288,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="performance" class="space-y-3">
+      <section :id="settingsSectionIds.performance" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.performance.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -298,7 +326,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="zoom-interaction" class="space-y-3">
+      <section :id="settingsSectionIds.zoomInteraction" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.zoom.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
@@ -339,7 +367,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="fileops" class="space-y-3">
+      <section :id="settingsSectionIds.fileOps" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.fileOps.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
@@ -361,7 +389,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="compression-save" class="space-y-3">
+      <section :id="settingsSectionIds.compressionSave" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.compressionSave.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div>
@@ -383,14 +411,14 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="insert-defaults" class="space-y-3">
+      <section :id="settingsSectionIds.insertDefaults" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.insertDefaults.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <InsertDefaults />
         </div>
       </section>
 
-      <section id="text-layer" class="space-y-3">
+      <section :id="settingsSectionIds.textLayer" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.textLayer.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div class="flex items-start gap-2">
@@ -500,14 +528,14 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="export" class="space-y-3">
+      <section :id="settingsSectionIds.export" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.export.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <ExportSettings />
         </div>
       </section>
 
-      <section id="encoding" class="space-y-3">
+      <section :id="settingsSectionIds.encoding" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.encoding.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -537,7 +565,7 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         </div>
       </section>
 
-      <section id="debug" class="space-y-3">
+      <section :id="settingsSectionIds.debug" class="space-y-3">
         <h2 class="font-medium text-base">{{ $t('settings.debug.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <label class="flex items-center gap-2">

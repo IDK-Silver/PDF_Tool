@@ -33,7 +33,8 @@
       "assetProtocol": {
         "scope": [
           "$APP/**",
-          "$RESOURCE/**"
+          "$RESOURCE/**",
+          "$HOME/**"
         ]
       }
     }

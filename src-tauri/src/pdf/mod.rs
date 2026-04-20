@@ -13,4 +13,4 @@ pub use compress::*;
 pub use pdfium::get_pdfium;
 pub use render::{PageRender, PdfRenderArgs, render_page_for_document};
 pub use types::*;
-pub use worker::{init_pdf_worker, PdfRequest, WORKER_TX};
+pub use worker::{PdfRequest, WORKER_TX, init_pdf_worker};

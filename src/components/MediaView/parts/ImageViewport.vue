@@ -9,8 +9,29 @@ import { useFileListStore } from '@/modules/filelist/store'
 import { useZoom, type ZoomContext } from '@/modules/media/useZoom'
 import AnnotationLayer from './AnnotationLayer.vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
+import type { MediaSession } from '@/modules/media/session'
 
-const media = useMediaStore()
+const props = withDefaults(defineProps<{
+  media?: MediaSession
+  contextMenuMode?: 'default' | 'disabled' | 'custom'
+  annotationsEnabled?: boolean
+  scrollbarMode?: 'visible' | 'hidden'
+  fitStrategy?: 'width' | 'contain'
+  layoutDensity?: 'default' | 'compact'
+}>(), {
+  media: undefined,
+  contextMenuMode: 'default',
+  annotationsEnabled: true,
+  scrollbarMode: 'visible',
+  fitStrategy: 'width',
+  layoutDensity: 'default',
+})
+
+const emit = defineEmits<{
+  (e: 'context-menu', payload: { x: number; y: number; filePath: string | null }): void
+}>()
+
+const media = props.media ?? useMediaStore()
 const settings = useSettingsStore()
 const filelist = useFileListStore()
 const annotationStore = useAnnotationStore()
@@ -19,6 +40,8 @@ const scrollRootEl = ref<HTMLElement | null>(null)
 const imageEl = ref<HTMLImageElement | null>(null)
 const imageNaturalWidth = ref<number | null>(null)
 const imageNaturalHeight = ref<number | null>(null)
+const containerWidth = ref(0)
+const containerHeight = ref(0)
 const menu = ref<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y: 0 })
 
 // --- 1. 建立 ZoomContext ---
@@ -66,12 +89,50 @@ const zoomMax = computed(() => clampZoomMax(settings.s.zoomMaxPercent))
 watch(zoomMax, (v) => setEffectiveMax(v), { immediate: true })
 
 const shouldInvertColors = computed(() => settings.actualTheme === 'dark' && settings.s.invertColorsInDarkMode)
+const isCompactLayout = computed(() => props.layoutDensity === 'compact')
+const fitHorizontalPadding = computed(() => isCompactLayout.value ? 8 : 48)
+const fitVerticalPadding = computed(() => isCompactLayout.value ? 8 : 80)
+const imageContainerClass = computed(() =>
+  viewMode.value === 'fit'
+    ? (isCompactLayout.value
+      ? 'w-full px-1 py-1 flex justify-center items-center min-h-full'
+      : 'w-full px-6 py-10 flex justify-center items-center min-h-full')
+    : (isCompactLayout.value
+      ? 'px-1 py-1 inline-flex min-w-full justify-center flex-shrink-0 items-center min-h-full'
+      : 'px-6 py-10 inline-flex min-w-full justify-center flex-shrink-0 items-center min-h-full')
+)
+const imageActualBottomSpacing = computed(() => isCompactLayout.value ? 8 : 40)
+
+function getContainFitMetrics() {
+  const naturalW = imageNaturalWidth.value
+  const naturalH = imageNaturalHeight.value
+  if (!naturalW || !naturalH) return null
+
+  const width = containerWidth.value || scrollRootEl.value?.clientWidth || 0
+  const height = containerHeight.value || scrollRootEl.value?.clientHeight || 0
+  if (width <= 0 || height <= 0) return null
+
+  const availableW = Math.max(100, width - fitHorizontalPadding.value)
+  const availableH = Math.max(100, height - fitVerticalPadding.value)
+  const scale = Math.min(availableW / naturalW, availableH / naturalH)
+
+  return {
+    percent: Math.max(5, Math.min(800, Math.round(scale * 100))),
+    width: naturalW * scale,
+    height: naturalH * scale,
+  }
+}
 
 // 計算圖片卡片樣式 - 直接使用 zoomTarget 確保響應式更新
 const imageCardStyle = computed(() => {
-  if (viewMode.value !== 'actual' || imageNaturalWidth.value == null) {
-    return undefined
+  if (viewMode.value === 'fit') {
+    if (props.fitStrategy !== 'contain') return undefined
+    const metrics = getContainFitMetrics()
+    if (!metrics) return undefined
+    return { width: `${metrics.width}px` }
   }
+
+  if (imageNaturalWidth.value == null) return undefined
   const width = imageNaturalWidth.value * (zoomTarget.value / 100)
   return { width: `${width}px` }
 })
@@ -80,6 +141,15 @@ const imageCardStyle = computed(() => {
 
 function onImageContextMenu(e: MouseEvent) {
   e.preventDefault()
+  if (props.contextMenuMode === 'disabled') return
+  if (props.contextMenuMode === 'custom') {
+    emit('context-menu', {
+      x: e.clientX,
+      y: e.clientY,
+      filePath: media.selected?.path ?? null,
+    })
+    return
+  }
   menu.value = { open: true, x: e.clientX, y: e.clientY }
 }
 
@@ -144,9 +214,10 @@ function handleResetZoom() {
   resetZoom(ctx, { type: 'viewport-center' })
 }
 
-function handleSetFitMode() {
+async function handleSetFitMode() {
   const ctx = createZoomContext()
-  setFitMode(ctx, { type: 'viewport-center' })
+  await setFitMode(ctx, { type: 'viewport-center' })
+  scheduleUpdateFitPercent()
 }
 
 function handleWheel(e: WheelEvent) {
@@ -161,15 +232,34 @@ function handleWheel(e: WheelEvent) {
 
 let fitTimer: number | null = null
 
+function syncContainerMetrics() {
+  const root = scrollRootEl.value
+  const width = root?.clientWidth || 0
+  const height = root?.clientHeight || 0
+  if (width !== containerWidth.value) containerWidth.value = width
+  if (height !== containerHeight.value) containerHeight.value = height
+}
+
 function updateFitPercent() {
   if (viewMode.value !== 'fit') return
-  const root = scrollRootEl.value
-  const natural = imageNaturalWidth.value
-  if (!root || !natural) return
-  
-  const width = root.clientWidth
-  // 回寫給 useZoom 狀態，讓 displayZoom 正確顯示
-  displayFitPercent.value = Math.max(5, Math.min(800, Math.round((width / natural) * 100)))
+  const naturalW = imageNaturalWidth.value
+  const naturalH = imageNaturalHeight.value
+  if (!naturalW || !naturalH) return
+
+  syncContainerMetrics()
+
+  const width = containerWidth.value || scrollRootEl.value?.clientWidth || 0
+  if (width <= 0) return
+
+  if (props.fitStrategy === 'contain') {
+    const metrics = getContainFitMetrics()
+    if (!metrics) return
+    displayFitPercent.value = metrics.percent
+    return
+  }
+
+  const availableW = Math.max(100, width - fitHorizontalPadding.value)
+  displayFitPercent.value = Math.max(5, Math.min(800, Math.round((availableW / naturalW) * 100)))
 }
 
 function scheduleUpdateFitPercent() {
@@ -188,6 +278,7 @@ function onImageLoad(e: Event) {
   imageNaturalWidth.value = el?.naturalWidth || null
   imageNaturalHeight.value = el?.naturalHeight || null
   // 圖片載入完成後，更新 Fit 比例
+  syncContainerMetrics()
   scheduleUpdateFitPercent()
 }
 
@@ -202,10 +293,16 @@ function getAnnotationLayerProps() {
   let displayHeight: number
 
   if (viewMode.value === 'fit') {
-    // In fit mode, width is container width
-    const containerW = scrollRootEl.value?.clientWidth || 800
-    displayWidth = containerW - 48 // Account for padding
-    displayHeight = displayWidth * (naturalH / naturalW)
+    if (props.fitStrategy === 'contain') {
+      const metrics = getContainFitMetrics()
+      if (!metrics) return null
+      displayWidth = metrics.width
+      displayHeight = metrics.height
+    } else {
+      const containerW = containerWidth.value || scrollRootEl.value?.clientWidth || 800
+      displayWidth = containerW - fitHorizontalPadding.value
+      displayHeight = displayWidth * (naturalH / naturalW)
+    }
   } else {
     // In actual mode, use zoom target
     displayWidth = naturalW * (zoomTarget.value / 100)
@@ -223,6 +320,7 @@ function getAnnotationLayerProps() {
 }
 
 function shouldRenderAnnotationLayer(): boolean {
+  if (!props.annotationsEnabled) return false
   return annotationStore.activeTool !== null || annotationStore.getPageAnnotations(0).length > 0
 }
 
@@ -235,8 +333,13 @@ onMounted(() => {
     // 設定 passive: false，讓 preventDefault() 生效
     root.addEventListener('wheel', handleWheel, { passive: false })
 
+    syncContainerMetrics()
+
     if ('ResizeObserver' in window) {
-      resizeObs = new ResizeObserver(() => scheduleUpdateFitPercent())
+      resizeObs = new ResizeObserver(() => {
+        syncContainerMetrics()
+        scheduleUpdateFitPercent()
+      })
       resizeObs.observe(root)
     }
   }
@@ -283,9 +386,10 @@ defineExpose({
 <template>
   <div
     ref="scrollRootEl"
-    class="flex-1 overflow-auto scrollbar-visible overscroll-y-contain bg-muted min-h-0"
+    class="flex-1 overflow-auto overscroll-y-contain bg-muted min-h-0"
+    :class="props.scrollbarMode === 'hidden' ? 'scrollbar-hidden' : 'scrollbar-visible'"
     :style="{
-      'scrollbar-gutter': 'stable',
+      'scrollbar-gutter': props.scrollbarMode === 'hidden' ? 'auto' : 'stable',
       'will-change': 'scroll-position',
       'overflow-anchor': 'none',
       '--zoom-factor': zoomTarget / 100 
@@ -294,8 +398,8 @@ defineExpose({
     @contextmenu.prevent="onImageContextMenu"
   >
     <div
-      :class="viewMode === 'fit' ? 'w-full px-6 py-10 flex justify-center items-center min-h-full' : 'px-6 py-10 inline-flex min-w-full justify-center flex-shrink-0 items-center min-h-full'"
-      :style="viewMode === 'actual' ? { marginBottom: 'calc(40px * var(--zoom-factor))' } : undefined"
+      :class="imageContainerClass"
+      :style="viewMode === 'actual' ? { marginBottom: `calc(${imageActualBottomSpacing}px * var(--zoom-factor))` } : undefined"
       data-image-container
       data-pdf-page="0"
     >
@@ -329,7 +433,7 @@ defineExpose({
   
   <teleport to="body">
     <div
-      v-if="menu.open"
+      v-if="props.contextMenuMode === 'default' && menu.open"
       data-image-context-menu
       class="fixed z-[2000] bg-card border border-border rounded shadow text-sm w-max"
       :style="{ left: menu.x + 'px', top: menu.y + 'px' }"

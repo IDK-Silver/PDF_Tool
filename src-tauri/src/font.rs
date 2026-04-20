@@ -24,10 +24,30 @@ fn scan_system_fonts() -> Vec<FontInfo> {
 
     // Keywords to identify CJK fonts
     let cjk_keywords = [
-        "tc", "sc", "jp", "kr", "cjk", "hei", "song", "kai", "ming", "gothic",
-        "pingfang", "hiragino", "noto sans", "noto serif", "source han",
-        "microsoft yahei", "microsoft jhenghei", "simsun", "simhei", "mingliu",
-        "malgun", "meiryo", "yu gothic", "yu mincho",
+        "tc",
+        "sc",
+        "jp",
+        "kr",
+        "cjk",
+        "hei",
+        "song",
+        "kai",
+        "ming",
+        "gothic",
+        "pingfang",
+        "hiragino",
+        "noto sans",
+        "noto serif",
+        "source han",
+        "microsoft yahei",
+        "microsoft jhenghei",
+        "simsun",
+        "simhei",
+        "mingliu",
+        "malgun",
+        "meiryo",
+        "yu gothic",
+        "yu mincho",
     ];
 
     fn has_cjk_chars(name: &str) -> bool {

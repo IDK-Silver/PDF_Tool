@@ -250,10 +250,7 @@ pub async fn download_and_install_update(app: tauri::AppHandle) -> Result<Update
         }
     };
 
-    info!(
-        "[updater] Downloading update to version {}",
-        update.version
-    );
+    info!("[updater] Downloading update to version {}", update.version);
 
     // Download with progress reporting
     let app_handle = app.clone();

@@ -124,6 +124,16 @@
         background-color: hsl(var(--scrollbar-track));
     }
 
+    .scrollbar-hidden {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .scrollbar-hidden::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        display: none;
+    }
+
     /* 禁用 macOS Live Text 功能 */
     .disable-live-text {
         -webkit-user-select: none;

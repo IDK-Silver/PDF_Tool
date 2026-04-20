@@ -8,6 +8,7 @@ mod menu_i18n;
 mod pdf;
 mod signature;
 mod updater;
+mod workspace;
 
 use std::{
     path::{Path, PathBuf},
@@ -181,6 +182,7 @@ pub fn run() {
             frontend_ready,
             set_app_language,
             media::analyze_media,
+            image::image_probe,
             image::image_read,
             image::compress_image,
             image::save_image_bytes,
@@ -219,6 +221,10 @@ pub fn run() {
             bookmark::bookmark_create,
             bookmark::bookmark_resolve,
             bookmark::bookmark_stop_access,
+            workspace::workspace_list_media_files,
+            workspace::workspace_move_file,
+            workspace::workspace_delete_file,
+            workspace::workspace_export_images,
         ]);
 
     let app = builder

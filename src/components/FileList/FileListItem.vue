@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FileItem } from './types'
-import { XMarkIcon, DocumentTextIcon, PhotoIcon } from '@heroicons/vue/24/outline'
+import { XMarkIcon, DocumentTextIcon, PhotoIcon, RectangleStackIcon } from '@heroicons/vue/24/outline'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -17,6 +17,7 @@ const emit = defineEmits<{
 const iconComponent = computed(() => {
   if (props.item.type === 'pdf') return DocumentTextIcon
   if (props.item.type === 'image') return PhotoIcon
+  if (props.item.type === 'workspace') return RectangleStackIcon
   return DocumentTextIcon // fallback
 })
 

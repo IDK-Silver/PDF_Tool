@@ -2,31 +2,32 @@
 //!
 //! 處理 PDF 文件的所有操作，包括開啟、渲染、編輯、儲存等。
 
+use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use flate2::Compression;
 use image::GenericImageView;
 use log::warn;
 use once_cell::sync::Lazy;
 use pdfium_render::prelude::{PdfDocument, PdfPagePaperSize, PdfPoints};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
+    Mutex,
     atomic::{AtomicU64, Ordering},
-    mpsc, Mutex,
+    mpsc,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::MediaError;
 use crate::image::image_dpi_from_bytes;
 use crate::pdf::{
-    get_pdfium, render_page_for_document, AddImageResult, ImageToPdfResult, MutationResult,
-    PageRender, PageTextContent, PdfOpenResult, PdfPageSize, PdfRenderArgs, RotationResult,
-    SaveResult, TextLayerSettings, TextSpan,
+    AddImageResult, ImageToPdfResult, MutationResult, PageRender, PageTextContent, PdfOpenResult,
+    PdfPageSize, PdfRenderArgs, RotationResult, SaveResult, TextLayerSettings, TextSpan,
+    get_pdfium, render_page_for_document,
 };
 
 // ============================================================================
@@ -69,10 +70,29 @@ struct PdfDocRecord<'a> {
 
 #[derive(Clone)]
 enum HistoryEvent {
-    Rotate { index: u32, from: u16, to: u16 },
-    InsertBlank { index: u32, count: usize, width_pt: f32, height_pt: f32 },
-    InsertFromPdf { index: u32, count: usize, temp_path: PathBuf },
-    Delete { index: u32, count: usize, temp_path: PathBuf, tokens: Vec<u64>, rotations: Vec<u16> },
+    Rotate {
+        index: u32,
+        from: u16,
+        to: u16,
+    },
+    InsertBlank {
+        index: u32,
+        count: usize,
+        width_pt: f32,
+        height_pt: f32,
+    },
+    InsertFromPdf {
+        index: u32,
+        count: usize,
+        temp_path: PathBuf,
+    },
+    Delete {
+        index: u32,
+        count: usize,
+        temp_path: PathBuf,
+        tokens: Vec<u64>,
+        rotations: Vec<u16>,
+    },
 }
 
 #[derive(Clone)]
@@ -197,9 +217,9 @@ fn capture_pages_to_temp(
     if indices.is_empty() {
         return Err(MediaError::new("invalid_input", "缺少頁索引"));
     }
-    let mut tmp = pdfium.create_new_pdf().map_err(|e| {
-        MediaError::new("io_error", format!("建立暫存 PDF 失敗: {e}"))
-    })?;
+    let mut tmp = pdfium
+        .create_new_pdf()
+        .map_err(|e| MediaError::new("io_error", format!("建立暫存 PDF 失敗: {e}")))?;
     let indices_1: Vec<u32> = indices.iter().map(|&i| i + 1).collect();
     let spec = build_ranges(&indices_1);
     tmp.pages_mut()
@@ -245,9 +265,9 @@ fn delete_indices<'a>(
     let mut pages_1: Vec<u32> = keep.into_iter().map(|i| i + 1).collect();
     pages_1.sort_unstable();
     let spec_keep = build_ranges(&pages_1);
-    let mut new_doc = pdfium.create_new_pdf().map_err(|e| {
-        MediaError::new("io_error", format!("建立新 PDF 失敗: {e}"))
-    })?;
+    let mut new_doc = pdfium
+        .create_new_pdf()
+        .map_err(|e| MediaError::new("io_error", format!("建立新 PDF 失敗: {e}")))?;
     new_doc
         .pages_mut()
         .copy_pages_from_document(&record.doc, &spec_keep, 0)
@@ -289,9 +309,9 @@ fn insert_blank_at(
         .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
     {
         let pages = record.doc.pages_mut();
-        pages.create_page_at_index(size, idx_u16).map_err(|e| {
-            MediaError::new("io_error", format!("插入空白頁失敗: {e}"))
-        })?;
+        pages
+            .create_page_at_index(size, idx_u16)
+            .map_err(|e| MediaError::new("io_error", format!("插入空白頁失敗: {e}")))?;
     }
     let insert_at: usize = index
         .try_into()
@@ -302,9 +322,7 @@ fn insert_blank_at(
             "內部頁序列長度不一致，無法插入",
         ));
     }
-    record
-        .current_tokens
-        .insert(insert_at, record.next_token);
+    record.current_tokens.insert(insert_at, record.next_token);
     record.next_token = record.next_token.saturating_add(1);
     record.current_rot.insert(insert_at, 0);
     record.file_hash = None;
@@ -332,12 +350,9 @@ fn insert_from_pdf_path(
             "內部頁序列長度不一致，無法插入",
         ));
     }
-    let src_doc = pdfium.load_pdf_from_file(path, None).map_err(|e| {
-        MediaError::new(
-            "io_error",
-            format!("載入暫存 PDF 失敗以便插入：{e}"),
-        )
-    })?;
+    let src_doc = pdfium
+        .load_pdf_from_file(path, None)
+        .map_err(|e| MediaError::new("io_error", format!("載入暫存 PDF 失敗以便插入：{e}")))?;
     let page_count: usize = src_doc.pages().len() as usize;
     let spec = if page_count == 1 {
         "1".to_string()
@@ -458,12 +473,12 @@ fn apply_history_event<'a>(
                 delete_indices(pdfium, record, inds)?;
             } else {
                 // Restore pages from temp PDF
-                let idx_dest_u16: u16 = (*index)
-                    .try_into()
-                    .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
-                let insert_at: usize = (*index)
-                    .try_into()
-                    .map_err(|_| MediaError::new("invalid_input", format!("頁索引過大: {}", index)))?;
+                let idx_dest_u16: u16 = (*index).try_into().map_err(|_| {
+                    MediaError::new("invalid_input", format!("頁索引過大: {}", index))
+                })?;
+                let insert_at: usize = (*index).try_into().map_err(|_| {
+                    MediaError::new("invalid_input", format!("頁索引過大: {}", index))
+                })?;
                 let src_doc = pdfium.load_pdf_from_file(temp_path, None).map_err(|e| {
                     MediaError::new("io_error", format!("載入暫存 PDF 失敗以便插入：{e}"))
                 })?;
@@ -1064,13 +1079,19 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                 ));
                             }
                         }
-                        let first = *indices
-                            .first()
-                            .ok_or_else(|| MediaError::new("invalid_input", "缺少要刪除的頁索引"))?;
+                        let first = *indices.first().ok_or_else(|| {
+                            MediaError::new("invalid_input", "缺少要刪除的頁索引")
+                        })?;
                         let count = indices.len();
                         // Save original tokens and rotations before deletion
-                        let tokens: Vec<u64> = indices.iter().map(|&i| record.current_tokens[i as usize]).collect();
-                        let rotations: Vec<u16> = indices.iter().map(|&i| record.current_rot[i as usize]).collect();
+                        let tokens: Vec<u64> = indices
+                            .iter()
+                            .map(|&i| record.current_tokens[i as usize])
+                            .collect();
+                        let rotations: Vec<u16> = indices
+                            .iter()
+                            .map(|&i| record.current_rot[i as usize])
+                            .collect();
                         let temp_path = capture_pages_to_temp(&pdfium, &record.doc, &indices)?;
                         delete_indices(&pdfium, record, indices)?;
                         push_undo(
@@ -1431,9 +1452,10 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let doc = docs.get_mut(&doc_id).ok_or_else(|| {
                             MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
                         })?;
-                        let ev = doc.undo_stack.pop().ok_or_else(|| {
-                            MediaError::new("invalid_input", "沒有可復原的動作")
-                        })?;
+                        let ev = doc
+                            .undo_stack
+                            .pop()
+                            .ok_or_else(|| MediaError::new("invalid_input", "沒有可復原的動作"))?;
                         apply_history_event(&pdfium, doc, &ev, false)?;
                         doc.redo_stack.push(ev);
                         Ok(make_mutation_result(doc))
@@ -1445,9 +1467,10 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                         let doc = docs.get_mut(&doc_id).ok_or_else(|| {
                             MediaError::new("not_found", format!("未知的 docId: {}", doc_id))
                         })?;
-                        let ev = doc.redo_stack.pop().ok_or_else(|| {
-                            MediaError::new("invalid_input", "沒有可重做的動作")
-                        })?;
+                        let ev = doc
+                            .redo_stack
+                            .pop()
+                            .ok_or_else(|| MediaError::new("invalid_input", "沒有可重做的動作"))?;
                         apply_history_event(&pdfium, doc, &ev, true)?;
                         doc.undo_stack.push(ev);
                         Ok(make_mutation_result(doc))
@@ -1704,30 +1727,24 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                         char_geometry(&text_char, global_offset_x, global_offset_y)
                                     {
                                         let (mut x, y, mut width, mut height) = match rotation_deg {
-                                            90 => {
-                                                (
-                                                    raw_y,
-                                                    orig_width - raw_x - raw_width,
-                                                    raw_height,
-                                                    raw_width,
-                                                )
-                                            }
-                                            180 => {
-                                                (
-                                                    orig_width - raw_x - raw_width,
-                                                    orig_height - raw_y - raw_height,
-                                                    raw_width,
-                                                    raw_height,
-                                                )
-                                            }
-                                            270 => {
-                                                (
-                                                    orig_height - raw_y - raw_height,
-                                                    raw_x,
-                                                    raw_height,
-                                                    raw_width,
-                                                )
-                                            }
+                                            90 => (
+                                                raw_y,
+                                                orig_width - raw_x - raw_width,
+                                                raw_height,
+                                                raw_width,
+                                            ),
+                                            180 => (
+                                                orig_width - raw_x - raw_width,
+                                                orig_height - raw_y - raw_height,
+                                                raw_width,
+                                                raw_height,
+                                            ),
+                                            270 => (
+                                                orig_height - raw_y - raw_height,
+                                                raw_x,
+                                                raw_height,
+                                                raw_width,
+                                            ),
                                             _ => (raw_x, raw_y, raw_width, raw_height),
                                         };
 
@@ -1910,10 +1927,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                     Some(PdfPoints::new(height_pt)),
                                 )
                                 .map_err(|e| {
-                                    MediaError::new(
-                                        "unsupported",
-                                        format!("建立影像物件失敗: {e}"),
-                                    )
+                                    MediaError::new("unsupported", format!("建立影像物件失敗: {e}"))
                                 })?;
                         }
 
@@ -1980,9 +1994,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
                                             .doc
                                             .fonts_mut()
                                             .load_true_type_from_bytes(&font_data, true)
-                                            .unwrap_or_else(|_| {
-                                                record.doc.fonts_mut().helvetica()
-                                            }),
+                                            .unwrap_or_else(|_| record.doc.fonts_mut().helvetica()),
                                         Err(_) => record.doc.fonts_mut().helvetica(),
                                     }
                                 }

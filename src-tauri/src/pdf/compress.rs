@@ -734,8 +734,7 @@ pub async fn compress_pdf_smart(
                         };
                         if need {
                             use image::imageops::FilterType;
-                            let target_w =
-                                ((disp_w_pt / 72.0) * tgt_dpi).round().max(1.0) as u32;
+                            let target_w = ((disp_w_pt / 72.0) * tgt_dpi).round().max(1.0) as u32;
                             let target_h = if disp_h_pt > 0.0 {
                                 ((disp_h_pt / 72.0) * tgt_dpi).round().max(1.0) as u32
                             } else {

@@ -126,11 +126,12 @@ mod macos {
             }
 
             // Retain the URL for our use
-            let url_retained: Retained<NSURL> = Retained::retain(resolved_url)
-                .ok_or_else(|| "Failed to retain URL".to_string())?;
+            let url_retained: Retained<NSURL> =
+                Retained::retain(resolved_url).ok_or_else(|| "Failed to retain URL".to_string())?;
 
             // Start accessing the security-scoped resource
-            let started: Bool = objc2::msg_send![&url_retained, startAccessingSecurityScopedResource];
+            let started: Bool =
+                objc2::msg_send![&url_retained, startAccessingSecurityScopedResource];
             if !started.as_bool() {
                 warn!("startAccessingSecurityScopedResource returned false");
                 return Err("Failed to start accessing security-scoped resource".to_string());
@@ -155,10 +156,7 @@ mod macos {
                 map.insert(path.clone(), url_retained);
             }
 
-            debug!(
-                "Bookmark resolved successfully: {}, stale: {}",
-                path, stale
-            );
+            debug!("Bookmark resolved successfully: {}, stale: {}", path, stale);
 
             Ok(BookmarkResolveResult {
                 path,
