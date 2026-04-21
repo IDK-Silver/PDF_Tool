@@ -308,6 +308,36 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "$APPSTORE_PROVISIONING_PROFILE" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/appstore.provisionprofile
 
+      - name: Verify Apple signing identity
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -euo pipefail
+
+          echo "Checking codesigning identities in temporary keychain..."
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F 'Developer ID Application: Yu Feng Huang (S9782747Y9)' >/dev/null; then
+            echo "Developer ID Application identity not found in temporary keychain."
+            exit 1
+          fi
+
+      - name: Verify Apple notarization access
+        if: matrix.os == 'macos-latest'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          echo "Checking Apple notarization access..."
+          xcrun notarytool history \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_PASSWORD" \
+            --output-format json >/dev/null
+          echo "Apple notarization access verified."
+
       - name: Sign PDFium libraries (macOS)
         if: matrix.os == 'macos-latest'
         run: |

@@ -229,6 +229,8 @@ base64 -i ~/Desktop/certificate.p12 | pbcopy
 
 **GitHub 版本建置：**
 - `Import Apple certificates`：匯入所有證書到 runner
+- `Verify Apple signing identity`：確認 `Developer ID Application` 憑證已正確匯入 keychain
+- `Verify Apple notarization access`：先用 `notarytool history` 檢查 Apple 公證 API 是否可用，避免 build 完才發現 agreement 或權限問題
 - `Sign PDFium libraries`：簽名外部 dylib
 - `Build & Release with Tauri`：建置並上傳到 GitHub Release（非 Draft）
 - `Publish release`：確保 Release 為已發布狀態
