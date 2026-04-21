@@ -29,6 +29,7 @@ use crate::pdf::{
     PdfPageSize, PdfRenderArgs, RotationResult, SaveResult, TextLayerSettings, TextSpan,
     get_pdfium, render_page_for_document,
 };
+use crate::sql::open_app_db;
 
 // ============================================================================
 // Static variables
@@ -43,7 +44,6 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 // Constants
 // ============================================================================
 
-const TEXT_CACHE_DIR_NAME: &str = "db";
 const TEXT_CACHE_DB_FILE: &str = "page_text_cache.db";
 const TEXT_EXTRACTOR_VERSION: i64 = 2;
 const TEXT_CACHE_SOFT_LIMIT_BYTES: i64 = 50 * 1024 * 1024;
@@ -541,16 +541,9 @@ fn compute_file_hash(path: &str) -> Option<String> {
 // ============================================================================
 
 impl GlyphCache {
-    fn new(base_dir: &Path) -> Result<Self, MediaError> {
-        fs::create_dir_all(base_dir)
-            .map_err(|e| MediaError::new("cache_error", format!("建立文字快取目錄失敗: {e}")))?;
-
-        let db_path = base_dir.join(TEXT_CACHE_DB_FILE);
-        let conn = Connection::open(db_path)
+    fn new(cache_dir: &Path) -> Result<Self, MediaError> {
+        let conn = open_app_db(cache_dir, TEXT_CACHE_DB_FILE)
             .map_err(|e| MediaError::new("cache_error", format!("開啟文字快取資料庫失敗: {e}")))?;
-
-        let _ = conn.pragma_update(None, "journal_mode", "WAL");
-        let _ = conn.pragma_update(None, "synchronous", "NORMAL");
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS page_boxes (
@@ -866,8 +859,7 @@ pub fn init_pdf_worker(cache_dir: PathBuf) {
         };
         let mut docs: HashMap<u64, PdfDocRecord<'_>> = HashMap::new();
         let mut min_gen: HashMap<(u64, u32), u64> = HashMap::new();
-        let cache_root = cache_dir.join(TEXT_CACHE_DIR_NAME);
-        let glyph_cache = GlyphCache::new(&cache_root).ok();
+        let glyph_cache = GlyphCache::new(&cache_dir).ok();
         if glyph_cache.is_none() {
             warn!("文字框快取初始化失敗，將以非快取模式運行");
         }

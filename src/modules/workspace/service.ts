@@ -20,6 +20,8 @@ export async function workspaceExportImages(args: {
   rightTargetWidthPx: number
   destPath: string
   gapPx?: number
-}): Promise<{ path: string; width: number; height: number; size: number }> {
+  format?: 'png' | 'jpeg' | 'webp'
+  quality?: number
+}): Promise<{ path: string; width: number; height: number; size: number; format: string }> {
   return invoke('workspace_export_images', { args })
 }

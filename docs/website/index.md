@@ -28,9 +28,9 @@ title: Kano PDF Tool
 ## Download
 
 <p class="center">
-  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.5/Kano.PDF.Tool_3.11.5_x64-setup.exe" class="btn">Download for Windows</a>
+  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.12.0/Kano.PDF.Tool_3.12.0_x64-setup.exe" class="btn">Download for Windows</a>
   <a href="https://apps.apple.com/tw/app/kano-pdf-tool/id6757261963?mt=12" class="btn">App Store</a>
-  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.11.5/Kano.PDF.Tool_3.11.5_amd64.AppImage" class="btn">Download for Linux</a>
+  <a href="https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.12.0/Kano.PDF.Tool_3.12.0_amd64.AppImage" class="btn">Download for Linux</a>
 </p>
 
 <p class="center" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">

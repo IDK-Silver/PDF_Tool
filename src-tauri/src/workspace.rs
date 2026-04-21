@@ -1,9 +1,15 @@
 use crate::error::AppError;
-use image::{ImageFormat, ImageReader, Rgba, RgbaImage, imageops};
+use crate::workspace_cache::{
+    WorkspaceImageCacheKey, get_cached_workspace_image, put_cached_workspace_image,
+};
+use image::{ColorType, ImageEncoder, ImageReader, Rgba, RgbaImage, imageops};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Instant, UNIX_EPOCH};
 
 #[derive(Serialize)]
 pub struct WorkspaceFileEntry {
@@ -37,6 +43,8 @@ pub struct WorkspaceExportImagesArgs {
     pub right_target_width_px: u32,
     pub dest_path: String,
     pub gap_px: Option<u32>,
+    pub format: Option<String>, // "png" | "jpeg" | "webp", defaults to png
+    pub quality: Option<u8>,    // 1-100, used for jpeg/webp
 }
 
 #[derive(Serialize)]
@@ -46,7 +54,24 @@ pub struct WorkspaceExportImagesResult {
     pub width: u32,
     pub height: u32,
     pub size: u64,
+    pub format: String,
 }
+
+struct PreparedWorkspaceImage {
+    image: RgbaImage,
+    source_width: u32,
+    source_height: u32,
+    output_width: u32,
+    output_height: u32,
+    cache_status: &'static str,
+    cache_lookup_ms: u128,
+    cache_write_ms: u128,
+    decoded_ms: u128,
+    resized_ms: u128,
+    resize_method: &'static str,
+}
+
+const WORKSPACE_RESIZE_METHOD: &str = "lanczos3";
 
 fn infer_kind(path: &Path) -> Option<&'static str> {
     let ext = path
@@ -195,41 +220,180 @@ pub async fn workspace_export_images(
 fn workspace_export_images_sync(
     args: WorkspaceExportImagesArgs,
 ) -> Result<WorkspaceExportImagesResult, AppError> {
-    let left = read_image_for_workspace(&args.left_path)?;
-    let right = read_image_for_workspace(&args.right_path)?;
+    let total_started = Instant::now();
+    let format = normalize_export_format(args.format.as_deref());
+    let quality = args.quality.unwrap_or(90).clamp(1, 100);
 
-    let left_resized = resize_to_width(left, args.left_target_width_px)?;
-    let right_resized = resize_to_width(right, args.right_target_width_px)?;
+    let left_path = args.left_path;
+    let right_path = args.right_path;
+    let left_target_width = args.left_target_width_px;
+    let right_target_width = args.right_target_width_px;
+
+    let (left_resized, right_resized) = std::thread::scope(|scope| {
+        let left_handle =
+            scope.spawn(|| read_and_resize_image_for_workspace(&left_path, left_target_width));
+        let right_handle =
+            scope.spawn(|| read_and_resize_image_for_workspace(&right_path, right_target_width));
+
+        let left_resized = left_handle
+            .join()
+            .map_err(|_| AppError::async_error("左側圖片處理失敗"))??;
+        let right_resized = right_handle
+            .join()
+            .map_err(|_| AppError::async_error("右側圖片處理失敗"))??;
+
+        Ok::<(PreparedWorkspaceImage, PreparedWorkspaceImage), AppError>((
+            left_resized,
+            right_resized,
+        ))
+    })?;
     let gap = args.gap_px.unwrap_or(12);
+    let prepare_ms = total_started.elapsed().as_millis();
 
-    let out_width = left_resized.width() + right_resized.width() + gap;
-    let out_height = left_resized.height().max(right_resized.height());
-    let left_y = (out_height.saturating_sub(left_resized.height())) / 2;
-    let right_y = (out_height.saturating_sub(right_resized.height())) / 2;
-
-    let mut canvas = RgbaImage::from_pixel(out_width, out_height, Rgba([0, 0, 0, 0]));
-    imageops::overlay(&mut canvas, &left_resized, 0, i64::from(left_y));
-    imageops::overlay(
-        &mut canvas,
-        &right_resized,
-        i64::from(left_resized.width() + gap),
-        i64::from(right_y),
+    info!(
+        "[workspace] export start format={} quality={} gap={} left_target={} right_target={} left_path={} right_path={}",
+        format,
+        quality,
+        gap,
+        left_target_width,
+        right_target_width,
+        left_path,
+        right_path
+    );
+    info!(
+        "[workspace] export prepared left src={}x{} out={}x{} cache_status={} cache_lookup_ms={} cache_write_ms={} decoded_ms={} resized_ms={} resize_method={}",
+        left_resized.source_width,
+        left_resized.source_height,
+        left_resized.output_width,
+        left_resized.output_height,
+        left_resized.cache_status,
+        left_resized.cache_lookup_ms,
+        left_resized.cache_write_ms,
+        left_resized.decoded_ms,
+        left_resized.resized_ms,
+        left_resized.resize_method
+    );
+    info!(
+        "[workspace] export prepared right src={}x{} out={}x{} cache_status={} cache_lookup_ms={} cache_write_ms={} decoded_ms={} resized_ms={} resize_method={}",
+        right_resized.source_width,
+        right_resized.source_height,
+        right_resized.output_width,
+        right_resized.output_height,
+        right_resized.cache_status,
+        right_resized.cache_lookup_ms,
+        right_resized.cache_write_ms,
+        right_resized.decoded_ms,
+        right_resized.resized_ms,
+        right_resized.resize_method
     );
 
+    let compose_started = Instant::now();
+    let out_width = left_resized.image.width() + right_resized.image.width() + gap;
+    let out_height = left_resized.image.height().max(right_resized.image.height());
+    let left_y = (out_height.saturating_sub(left_resized.image.height())) / 2;
+    let right_y = (out_height.saturating_sub(right_resized.image.height())) / 2;
+
+    // JPEG has no alpha; use white background to avoid black fill on transparent pixels.
+    let background = if format == "jpeg" {
+        Rgba([255, 255, 255, 255])
+    } else {
+        Rgba([0, 0, 0, 0])
+    };
+    let mut canvas = RgbaImage::from_pixel(out_width, out_height, background);
+    imageops::overlay(&mut canvas, &left_resized.image, 0, i64::from(left_y));
+    imageops::overlay(
+        &mut canvas,
+        &right_resized.image,
+        i64::from(left_resized.image.width() + gap),
+        i64::from(right_y),
+    );
+    let compose_ms = compose_started.elapsed().as_millis();
+
+    let encode_started = Instant::now();
     let dest = PathBuf::from(&args.dest_path);
-    image::DynamicImage::ImageRgba8(canvas)
-        .save_with_format(&dest, ImageFormat::Png)
-        .map_err(|e| AppError::io_error(format!("寫入合成圖片失敗: {e}")))?;
+    if let Some(parent) = dest.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            fs::create_dir_all(parent)
+                .map_err(|e| AppError::io_error(format!("建立輸出資料夾失敗: {e}")))?;
+        }
+    }
+    encode_canvas_to_path(&canvas, &format, quality, &dest)?;
+    let encode_ms = encode_started.elapsed().as_millis();
 
     let meta = fs::metadata(&dest)
         .map_err(|e| AppError::io_error(format!("讀取檔案資訊失敗: {e}")))?;
+    let total_ms = total_started.elapsed().as_millis();
+
+    info!(
+        "[workspace] export done out={}x{} size={} format={} prepare_ms={} compose_ms={} encode_ms={} total_ms={}",
+        out_width,
+        out_height,
+        meta.len(),
+        format,
+        prepare_ms,
+        compose_ms,
+        encode_ms,
+        total_ms
+    );
 
     Ok(WorkspaceExportImagesResult {
         path: dest.to_string_lossy().to_string(),
         width: out_width,
         height: out_height,
         size: meta.len(),
+        format,
     })
+}
+
+fn normalize_export_format(input: Option<&str>) -> String {
+    match input.map(|s| s.to_ascii_lowercase()).as_deref() {
+        Some("jpeg") | Some("jpg") => "jpeg".to_string(),
+        Some("webp") => "webp".to_string(),
+        _ => "png".to_string(),
+    }
+}
+
+fn encode_canvas_to_path(
+    canvas: &RgbaImage,
+    format: &str,
+    quality: u8,
+    dest: &Path,
+) -> Result<(), AppError> {
+    let width = canvas.width();
+    let height = canvas.height();
+    match format {
+        "jpeg" => {
+            let rgb = rgba_to_rgb_bytes(canvas);
+            let file = fs::File::create(dest)
+                .map_err(|e| AppError::io_error(format!("建立輸出檔案失敗: {e}")))?;
+            let mut writer = BufWriter::new(file);
+            let encoder =
+                image::codecs::jpeg::JpegEncoder::new_with_quality(&mut writer, quality);
+            encoder
+                .write_image(&rgb, width, height, ColorType::Rgb8.into())
+                .map_err(|e| AppError::encode_error(format!("JPEG 編碼失敗: {e}")))?;
+        }
+        "webp" => {
+            let encoder = webp::Encoder::from_rgba(canvas.as_raw(), width, height);
+            let encoded = encoder.encode(quality as f32);
+            fs::write(dest, encoded.to_vec())
+                .map_err(|e| AppError::io_error(format!("寫入 WebP 圖片失敗: {e}")))?;
+        }
+        _ => {
+            let file = fs::File::create(dest)
+                .map_err(|e| AppError::io_error(format!("建立輸出檔案失敗: {e}")))?;
+            let mut writer = BufWriter::new(file);
+            let encoder = image::codecs::png::PngEncoder::new_with_quality(
+                &mut writer,
+                image::codecs::png::CompressionType::Fast,
+                image::codecs::png::FilterType::NoFilter,
+            );
+            encoder
+                .write_image(canvas, width, height, ColorType::Rgba8.into())
+                .map_err(|e| AppError::encode_error(format!("PNG 編碼失敗: {e}")))?;
+        }
+    }
+    Ok(())
 }
 
 fn read_image_for_workspace(path: &str) -> Result<image::DynamicImage, AppError> {
@@ -246,10 +410,109 @@ fn read_image_for_workspace(path: &str) -> Result<image::DynamicImage, AppError>
         .map_err(|e| AppError::decode_error(format!("解碼圖片失敗: {e}")))
 }
 
+fn read_and_resize_image_for_workspace(
+    path: &str,
+    target_width: u32,
+) -> Result<PreparedWorkspaceImage, AppError> {
+    let cache_key = workspace_cache_key(path, target_width, WORKSPACE_RESIZE_METHOD);
+    let cache_lookup_started = Instant::now();
+    if let Some(key) = cache_key.as_ref() {
+        match get_cached_workspace_image(key) {
+            Ok(Some(cached)) => {
+                let cache_lookup_ms = cache_lookup_started.elapsed().as_millis();
+                return Ok(PreparedWorkspaceImage {
+                    output_width: cached.image.width(),
+                    output_height: cached.image.height(),
+                    source_width: cached.source_width,
+                    source_height: cached.source_height,
+                    cache_status: "hit",
+                    cache_lookup_ms,
+                    cache_write_ms: 0,
+                    decoded_ms: 0,
+                    resized_ms: 0,
+                    resize_method: WORKSPACE_RESIZE_METHOD,
+                    image: cached.image,
+                });
+            }
+            Ok(None) => {}
+            Err(err) => warn!("[workspace] cache read failed path={}: {}", path, err),
+        }
+    }
+    let cache_lookup_ms = cache_lookup_started.elapsed().as_millis();
+
+    let decode_started = Instant::now();
+    let image = read_image_for_workspace(path)?;
+    let decoded_ms = decode_started.elapsed().as_millis();
+    let source_width = image.width();
+    let source_height = image.height();
+
+    let resize_started = Instant::now();
+    let (resize_method, output) = resize_to_width(image, target_width)?;
+    let resized_ms = resize_started.elapsed().as_millis();
+    let cache_write_started = Instant::now();
+    let cache_write_ms = if let Some(key) = cache_key.as_ref() {
+        match put_cached_workspace_image(key, source_width, source_height, &output) {
+            Ok(()) => cache_write_started.elapsed().as_millis(),
+            Err(err) => {
+                warn!("[workspace] cache write failed path={}: {}", path, err);
+                0
+            }
+        }
+    } else {
+        0
+    };
+
+    Ok(PreparedWorkspaceImage {
+        source_width,
+        source_height,
+        output_width: output.width(),
+        output_height: output.height(),
+        cache_status: "miss",
+        cache_lookup_ms,
+        cache_write_ms,
+        decoded_ms,
+        resized_ms,
+        resize_method,
+        image: output,
+    })
+}
+
+fn workspace_cache_key(
+    path: &str,
+    target_width: u32,
+    resize_method: &'static str,
+) -> Option<WorkspaceImageCacheKey> {
+    let meta = fs::metadata(path).ok()?;
+    let modified_ns = meta
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_nanos();
+
+    let modified_ns = i64::try_from(modified_ns).ok()?;
+    Some(WorkspaceImageCacheKey {
+        path: path.to_string(),
+        file_size: meta.len(),
+        modified_ns,
+        target_width,
+        resize_method,
+    })
+}
+
+fn rgba_to_rgb_bytes(canvas: &RgbaImage) -> Vec<u8> {
+    let raw = canvas.as_raw();
+    let mut rgb = Vec::with_capacity(raw.len() / 4 * 3);
+    for chunk in raw.chunks_exact(4) {
+        rgb.extend_from_slice(&chunk[..3]);
+    }
+    rgb
+}
+
 fn resize_to_width(
     image: image::DynamicImage,
     target_width: u32,
-) -> Result<RgbaImage, AppError> {
+) -> Result<(&'static str, RgbaImage), AppError> {
     let width = image.width();
     let height = image.height();
     if width == 0 || height == 0 {
@@ -258,13 +521,16 @@ fn resize_to_width(
 
     let clamped_width = target_width.max(1);
     let target_height = ((height as f64 * clamped_width as f64) / width as f64).round() as u32;
-    Ok(image
+    Ok((
+        WORKSPACE_RESIZE_METHOD,
+        image
         .resize_exact(
             clamped_width,
             target_height.max(1),
             imageops::FilterType::Lanczos3,
         )
-        .to_rgba8())
+        .to_rgba8(),
+    ))
 }
 
 fn run_command(program: &str, args: &[&str]) -> Result<(), AppError> {

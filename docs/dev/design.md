@@ -175,12 +175,13 @@ MediaView 組件支援兩種檢視模式：
 - 目前自訂右鍵動作包含：
   - 將目前檔案實際搬移到另一欄資料夾
   - 將目前檔案移到垃圾桶
-- 工具列支援將左右兩欄目前顯示的圖片依當下縮放比例合成單張 PNG 匯出（不包含工作台介面與檔案清單）。
+- 工具列「擷取」會開啟匯出對話框（`Workspace/parts/CaptureExportDialog.vue`），可選擇格式（PNG / JPEG / WebP）、基準寬度、品質（JPEG/WebP）與輸出位置；按「匯出」後等後端實際寫出檔案並回傳 `path` 再顯示完成提示，選項透過 localStorage 鍵 `workspace-export-settings` 持久化。
 
 資料流：
-- `src/modules/workspace/store.ts`：管理工作台列表、左右資料夾、每欄排序、目前選取檔案與 runtime viewer session。
+- `src/modules/workspace/store.ts`：管理工作台列表、左右資料夾、每欄排序、目前選取檔案與 runtime viewer session；狀態透過 localStorage 鍵 `workspaces` 持久化（含上次開啟資料夾與選取檔案）。
+- `src/modules/workspace/exportSettings.ts`：擷取匯出對話框使用的格式、基準寬度、品質與上次輸出資料夾。
 - `src/modules/media/session.ts`：將原本單一 `media store` 的檢視 session 抽成可重用工廠，讓工作台左右兩欄各自擁有獨立 session。
-- `src-tauri/src/workspace.rs`：提供資料夾掃描、檔案搬移、檔案刪除指令。
+- `src-tauri/src/workspace.rs`：提供資料夾掃描、檔案搬移、檔案刪除與擷取合成（PNG/JPEG/WebP）指令。
 
 ### 導覽行為（Dirty State）
 
@@ -200,6 +201,16 @@ PDF 頁面僅維持高解析度快取（RAW 預設），按需載入並以 LRU �
 - 失效：若檔案雜湊或大小不同則重新計算；文件被編輯標記為 dirty 時不讀寫快取；儲存成功後重算雜湊並清除 dirty。
 - 容量：軟上限（預設 50MB），以 `updated_at` 先進先出刪除，避免 DB 無限增長。
 - 約束：SQLite 檔僅由文字框快取模組建立與管理，其他功能若需共用同一 DB，必須透過共用介面呼叫，不得自行開新連線或新檔。
+
+### 工作台擷取快取（Workspace Capture）
+
+- 目的：加速重複匯出同一批圖片，避免每次都重跑高成本縮圖。
+- 儲存：桌面端放於 app cache 目錄下的 `db/workspace_cache.db`（SQLite），由共用 SQL helper 建立與開啟。
+- Key：`{path, file_size, modified_ns, target_width, resize_method}`。檔案內容或目標寬度改變就重新計算。
+- 內容：儲存精確縮圖後的 RGBA 像素，不改輸出尺寸、不改縮圖方法，只省去重算。
+- 容量：軟上限（預設 256MB），以 `updated_at` 先進先出刪除。
+- 效能判讀：工作台匯出的第一次縮圖在 `debug/dev` build 會明顯偏慢，獨立 benchmark 可到數秒；同條件在 `release` build，現有 `image + Lanczos3` 路徑約為 `84ms`（`4096x2304 -> 1200x675`），屬可接受範圍。
+- 平台決策：曾比較 macOS 內建 `vImage`，速度更快，但目前 `release` 已足夠，因此先維持跨平台共用的 Rust 流程，不引入平台特化後端。
 
 ## 設定系統
 

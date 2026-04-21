@@ -2,44 +2,37 @@
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDoubleRightIcon, PencilSquareIcon, PhotoIcon } from '@heroicons/vue/24/outline'
-import { save as saveDialog } from '@tauri-apps/plugin-dialog'
-import { join } from '@tauri-apps/api/path'
 import WorkspacePane from './parts/WorkspacePane.vue'
+import CaptureExportDialog from './parts/CaptureExportDialog.vue'
 import { useWorkspaceStore } from '@/modules/workspace/store'
 import { useUiStore } from '@/modules/ui/store'
-import { workspaceExportImages } from '@/modules/workspace/service'
-import { useSettingsStore } from '@/modules/settings/store'
-import { clampWorkspaceCaptureBaseWidthPx } from '@/modules/settings/types'
+
+type CaptureSource = {
+  leftPath: string
+  rightPath: string
+  leftCssWidth: number
+  rightCssWidth: number
+  leftImageWidthPx: number | null
+  rightImageWidthPx: number | null
+  defaultBaseName: string
+  defaultDir: string | null
+}
 
 const { t } = useI18n()
 const workspace = useWorkspaceStore()
 const ui = useUiStore()
-const settings = useSettingsStore()
 const captureRoot = ref<HTMLElement | null>(null)
 const isRenaming = ref(false)
 const renameDraft = ref('')
 const renameInput = ref<HTMLInputElement | null>(null)
+const exportDialogOpen = ref(false)
+const exportSource = ref<CaptureSource | null>(null)
 
 function isEditableTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el) return false
   const tag = el.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || (el as any).isContentEditable === true
-}
-
-function getCaptureTargetWidths(leftCssWidth: number, rightCssWidth: number) {
-  const largestCssWidth = Math.max(leftCssWidth, rightCssWidth, 1)
-  const deviceScale = Math.max(1, window.devicePixelRatio || 1)
-  const baseWidth = clampWorkspaceCaptureBaseWidthPx(settings.s.workspaceCaptureBaseWidthPx)
-  const targetLargestWidth = Math.max(
-    Math.round(largestCssWidth * deviceScale),
-    baseWidth,
-  )
-  const scale = targetLargestWidth / largestCssWidth
-  return {
-    left: Math.max(1, Math.round(leftCssWidth * scale)),
-    right: Math.max(1, Math.round(rightCssWidth * scale)),
-  }
 }
 
 async function onKeydown(event: KeyboardEvent) {
@@ -74,7 +67,7 @@ async function onKeydown(event: KeyboardEvent) {
   }
 }
 
-async function onCapture() {
+function onCapture() {
   const root = captureRoot.value
   const current = workspace.currentWorkspace
   if (!root || !current) return
@@ -98,27 +91,22 @@ async function onCapture() {
     if (leftWidth <= 0 || rightWidth <= 0) {
       throw new Error(t('workspace.captureImageMissing'))
     }
-    // Keep the current on-screen ratio, but normalize export size so the
-    // workspace layout does not force tiny output images.
-    const captureWidths = getCaptureTargetWidths(leftWidth, rightWidth)
 
-    const defaultName = `${current.name}.png`
-    const baseDir = workspace.getPaneState('left')?.folderPath || workspace.getPaneState('right')?.folderPath || ''
-    const suggested = baseDir ? await join(baseDir, defaultName) : defaultName
-    const destPath = await saveDialog({
-      defaultPath: suggested,
-      filters: [{ name: 'PNG', extensions: ['png'] }],
-    })
-    if (!destPath) return
+    const baseDir = workspace.getPaneState('left')?.folderPath
+      || workspace.getPaneState('right')?.folderPath
+      || null
 
-    await workspaceExportImages({
+    exportSource.value = {
       leftPath: leftDescriptor.path,
       rightPath: rightDescriptor.path,
-      leftTargetWidthPx: captureWidths.left,
-      rightTargetWidthPx: captureWidths.right,
-      destPath,
-      gapPx: 12,
-    })
+      leftCssWidth: leftWidth,
+      rightCssWidth: rightWidth,
+      leftImageWidthPx: leftDescriptor.width ?? null,
+      rightImageWidthPx: rightDescriptor.width ?? null,
+      defaultBaseName: current.name,
+      defaultDir: baseDir,
+    }
+    exportDialogOpen.value = true
   } catch (error) {
     console.error('[workspace] capture failed', error)
     alert(error instanceof Error && error.message ? error.message : t('workspace.captureFailed'))
@@ -222,5 +210,10 @@ onBeforeUnmount(() => {
       <WorkspacePane pane="left" />
       <WorkspacePane pane="right" />
     </div>
+
+    <CaptureExportDialog
+      v-model:open="exportDialogOpen"
+      :source="exportSource"
+    />
   </div>
 </template>

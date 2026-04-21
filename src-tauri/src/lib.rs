@@ -7,8 +7,10 @@ mod menu;
 mod menu_i18n;
 mod pdf;
 mod signature;
+mod sql;
 mod updater;
 mod workspace;
+mod workspace_cache;
 
 use std::{
     path::{Path, PathBuf},
@@ -175,6 +177,7 @@ pub fn run() {
             crate::pdf::init_pdf_worker(cache_dir.clone());
             crate::signature::init_signature_db(&cache_dir);
             crate::font::init_font_cache();
+            crate::workspace_cache::init_workspace_cache(&cache_dir);
 
             Ok(())
         })

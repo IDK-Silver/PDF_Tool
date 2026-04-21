@@ -13,11 +13,6 @@ import { isAppStoreBuild } from '@/modules/updater/service'
 import {
   SETTINGS_SECTION_IDS,
 } from '@/modules/settings/sections'
-import {
-  WORKSPACE_CAPTURE_BASE_WIDTH_MAX_PX,
-  WORKSPACE_CAPTURE_BASE_WIDTH_MIN_PX,
-  clampWorkspaceCaptureBaseWidthPx,
-} from '@/modules/settings/types'
 
 const { t } = useI18n()
 const settings = useSettingsStore()
@@ -163,27 +158,6 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 <span v-if="settings.actualTheme !== 'dark'" class="block mt-1">{{ $t('settings.appearance.invertColorsDisabled') }}</span>
               </p>
             </label>
-          </div>
-        </div>
-      </section>
-
-      <section :id="settingsSectionIds.workspace" class="space-y-3">
-        <h2 class="font-medium text-base">{{ $t('settings.workspace.title') }}</h2>
-        <div class="rounded-md border p-4 space-y-3">
-          <div>
-            <label class="block mb-1">{{ $t('settings.workspace.captureBaseWidth') }}</label>
-            <input
-              type="number"
-              step="100"
-              :min="WORKSPACE_CAPTURE_BASE_WIDTH_MIN_PX"
-              :max="WORKSPACE_CAPTURE_BASE_WIDTH_MAX_PX"
-              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-              :value="s.workspaceCaptureBaseWidthPx"
-              @input="s.workspaceCaptureBaseWidthPx = clampWorkspaceCaptureBaseWidthPx(number($event, s.workspaceCaptureBaseWidthPx))"
-            />
-            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              {{ $t('settings.workspace.captureBaseWidthDescription') }}
-            </p>
           </div>
         </div>
       </section>

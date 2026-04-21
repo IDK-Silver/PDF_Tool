@@ -141,7 +141,22 @@
     "next": "Next",
     "addWorkspace": "Add workspace",
     "noWorkspaces": "No workspaces",
-    "dropHint": "Create a workspace, then choose folders for both panes"
+    "dropHint": "Create a workspace, then choose folders for both panes",
+    "exportDialog": {
+      "title": "Export capture",
+      "format": "Image format",
+      "formatDesc": "PNG is lossless; JPEG has broad compatibility; WebP is smaller.",
+      "baseWidth": "Base width",
+      "baseWidthDesc": "The larger of the two panes is scaled up to at least this width; on-screen ratio is preserved.",
+      "quality": "Quality",
+      "destination": "Destination",
+      "destPlaceholder": "No destination chosen",
+      "browse": "Browse...",
+      "export": "Export",
+      "exporting": "Exporting...",
+      "cancel": "Cancel",
+      "close": "Close"
+    }
   },
   "settings": {
     "title": "Settings",
@@ -154,7 +169,6 @@
       "language": "Language",
       "update": "Updates",
       "appearance": "Appearance",
-      "workspace": "Workspace",
       "highResRendering": "High-res rendering",
       "performance": "Performance",
       "zoomInteraction": "Zoom interaction",
@@ -182,11 +196,6 @@
       "invertColors": "Invert document colors in dark mode",
       "invertColorsDescription": "In dark mode, invert PDF/image colors so white-on-black documents become black-on-white, better for night reading.",
       "invertColorsDisabled": "Dark mode is not currently active."
-    },
-    "workspace": {
-      "title": "Workspace",
-      "captureBaseWidth": "Capture base width (px)",
-      "captureBaseWidthDescription": "When capturing the workspace, the larger of the two images will be exported at at least this width while preserving the current on-screen ratio. Range 400-4000, default 1200."
     },
     "highRes": {
       "title": "High-resolution rendering",

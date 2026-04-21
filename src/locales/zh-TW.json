@@ -141,7 +141,22 @@
     "next": "下一個",
     "addWorkspace": "新增工作台",
     "noWorkspaces": "沒有工作台",
-    "dropHint": "先新增工作台，再替左右兩欄選資料夾"
+    "dropHint": "先新增工作台，再替左右兩欄選資料夾",
+    "exportDialog": {
+      "title": "匯出擷取",
+      "format": "圖片格式",
+      "formatDesc": "PNG 無損；JPEG 相容性佳；WebP 檔案較小。",
+      "baseWidth": "基準寬度",
+      "baseWidthDesc": "左右兩張中較大的一張至少會輸出到這個寬度，保留目前畫面比例。",
+      "quality": "品質",
+      "destination": "輸出位置",
+      "destPlaceholder": "尚未選擇輸出位置",
+      "browse": "選擇…",
+      "export": "匯出",
+      "exporting": "匯出中…",
+      "cancel": "取消",
+      "close": "關閉"
+    }
   },
   "settings": {
     "title": "設定",
@@ -154,7 +169,6 @@
       "language": "語言",
       "update": "更新",
       "appearance": "外觀",
-      "workspace": "工作台",
       "highResRendering": "高畫質渲染",
       "performance": "效能控制",
       "zoomInteraction": "縮放互動",
@@ -182,11 +196,6 @@
       "invertColors": "暗色模式反轉文件顏色",
       "invertColorsDescription": "在暗色模式下反轉 PDF/圖片的顏色，讓白底黑字的文件變成黑底白字，更適合夜間閱讀。",
       "invertColorsDisabled": "需先啟用暗色模式。"
-    },
-    "workspace": {
-      "title": "工作台",
-      "captureBaseWidth": "擷取基準寬度（px）",
-      "captureBaseWidthDescription": "工作台擷取時，會把左右兩張圖中較大的一張至少輸出到這個寬度，並保留目前畫面比例。範圍 400–4000，預設 1200。"
     },
     "highRes": {
       "title": "高畫質渲染",

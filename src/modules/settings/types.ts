@@ -59,23 +59,8 @@ export interface SettingsState {
   zoomMaxPercent: number                // PDF/圖片共用的最大縮放百分比
   zoomSensitivity: number                // 滾輪縮放敏感度（建議 0.002–0.006，預設 0.0045）
 
-  // === 工作台 ===
-  workspaceCaptureBaseWidthPx: number   // 工作台擷取時，較大圖片的最小輸出寬度
-
   // === 更新 ===
   checkUpdateOnStartup: boolean          // 啟動時自動檢查更新
-}
-
-export const WORKSPACE_CAPTURE_BASE_WIDTH_MIN_PX = 400
-export const WORKSPACE_CAPTURE_BASE_WIDTH_MAX_PX = 4000
-export const WORKSPACE_CAPTURE_BASE_WIDTH_DEFAULT_PX = 1200
-
-export function clampWorkspaceCaptureBaseWidthPx(value: number): number {
-  const fallback = Number.isFinite(value) ? Math.round(value) : WORKSPACE_CAPTURE_BASE_WIDTH_DEFAULT_PX
-  return Math.min(
-    WORKSPACE_CAPTURE_BASE_WIDTH_MAX_PX,
-    Math.max(WORKSPACE_CAPTURE_BASE_WIDTH_MIN_PX, fallback),
-  )
 }
 
 export const defaultSettings: SettingsState = {
@@ -136,9 +121,6 @@ export const defaultSettings: SettingsState = {
   // 縮放互動
   zoomMaxPercent: 400,                // 預設最大縮放 400%，適用於 PDF 與圖片
   zoomSensitivity: 0.0045,            // 預設：0.0045（較快的滾輪縮放）
-
-  // 工作台
-  workspaceCaptureBaseWidthPx: WORKSPACE_CAPTURE_BASE_WIDTH_DEFAULT_PX,
 
   // 更新
   checkUpdateOnStartup: true,         // 預設：啟動時自動檢查更新
