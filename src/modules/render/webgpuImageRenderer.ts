@@ -175,13 +175,8 @@ function sourceHeight(source: WebGpuImageSource): number {
 }
 
 function resizeCanvas(canvas: HTMLCanvasElement, source: WebGpuImageSource) {
-  const rect = canvas.getBoundingClientRect()
-  const ratio = sourceHeight(source) / Math.max(1, sourceWidth(source))
-  const cssWidth = Math.max(1, rect.width || sourceWidth(source))
-  const cssHeight = Math.max(1, rect.height || Math.round(cssWidth * ratio))
-  const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2))
-  const width = Math.max(1, Math.round(cssWidth * dpr))
-  const height = Math.max(1, Math.round(cssHeight * dpr))
+  const width = Math.max(1, Math.round(sourceWidth(source)))
+  const height = Math.max(1, Math.round(sourceHeight(source)))
 
   if (canvas.width !== width) canvas.width = width
   if (canvas.height !== height) canvas.height = height
