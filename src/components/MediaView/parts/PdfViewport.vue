@@ -15,6 +15,7 @@ import PdfTextLayer from './PdfTextLayer.vue'
 import PdfSearchPanel from './PdfSearchPanel.vue'
 import PdfPageContextMenu from './PdfPageContextMenu.vue'
 import AnnotationLayer from './AnnotationLayer.vue'
+import WebGpuImageCanvas from './WebGpuImageCanvas.vue'
 import { usePdfSearch } from './usePdfSearch'
 import { useAnnotationStore } from '@/modules/annotation/store'
 
@@ -130,13 +131,7 @@ const isRestoringLastPage = ref(true)
 let restoreToken = 0
 
 function getRenderFormat() {
-  return settings.s.renderFormat
-}
-function getRenderQuality() {
-  const fmt = settings.s.renderFormat
-  if (fmt === 'jpeg') return settings.s.jpegQuality
-  if (fmt === 'webp') return 85
-  return 75
+  return 'raw' as const
 }
 function getPageDisplayUrl(idx: number): string | undefined {
   const page = media.pdfPages[idx]
@@ -145,54 +140,46 @@ function getPageDisplayUrl(idx: number): string | undefined {
   return undefined
 }
 
-function isRawPage(idx: number): boolean {
+function getRawPageImageData(idx: number): ImageData | undefined {
   const page = media.pdfPages[idx]
-  return !!page && page.format === 'raw' && !!page.rawImageData
+  if (!page || page.format !== 'raw' || !page.rawImageData) return undefined
+  return page.rawImageData
 }
 
-function drawRawInto(el: HTMLCanvasElement | null, idx: number) {
-  if (!el) return
-  const page = media.pdfPages[idx]
-  if (!page || page.format !== 'raw' || !page.rawImageData) return
-  const d = page.rawImageData
-  if (el.width !== d.width) el.width = d.width
-  if (el.height !== d.height) el.height = d.height
-  const ctx = el.getContext('2d')
-  if (!ctx) return
-  ctx.putImageData(d, 0, 0)
+function hasPageImageSource(idx: number): boolean {
+  return !!getPageDisplayUrl(idx) || !!getRawPageImageData(idx)
 }
 
 const totalPages = computed(() => media.descriptor?.pages ?? 0)
 const docId = computed(() => media.docId)
 
-function dprForMode() {
-  // Fit 模式下也使用統一的 currentRenderingZoom 來判斷
-  return viewMode.value === 'fit' ? Math.min(window.devicePixelRatio || 1, settings.s.dprCap) : 1
+function renderDpi() {
+  return Math.max(24, Math.round(settings.s.pdfRenderDpi || 144))
 }
-function dpiForActual() {
-  const dpi = Math.max(24, Math.round(96 * (currentRenderingZoom.value / 100)))
-  const cap = Math.max(48, settings.s.actualModeDpiCap || dpi)
-  return Math.min(dpi, cap)
-}
+
+const PDF_RENDER_OVERSCAN = 4
 
 async function handleZoomIn() {
   const ctx = createZoomContext()
   const currentZoom = Math.round(currentRenderingZoom.value)
   await setZoom(currentZoom + 25, ctx, { type: 'viewport-center' })
-  triggerRerender(300)
+  updateVisibleByScroll()
+  schedulePdfRender()
 }
 
 async function handleZoomOut() {
   const ctx = createZoomContext()
   const currentZoom = Math.round(currentRenderingZoom.value)
   await setZoom(currentZoom - 25, ctx, { type: 'viewport-center' })
-  triggerRerender(300)
+  updateVisibleByScroll()
+  schedulePdfRender()
 }
 
 async function handleResetZoom() {
   const ctx = createZoomContext()
   await resetZoom(ctx, { type: 'viewport-center' })
-  triggerRerender(300)
+  updateVisibleByScroll()
+  schedulePdfRender()
 }
 
 async function handleSetFitMode() {
@@ -200,24 +187,13 @@ async function handleSetFitMode() {
   // Always recalculate fit percent and re-enter fit mode so workspace reflows immediately.
   await updateFitPercent()
   await setFitMode(ctx, { type: 'viewport-center' })
-  triggerRerender(300)
+  updateVisibleByScroll()
+  schedulePdfRender()
 
   // CSS handles centering via margin:auto, just reset scrollLeft after layout settles
   setTimeout(() => {
     centerPageHorizontally(displayPageIndex.value)
   }, 100)
-}
-
-function triggerRerender(delay: number = 0) {
-  pendingIdx.clear()
-  const tp = totalPages.value || 0
-  if (tp > 0) {
-    const start = Math.max(0, visibleStart.value)
-    const end = Math.min(tp - 1, visibleEnd.value)
-    for (let i = start; i <= end; i++) pendingIdx.add(i)
-  }
-  rafScheduled = false
-  scheduleHiResRerender(delay)
 }
 
 // 頁面頂部的視覺留白，讓閱讀體驗更舒適
@@ -503,7 +479,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
           pendingIdx.clear()
           const target = Math.max(0, Math.min(routed.pageIndex, Math.max(0, pages - 1)))
           void gotoPage(target + 1).then(() => {
-            scheduleHiResRerender(0)
+            schedulePdfRender()
           })
         }).catch(() => {})
         return
@@ -519,7 +495,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
         pendingIdx.clear()
         const target = Math.max(0, Math.min(pageIndexBefore, Math.max(0, pages - 1)))
         void gotoPage(target + 1).then(() => {
-          scheduleHiResRerender(0)
+          schedulePdfRender()
         })
       }).catch(() => {})
       return
@@ -541,7 +517,7 @@ function handleGlobalKeyDown(e: KeyboardEvent) {
       centerIndex.value = clamped
       displayPageIndex.value = clamped
       pendingIdx.clear()
-      scheduleHiResRerender(0)
+      schedulePdfRender()
     }).catch(() => {})
     return
   }
@@ -684,7 +660,7 @@ async function deletePageFromMenu(pageIndex: number) {
     pendingIdx.clear()
     const tp = res.pages
     for (let i = pageIndex; i < Math.min(tp, pageIndex + 5); i++) pendingIdx.add(i)
-    scheduleHiResRerender(0)
+    schedulePdfRender()
   } catch (e: any) {
     media.pdfPages = oldPagesArr as any
     media.pageSizesPt = oldSizes as any
@@ -824,7 +800,7 @@ async function insertBlankAt(pageIndex: number, before: boolean) {
     pendingIdx.clear()
     const tp = res.pages
     for (let i = insertIndex; i < Math.min(tp, insertIndex + 6); i++) pendingIdx.add(i)
-    scheduleHiResRerender(0)
+    schedulePdfRender()
 
     // [修復] 等待佈局穩定後恢復
     await nextTick()
@@ -918,7 +894,7 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       if (insertIndex <= oldCenter) centerIndex.value = oldCenter + inserted
       pendingIdx.clear()
       for (let i = insertIndex; i < insertIndex + Math.min(inserted + 6, (media.descriptor?.pages || 0) - insertIndex); i++) pendingIdx.add(i)
-      scheduleHiResRerender(0)
+      schedulePdfRender()
 
       for (let i = 0; i < src.pages; i++) {
         const res = await pdfCopyPage({ srcDocId: src.docId, srcIndex: i, destDocId: id, destIndex: insertIndex + i })
@@ -948,7 +924,7 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       if (insertIndex <= oldCenter) centerIndex.value = oldCenter + 1
       pendingIdx.clear()
       for (let i = insertIndex; i < insertIndex + Math.min(inserted + 6, (media.descriptor?.pages || 0) - insertIndex); i++) pendingIdx.add(i)
-      scheduleHiResRerender(0)
+      schedulePdfRender()
 
       const src = await pdfOpen(tempPath)
       const res = await pdfCopyPage({ srcDocId: src.docId, srcIndex: 0, destDocId: id, destIndex: insertIndex })
@@ -962,7 +938,7 @@ async function insertFileAt(pageIndex: number, before: boolean) {
       pendingIdx.clear()
       const tp = finalPages
       for (let i = insertIndex; i < Math.min(tp, insertIndex + inserted + 6); i++) pendingIdx.add(i)
-      scheduleHiResRerender(0)
+      schedulePdfRender()
       if (lastMutation) {
         media.setDirtyState(lastMutation.dirty, lastMutation.revision)
       }
@@ -1038,7 +1014,7 @@ async function rotatePlus90(pageIndex: number) {
 
     // 等待 Vue 更新後再觸發重新渲染
     await nextTick()
-    scheduleHiResRerender(0)
+    schedulePdfRender()
 
     // Removed: auto updateFitPercent after rotation
     // User must manually re-click "fit width" to recalculate
@@ -1098,12 +1074,10 @@ let resizeObs: ResizeObserver | null = null
 let rafScheduled = false
 const pendingIdx = new Set<number>()
 const containerW = ref(0)
-let hiResTimer: number | null = null
 
 const visibleStart = ref(0)
 const visibleEnd = ref(0)
 let scrollRaf: number | null = null
-let scrollEndTimer: number | null = null
 
 function updateVisibleByScroll() {
   // 如果正在處理佈局變更（如模式切換），暫停更新 centerIndex，防止文字層被誤刪
@@ -1132,7 +1106,7 @@ function updateVisibleByScroll() {
   displayPageIndex.value = closestIndex
   media.setPriorityIndex(closestIndex)
 
-  const overscan = settings.s.highResOverscan || 5
+  const overscan = PDF_RENDER_OVERSCAN
   const elements = root.querySelectorAll('[data-pdf-page]')
   const visibleIndices: number[] = []
   const rootRect = root.getBoundingClientRect()
@@ -1288,7 +1262,6 @@ async function restoreSelectionIfNeeded() {
 
 function onScroll() {
   if (scrollRaf !== null) return
-  if (scrollEndTimer) clearTimeout(scrollEndTimer)
   scrollRaf = requestAnimationFrame(() => {
     scrollRaf = null
     const prevDisplayPage = displayPageIndex.value
@@ -1299,39 +1272,18 @@ function onScroll() {
       centerPageHorizontally(displayPageIndex.value)
     }
 
-    if (scrollEndTimer) clearTimeout(scrollEndTimer)
-    const endMs = Math.max(0, Number(settings.s.scrollEndDebounceMs) || 0)
-    scrollEndTimer = window.setTimeout(() => {
-      centerIndex.value = displayPageIndex.value
-      centerPageHorizontally(centerIndex.value)
-      requestAnimationFrame(() => {
-        scheduleHiResRerender()
-      })
-      scrollEndTimer = null
-    }, endMs)
+    centerIndex.value = displayPageIndex.value
+    schedulePdfRender()
   })
 }
 
-function scheduleHiResRerender(delay?: number) {
-  if (hiResTimer) {
-    clearTimeout(hiResTimer)
-    hiResTimer = null
-  }
-  const ms = typeof delay === 'number' ? delay : (Number(settings.s.hiResRerenderDelayMs) || 0)
-  hiResTimer = window.setTimeout(() => {
-    const tp = totalPages.value || 0
-    if (tp <= 0) {
-      hiResTimer = null
-      return
-    }
-    const start = Math.max(0, visibleStart.value)
-    const end = Math.min(tp - 1, visibleEnd.value)
-    pendingIdx.clear()
-    for (let i = start; i <= end; i++) pendingIdx.add(i)
-    rafScheduled = false
-    scheduleProcess()
-    hiResTimer = null
-  }, ms)
+function schedulePdfRender() {
+  const tp = totalPages.value || 0
+  if (tp <= 0) return
+  const start = Math.max(0, visibleStart.value)
+  const end = Math.min(tp - 1, visibleEnd.value)
+  for (let i = start; i <= end; i++) pendingIdx.add(i)
+  scheduleProcess()
 }
 
 function scheduleProcess() {
@@ -1344,23 +1296,15 @@ function scheduleProcess() {
     const tp = totalPages.value || 0
     if (tp <= 0) return
     const center = centerIndex.value
-    const overscan = settings.s.highResOverscan
+    const overscan = PDF_RENDER_OVERSCAN
     const start = Math.max(0, Math.min(visibleStart.value, center - overscan))
     const end = Math.min(tp - 1, Math.max(visibleEnd.value, center + overscan))
     media.enforceVisibleRange(start, end)
     const allowed = new Set<number>()
     for (let i = start; i <= end; i++) allowed.add(i)
     const work = list.filter((idx) => allowed.has(idx))
-    const cW = containerW.value || 800
     for (const idx of work) {
-      if (viewMode.value === 'actual') {
-        media.renderPdfPage(idx, undefined, getRenderFormat(), getRenderQuality(), dpiForActual())
-      } else {
-        const dpr = dprForMode()
-        const baseW = cW
-        const hiW = Math.min(Math.floor(baseW * dpr), Math.max(320, settings.s.maxOutputWidth || 2147483647))
-        media.renderPdfPage(idx, hiW, getRenderFormat(), getRenderQuality())
-      }
+      media.renderPdfPage(idx, undefined, getRenderFormat(), renderDpi())
     }
   })
 }
@@ -1453,8 +1397,8 @@ onMounted(async () => {
         const shouldRerender = oldW > 0 ? sizeDiff / oldW > 0.1 : false
         if (shouldRerender && w !== lastResizeWidth) {
           lastResizeWidth = w
-          if (hiResTimer) clearTimeout(hiResTimer)
-          scheduleHiResRerender(500)
+          updateVisibleByScroll()
+          schedulePdfRender()
         }
       } else {
         containerW.value = w
@@ -1477,8 +1421,6 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (scrollEndTimer) clearTimeout(scrollEndTimer)
-  if (hiResTimer) clearTimeout(hiResTimer)
   if (fitTimer) clearTimeout(fitTimer)
   if (viewModeResizeTimer) {
     clearTimeout(viewModeResizeTimer)
@@ -1501,7 +1443,6 @@ watch(viewMode, () => {
 
   // 立即更新 Fit Percent 確保 currentRenderingZoom 有正確數值
   updateFitPercent()
-  scheduleHiResRerender()
 
   // 給予瀏覽器足夠時間完成 CSS 佈局與 Scroll 修正 (約 200ms)
   if (viewModeResizeTimer) clearTimeout(viewModeResizeTimer)
@@ -1511,6 +1452,7 @@ watch(viewMode, () => {
     await nextTick()
     // 解鎖後，手動觸發一次更新，確保文字層的位置與尺寸參數是基於新的模式計算的
     updateVisibleByScroll()
+    schedulePdfRender()
     restoreCurrentPageAfterLayout(lockedPage)
     debugTextLayerState('after-mode-change', lockedPage)
     await primeTextLayerForPage(lockedPage)
@@ -1650,17 +1592,17 @@ onBeforeUnmount(() => {
 function handleWheelZoom(e: WheelEvent) {
   const ctx = createZoomContext()
   if (!ctx) return
-  zoomHandleWheel(e, ctx, () => triggerRerender(300))
+  zoomHandleWheel(e, ctx, () => {
+    updateVisibleByScroll()
+    schedulePdfRender()
+  })
 }
 
 const shouldInvertColors = computed(() => settings.actualTheme === 'dark' && settings.s.invertColorsInDarkMode)
 
 function imgStyle(idx: number) {
   const styles: Record<string, string> = {}
-
-  if (shouldInvertColors.value) {
-    styles.filter = 'invert(1) hue-rotate(180deg)'
-  }
+  styles.pointerEvents = 'none'
 
   // [重構] 統一使用 CSS 變數控制寬度
   const base = media.baseCssWidthAt100(idx)
@@ -1845,25 +1787,16 @@ defineExpose({
               >
                 <!-- DOM 虛擬化：只渲染視野附近頁面的實際內容 -->
                 <template v-if="shouldRenderPageContent(idx)">
-                  <img
-                    v-if="getPageDisplayUrl(idx)"
+                  <WebGpuImageCanvas
+                    v-if="hasPageImageSource(idx)"
                     :src="getPageDisplayUrl(idx)"
-                    :alt="`page-${idx}`"
+                    :image-data="getRawPageImageData(idx)"
+                    :invert="shouldInvertColors"
                     class="block disable-live-text"
                     :style="imgStyle(idx)"
-                    style="pointer-events: none;"
-                    decoding="async"
-                    loading="lazy"
-                    draggable="false"
-                    @load="onPageImageLoad"
-                  />
-                  <canvas
-                    v-else-if="isRawPage(idx)"
-                    class="block disable-live-text"
-                    :style="imgStyle(idx)"
-                    style="pointer-events: none;"
                     :data-raw-page="idx"
-                    :ref="(el: any) => drawRawInto(el as HTMLCanvasElement | null, idx)"
+                    :aria-label="`page-${idx}`"
+                    @ready="onPageImageLoad"
                   />
                   <div v-else class="w-full aspect-[1/1.414] bg-muted animate-pulse"></div>
 

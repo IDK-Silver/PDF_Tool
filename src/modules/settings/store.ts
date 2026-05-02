@@ -41,8 +41,35 @@ function applyTheme(theme: ActualTheme) {
 
 const STORAGE_KEY = 'settings'
 
+function normalizeSettings(loaded: Partial<SettingsState> & Record<string, unknown>): SettingsState {
+  const normalized = { ...defaultSettings }
+  const normalizedRecord = normalized as Record<keyof SettingsState, unknown>
+  for (const key of Object.keys(defaultSettings) as Array<keyof SettingsState>) {
+    if (Object.prototype.hasOwnProperty.call(loaded, key)) {
+      normalizedRecord[key] = loaded[key]
+    }
+  }
+  if (
+    !Object.prototype.hasOwnProperty.call(loaded, 'pdfRenderDpi') &&
+    typeof loaded.highResDpiCap === 'number'
+  ) {
+    normalized.pdfRenderDpi = loaded.highResDpiCap
+  }
+  return normalized
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const s = ref<SettingsState>({ ...defaultSettings })
+
+  function replaceSettings(next: SettingsState) {
+    const current = s.value as Record<string, unknown>
+    for (const key of Object.keys(current)) {
+      if (!Object.prototype.hasOwnProperty.call(defaultSettings, key)) {
+        delete current[key]
+      }
+    }
+    Object.assign(s.value, next)
+  }
 
   // Track current actual theme for reactivity
   const actualTheme = ref<ActualTheme>(resolveTheme(s.value.theme))
@@ -60,8 +87,8 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // Initial load (localStorage)
   ;(async () => {
-    const loaded = await readLocalJson<SettingsState>(STORAGE_KEY, { ...defaultSettings })
-    Object.assign(s.value, loaded)
+    const loaded = await readLocalJson<Partial<SettingsState> & Record<string, unknown>>(STORAGE_KEY, { ...defaultSettings })
+    replaceSettings(normalizeSettings(loaded))
     actualTheme.value = resolveTheme(s.value.theme)
     applyTheme(actualTheme.value)
     // Set initial locale (vue-i18n already initialized from localStorage in locales/index.ts,
@@ -131,7 +158,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function reset() {
     // 保持物件身份不變，避免使用端持有舊引用而不更新
-    Object.assign(s.value, defaultSettings)
+    replaceSettings({ ...defaultSettings })
   }
 
   return {

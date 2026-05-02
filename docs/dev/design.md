@@ -12,6 +12,7 @@ PDF_Tool 是一個基於 Tauri + Vue 3 的 PDF 與圖片檢視器及編輯工具
 - **後端**: Rust + Tauri
 - **狀態管理**: Pinia
 - **PDF 渲染**: pdfium-render
+- **檢視顯示管線**: WebGPU canvas（PDF 與圖片共用）
 
 ### 目錄結構
 
@@ -58,9 +59,9 @@ src-tauri/
    - 後端使用 `image` crate 解碼圖片
    - 回傳圖片 bytes、寬高、MIME 類型
 4. **前端顯示**:
-   - 建立 Blob URL
+   - 建立 WebGPU 可讀的影像來源
    - 更新 descriptor 資訊（寬高）
-   - 渲染到 MediaView 組件
+   - 透過 WebGPU canvas 顯示到 MediaView 組件
 
 ### API
 
@@ -127,7 +128,7 @@ MediaView 組件支援兩種檢視模式：
 2. **實際大小** (Actual Size Mode)
    - 以原始尺寸的百分比顯示
    - 支援縮放 (10% - 400%)
-   - 使用 CSS transform 實現即時縮放
+   - 使用 WebGPU canvas 貼圖顯示，CSS 尺寸負責版面與捲動範圍
 
 ### 縮放系統
 
@@ -142,8 +143,9 @@ MediaView 組件支援兩種檢視模式：
 
 - `MediaView.vue`：主控容器，負責選擇媒體型態、串接工具列與載入狀態。
 - `MediaView/parts/MediaToolbar.vue`：檔案儲存與縮放控制列，透過事件呼叫檢視器動作。
-- `MediaView/parts/PdfViewport.vue`：專責 PDF 頁面渲染、快取與右鍵操作。
-- `MediaView/parts/ImageViewport.vue`：圖片檢視與縮放控制，保持與 PDF 相同的檢視體驗。
+- `MediaView/parts/PdfViewport.vue`：專責 PDF 頁面渲染排程、快取與右鍵操作；頁面像素交給 WebGPU canvas 顯示。
+- `MediaView/parts/ImageViewport.vue`：圖片檢視與縮放控制；圖片像素交給 WebGPU canvas 顯示，保持與 PDF 相同的檢視體驗。
+- `MediaView/parts/WebGpuImageCanvas.vue`：PDF 與圖片共用的 WebGPU 貼圖顯示元件。
 
 右鍵選單：
 - 插入空白頁（自動判斷插入於頁面「之前/之後」；預設紙張可選「根據當前頁」）
@@ -191,7 +193,16 @@ MediaView 組件支援兩種檢視模式：
 
 ### 快取策略（PDF）
 
-PDF 頁面僅維持高解析度快取（RAW 預設），按需載入並以 LRU 策略淘汰，確保視覺品質與互動流暢。低清預覽已移除。
+PDF 頁面僅維持 RAW 高解析度快取，按需載入並以 LRU 策略淘汰，確保視覺品質與互動流暢。低清預覽已移除。
+
+顯示管線：
+- PDF viewer 頁面仍由 Rust/pdfium-render 依設定的 PDF 渲染 DPI 光柵化為 RAW `ImageData`。
+- Fit 與實際大小模式使用同一個 DPI；不再用 DPR 或最大輸出寬度改變頁面像素。
+- 縮放只改變 WebGPU canvas 的顯示比例，不觸發 PDF 重新光柵化；canvas backing buffer 固定使用 RAW 來源尺寸，避免放大時要求超大的 WebGPU current texture。
+- 前端不再以 `<img>` 或 2D canvas 作為 PDF/圖片的主要顯示路徑。
+- `WebGpuImageCanvas.vue` 將 RAW `ImageData` 或影像 Blob 上傳為 GPU texture，再繪製到 WebGPU canvas。
+- 暗色模式反色在 WebGPU fragment shader 內處理，避免額外 DOM filter。
+- 不提供 2D canvas 顯示 fallback；若目標 WebView 不支援 WebGPU，畫面會顯示 WebGPU 錯誤狀態。
 
 ### 文字框快取（PDF Text）
 
@@ -216,8 +227,7 @@ PDF 頁面僅維持高解析度快取（RAW 預設），按需載入並以 LRU �
 
 使用 Pinia store 管理全域設定，支援：
 
-- 渲染格式 (PNG/JPEG/WebP/Raw)
-- DPI 與品質設定
+- PDF 渲染 DPI
 - 深色模式
 - 快取大小限制
 - 等等...
@@ -247,9 +257,7 @@ PDF 頁面僅維持高解析度快取（RAW 預設），按需載入並以 LRU �
 
 ## 未來規劃
 
-- [ ] PDF View 大改版
-  - [ ] 改為純 WebGL 顯示管線，不再使用 `<img>` 或 2D canvas 作為 PDF 頁面顯示主路徑
-  - [ ] 不提供舊顯示管線 fallback，直接以新架構為準
+- [ ] PDF View 渲染排程重整
   - [ ] 重新設計 PDF View 的渲染排程，優先服務目前頁面
   - [ ] 設定頁一併重做，改成對應新渲染架構的參數與模式
 - [ ] PDF 標註系統（詳見 `docs/annotation-system.md`）
