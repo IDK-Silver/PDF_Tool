@@ -1,4 +1,4 @@
-import { computed, proxyRefs, ref, type ShallowUnwrapRef } from 'vue'
+import { computed, proxyRefs, ref, watch, type ShallowUnwrapRef } from 'vue'
 import type { FileItem } from '@/components/FileList/types'
 import type { MediaDescriptor, PageRender, PageTextContent } from './types'
 import {
@@ -21,7 +21,9 @@ import { useFileListStore } from '@/modules/filelist/store'
 import { save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 import { dirname, join } from '@tauri-apps/api/path'
 
-const RAW_HIGH_RES_CACHE_SIZE = 10
+const BYTES_PER_MB = 1024 * 1024
+const MIN_RAW_CACHE_MB = 64
+const MAX_RAW_CACHE_MB = 512
 
 export function createMediaSessionController() {
   const selected = ref<FileItem | null>(null)
@@ -51,11 +53,13 @@ export function createMediaSessionController() {
   const renderSessionId = ref(0)
   const priorityIndex = ref(0)
   const highResPages = new Set<number>()
-  const getMaxHiResCache = () => RAW_HIGH_RES_CACHE_SIZE
-  let evictCounter = 0
 
   let applyScheduled = false
   const pendingApply: Array<{ idx: number; page: PageRender }> = []
+
+  watch(() => settings.s.rawCacheMaxMb, () => {
+    evictHighResCache()
+  })
 
   function scheduleApplyFrame() {
     if (applyScheduled) return
@@ -85,6 +89,7 @@ export function createMediaSessionController() {
         }
         if (idx === 0) pdfFirstPage.value = pdfPages.value[0]
       }
+      evictHighResCache()
     })
   }
 
@@ -96,7 +101,6 @@ export function createMediaSessionController() {
     pageGen.value = {}
     pendingApply.length = 0
     applyScheduled = false
-    evictCounter = 0
     priorityIndex.value = 0
   }
 
@@ -486,9 +490,6 @@ export function createMediaSessionController() {
           if (pageGen.value[idx] === gen) {
             pendingApply.push({ idx, page })
             scheduleApplyFrame()
-            if (++evictCounter % 3 === 0) {
-              evictHighResCache()
-            }
           } else if (page.contentUrl) {
             try { URL.revokeObjectURL(page.contentUrl) } catch {}
           }
@@ -507,9 +508,30 @@ export function createMediaSessionController() {
     }
   }
 
+  function getRawCacheMaxBytes() {
+    const rawValue = Number(settings.s.rawCacheMaxMb)
+    const mb = Number.isFinite(rawValue) ? rawValue : MAX_RAW_CACHE_MB
+    return Math.min(MAX_RAW_CACHE_MB, Math.max(MIN_RAW_CACHE_MB, Math.round(mb))) * BYTES_PER_MB
+  }
+
+  function pageCacheBytes(page: PageRender | null | undefined) {
+    if (!page) return 0
+    if (page.format === 'raw' && page.rawImageData) {
+      return page.rawImageData.data.byteLength
+    }
+    if (page.highResUrl) {
+      return page.widthPx * page.heightPx * 4
+    }
+    return 0
+  }
+
   function evictHighResCache() {
-    const maxCache = getMaxHiResCache()
-    if (highResPages.size <= maxCache) return
+    const maxBytes = getRawCacheMaxBytes()
+    let totalBytes = 0
+    for (const idx of highResPages) {
+      totalBytes += pageCacheBytes(pdfPages.value[idx])
+    }
+    if (totalBytes <= maxBytes) return
 
     const sorted = Array.from(highResPages).sort((a, b) => {
       const distA = Math.abs(a - priorityIndex.value)
@@ -517,9 +539,10 @@ export function createMediaSessionController() {
       return distB - distA
     })
 
-    const toRemove = sorted.slice(0, sorted.length - maxCache)
-    for (const idx of toRemove) {
+    for (const idx of sorted) {
+      if (totalBytes <= maxBytes) break
       const page = pdfPages.value[idx]
+      const bytes = pageCacheBytes(page)
       if (page?.highResUrl) {
         try { URL.revokeObjectURL(page.highResUrl) } catch {}
         pdfPages.value[idx] = {
@@ -532,6 +555,7 @@ export function createMediaSessionController() {
           rawImageData: undefined,
         }
       }
+      totalBytes -= bytes
       highResPages.delete(idx)
     }
   }

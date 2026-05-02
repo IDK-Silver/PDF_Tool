@@ -27,6 +27,7 @@ const number = (e: Event, fallback: number) => {
   return Number.isFinite(v) ? v : fallback
 }
 const clampZoomMax = (v: number) => Math.min(800, Math.max(50, Math.round(v)))
+const clampRawCacheMaxMb = (v: number) => Math.min(512, Math.max(64, Math.round(v)))
 
 // App Store build detection (hide update settings for App Store)
 const isAppStore = ref(true) // default true to hide until we know for sure
@@ -172,11 +173,29 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
           <div>
             <label class="block mb-1">{{ $t('settings.highRes.pdfRenderDpi') }}</label>
             <input
+              type="number"
+              min="24"
+              step="12"
               class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
               :value="s.pdfRenderDpi"
               @input="s.pdfRenderDpi = number($event, s.pdfRenderDpi)"
             />
             <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.pdfRenderDpiDescription') }}</p>
+          </div>
+
+          <div>
+            <label class="block mb-1">{{ $t('settings.highRes.rawCacheMaxMb') }}</label>
+            <input
+              type="number"
+              min="64"
+              max="512"
+              step="64"
+              class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
+              :value="s.rawCacheMaxMb"
+              @input="s.rawCacheMaxMb = number($event, s.rawCacheMaxMb)"
+              @blur="s.rawCacheMaxMb = clampRawCacheMaxMb(s.rawCacheMaxMb)"
+            />
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.rawCacheMaxMbDescription') }}</p>
           </div>
         </div>
       </section>

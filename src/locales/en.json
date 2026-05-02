@@ -200,7 +200,9 @@
       "title": "PDF rendering",
       "description": "PDF pages are rasterized to RAW images at a fixed DPI, then displayed through WebGPU.",
       "pdfRenderDpi": "PDF render DPI",
-      "pdfRenderDpiDescription": "Higher DPI is sharper and uses more memory and render time. Default 144. Zoom only scales the WebGPU output and does not re-render the PDF."
+      "pdfRenderDpiDescription": "Higher DPI is sharper and uses more memory and render time. Default 144. Zoom only scales the WebGPU output and does not re-render the PDF.",
+      "rawCacheMaxMb": "RAW cache limit (MB)",
+      "rawCacheMaxMbDescription": "Keep rendered pages until RAW cache exceeds this limit. Default 512 MB, adjustable from 64-512 MB."
     },
     "performance": {
       "title": "Performance control",

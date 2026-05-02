@@ -19,6 +19,7 @@ export interface SettingsState {
 
   // === 渲染品質 ===
   pdfRenderDpi: number                   // PDF 檢視渲染 DPI
+  rawCacheMaxMb: number                  // RAW page cache max size in MB
 
   // === 效能控制 ===
   maxConcurrentRenders: number      // 最大並行渲染數
@@ -66,6 +67,7 @@ export const defaultSettings: SettingsState = {
 
   // 渲染品質
   pdfRenderDpi: 144,          // A3: 96dpi=1.78M pixels, 144dpi=4M pixels
+  rawCacheMaxMb: 512,
 
   // 效能控制
   maxConcurrentRenders: 4,    // 激進降至 2（大檔案單頁 500ms）

@@ -193,10 +193,11 @@ MediaView 組件支援兩種檢視模式：
 
 ### 快取策略（PDF）
 
-PDF 頁面僅維持 RAW 高解析度快取，按需載入並以 LRU 策略淘汰，確保視覺品質與互動流暢。低清預覽已移除。
+PDF 頁面僅維持 RAW 高解析度快取，按需載入並以記憶體上限淘汰，確保視覺品質與互動流暢。低清預覽已移除。
 
 顯示管線：
 - PDF viewer 頁面仍由 Rust/pdfium-render 依設定的 PDF 渲染 DPI 光柵化為 RAW `ImageData`。
+- RAW cache 依設定的 MB 上限管理，預設 512MB，最高 512MB；超過時優先淘汰離目前頁最遠的頁面。
 - Fit 與實際大小模式使用同一個 DPI；不再用 DPR 或最大輸出寬度改變頁面像素。
 - 縮放只改變 WebGPU canvas 的顯示比例，不觸發 PDF 重新光柵化；canvas backing buffer 固定使用 RAW 來源尺寸，避免放大時要求超大的 WebGPU current texture。
 - 前端不再以 `<img>` 或 2D canvas 作為 PDF/圖片的主要顯示路徑。

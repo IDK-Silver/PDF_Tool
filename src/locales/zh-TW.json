@@ -200,7 +200,9 @@
       "title": "PDF 渲染",
       "description": "PDF 頁面會用固定 DPI 轉成 RAW 影像，再交由 WebGPU 顯示。",
       "pdfRenderDpi": "PDF 渲染 DPI",
-      "pdfRenderDpiDescription": "DPI 越高越清晰，也越吃記憶體與渲染時間。預設 144。縮放只放大或縮小 WebGPU 畫面，不會重新渲染 PDF。"
+      "pdfRenderDpiDescription": "DPI 越高越清晰，也越吃記憶體與渲染時間。預設 144。縮放只放大或縮小 WebGPU 畫面，不會重新渲染 PDF。",
+      "rawCacheMaxMb": "RAW 快取上限（MB）",
+      "rawCacheMaxMbDescription": "保留已渲染頁面直到 RAW cache 超過此上限。預設 512 MB，可調範圍 64–512 MB。"
     },
     "performance": {
       "title": "效能控制",
