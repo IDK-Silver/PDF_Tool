@@ -21,6 +21,8 @@ import { useFileListStore } from '@/modules/filelist/store'
 import { save as saveDialog, confirm as confirmDialog } from '@tauri-apps/plugin-dialog'
 import { dirname, join } from '@tauri-apps/api/path'
 
+const RAW_HIGH_RES_CACHE_SIZE = 10
+
 export function createMediaSessionController() {
   const selected = ref<FileItem | null>(null)
   const descriptor = ref<MediaDescriptor | null>(null)
@@ -49,7 +51,7 @@ export function createMediaSessionController() {
   const renderSessionId = ref(0)
   const priorityIndex = ref(0)
   const highResPages = new Set<number>()
-  const getMaxHiResCache = () => settings.s.renderFormat === 'raw' ? settings.s.rawHighResCacheSize : 50
+  const getMaxHiResCache = () => RAW_HIGH_RES_CACHE_SIZE
   let evictCounter = 0
 
   let applyScheduled = false
@@ -407,7 +409,7 @@ export function createMediaSessionController() {
     if (!d || d.type !== 'pdf') return
   }
 
-  async function renderPdfPage(index: number, targetWidth?: number, format?: 'png' | 'jpeg' | 'webp' | 'raw', _quality?: number, dpi?: number) {
+  async function renderPdfPage(index: number, targetWidth?: number, format?: 'png' | 'jpeg' | 'webp' | 'raw', dpi?: number) {
     const d = descriptor.value
     if (!d || d.type !== 'pdf') return
     if (index < 0) return
@@ -418,7 +420,7 @@ export function createMediaSessionController() {
       const size = pageSizesPt.value[index] || await getPageSizePt(index)
       if (size) {
         const impliedDpi = (targetWidth * 72) / size.widthPt
-        const cappedDpi = Math.min(impliedDpi, settings.s.highResDpiCap)
+        const cappedDpi = Math.min(impliedDpi, settings.s.pdfRenderDpi)
         requiredWidth = Math.floor(size.widthPt * cappedDpi / 72)
       } else {
         requiredWidth = targetWidth
@@ -426,7 +428,7 @@ export function createMediaSessionController() {
     } else if (typeof dpi === 'number' && dpi > 0) {
       const size = pageSizesPt.value[index] || await getPageSizePt(index)
       if (size) {
-        const cappedDpi = Math.min(dpi, settings.s.highResDpiCap)
+        const cappedDpi = Math.min(dpi, settings.s.pdfRenderDpi)
         requiredWidth = Math.max(1, Math.floor(size.widthPt * cappedDpi / 72))
       }
     }
@@ -437,7 +439,7 @@ export function createMediaSessionController() {
     }
 
     if (!pdfInflight.has(index)) {
-      const finalFormat = format ?? settings.s.renderFormat
+      const finalFormat = format ?? 'raw'
       enqueueJob(index, targetWidth, finalFormat, dpi)
     }
 
@@ -471,9 +473,7 @@ export function createMediaSessionController() {
         ? 82
         : (job.format === 'webp')
           ? 85
-          : (job.format === 'png'
-            ? (settings.s.pngCompression === 'fast' ? 25 : settings.s.pngCompression === 'best' ? 100 : 50)
-            : undefined)
+          : (job.format === 'png' ? 50 : undefined)
       const gen = nextGen(idx)
       pdfRenderPage({ docId: docId.value!, pageIndex: idx, targetWidth: job.targetWidth, dpi: job.dpi, format: job.format, quality: q, gen })
         .then(page => {

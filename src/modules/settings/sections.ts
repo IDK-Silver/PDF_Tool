@@ -10,7 +10,6 @@ export const SETTINGS_SECTION_IDS = {
   insertDefaults: 'insert-defaults',
   textLayer: 'text-layer',
   export: 'export',
-  encoding: 'encoding',
   debug: 'debug',
 } as const
 
@@ -35,6 +34,5 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   { key: 'insertDefaults', id: SETTINGS_SECTION_IDS.insertDefaults, navLabelKey: 'settings.nav.insertDefaults' },
   { key: 'textLayer', id: SETTINGS_SECTION_IDS.textLayer, navLabelKey: 'settings.nav.textLayer' },
   { key: 'export', id: SETTINGS_SECTION_IDS.export, navLabelKey: 'settings.nav.export' },
-  { key: 'encoding', id: SETTINGS_SECTION_IDS.encoding, navLabelKey: 'settings.nav.encoding' },
   { key: 'debug', id: SETTINGS_SECTION_IDS.debug, navLabelKey: 'settings.nav.debug' },
 ]

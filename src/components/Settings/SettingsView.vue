@@ -170,94 +170,13 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
           </p>
 
           <div>
-            <label class="block mb-1">{{ $t('settings.highRes.outputFormat') }}</label>
-            <select v-model="s.renderFormat" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
-              <option value="raw">{{ $t('settings.highRes.formatRaw') }}</option>
-              <option value="webp">{{ $t('settings.highRes.formatWebP') }}</option>
-              <option value="png">{{ $t('settings.highRes.formatPNG') }}</option>
-              <option value="jpeg">{{ $t('settings.highRes.formatJPEG') }}</option>
-            </select>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.formatDescription') }}</p>
-          </div>
-
-          <div v-if="s.renderFormat === 'raw'">
-            <label class="block mb-1">{{ $t('settings.highRes.rawCacheLimit') }}</label>
+            <label class="block mb-1">{{ $t('settings.highRes.pdfRenderDpi') }}</label>
             <input
               class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-              :value="s.rawHighResCacheSize"
-              @input="s.rawHighResCacheSize = number($event, s.rawHighResCacheSize)"
+              :value="s.pdfRenderDpi"
+              @input="s.pdfRenderDpi = number($event, s.pdfRenderDpi)"
             />
-            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-              {{ $t('settings.highRes.rawCacheDescription') }}
-            </p>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="block mb-1">{{ $t('settings.highRes.dpiCap') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.highResDpiCap"
-                @input="s.highResDpiCap = number($event, s.highResDpiCap)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.dpiCapDescription') }}</p>
-            </div>
-            <div>
-              <label class="block mb-1">{{ $t('settings.highRes.dprCap') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.dprCap"
-                @input="s.dprCap = number($event, s.dprCap)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.dprCapDescription') }}</p>
-            </div>
-            <div>
-              <label class="block mb-1">{{ $t('settings.highRes.maxOutputWidth') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.maxOutputWidth"
-                @input="s.maxOutputWidth = number($event, s.maxOutputWidth)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.maxOutputWidthDescription') }}</p>
-            </div>
-            <div>
-              <label class="block mb-1">{{ $t('settings.highRes.actualSizeDpiCap') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.actualModeDpiCap"
-                @input="s.actualModeDpiCap = number($event, s.actualModeDpiCap)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                {{ $t('settings.highRes.actualSizeDpiCapDescription') }}
-              </p>
-            </div>
-            <div>
-              <label class="block mb-1">{{ $t('settings.highRes.zoomRerenderDelay') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.zoomRerenderDelayMs"
-                @input="s.zoomRerenderDelayMs = number($event, s.zoomRerenderDelayMs)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.zoomRerenderDelayDescription') }}</p>
-            </div>
-            <div>
-              <label class="block mb-1">{{ $t('settings.highRes.hiResRerenderDelay') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.hiResRerenderDelayMs"
-                @input="s.hiResRerenderDelayMs = number($event, s.hiResRerenderDelayMs)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.hiResRerenderDelayDescription') }}</p>
-            </div>
-            <div>
-              <label class="block mb-1">{{ $t('settings.highRes.scrollEndDelay') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.scrollEndDebounceMs"
-                @input="s.scrollEndDebounceMs = number($event, s.scrollEndDebounceMs)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.scrollEndDelayDescription') }}</p>
-            </div>
+            <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.highRes.pdfRenderDpiDescription') }}</p>
           </div>
         </div>
       </section>
@@ -274,15 +193,6 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
                 @input="s.maxConcurrentRenders = number($event, s.maxConcurrentRenders)"
               />
               <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.performance.maxConcurrentRendersDescription') }}</p>
-            </div>
-            <div>
-              <label class="block mb-1">{{ $t('settings.performance.highResOverscan') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.highResOverscan"
-                @input="s.highResOverscan = number($event, s.highResOverscan)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">{{ $t('settings.performance.highResOverscanDescription') }}</p>
             </div>
             <div>
               <label class="block mb-1">{{ $t('settings.performance.structureOverscan') }}</label>
@@ -506,36 +416,6 @@ watch(() => route.hash, (h) => { scrollToHash(h) })
         <h2 class="font-medium text-base">{{ $t('settings.export.title') }}</h2>
         <div class="rounded-md border p-4 space-y-3">
           <ExportSettings />
-        </div>
-      </section>
-
-      <section :id="settingsSectionIds.encoding" class="space-y-3">
-        <h2 class="font-medium text-base">{{ $t('settings.encoding.title') }}</h2>
-        <div class="rounded-md border p-4 space-y-3">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label class="block mb-1">{{ $t('settings.encoding.jpegQuality') }}</label>
-              <input
-                class="w-full border border-border rounded px-2 py-1 bg-input text-foreground"
-                :value="s.jpegQuality"
-                @input="s.jpegQuality = number($event, s.jpegQuality)"
-              />
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                {{ $t('settings.encoding.jpegQualityDescription') }}
-              </p>
-            </div>
-            <div>
-              <label class="block mb-1">{{ $t('settings.encoding.pngCompression') }}</label>
-              <select v-model="s.pngCompression" class="w-full border border-border rounded px-2 py-1 bg-input text-foreground">
-                <option value="fast">{{ $t('settings.encoding.pngFast') }}</option>
-                <option value="balanced">{{ $t('settings.encoding.pngBalanced') }}</option>
-                <option value="best">{{ $t('settings.encoding.pngBest') }}</option>
-              </select>
-              <p class="text-xs text-[hsl(var(--muted-foreground))] mt-1">
-                {{ $t('settings.encoding.pngCompressionDescription') }}
-              </p>
-            </div>
-          </div>
         </div>
       </section>
 

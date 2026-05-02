@@ -18,26 +18,10 @@ export interface SettingsState {
   insertCustomHeightMm: number
 
   // === 渲染品質 ===
-  // 高清渲染（精細品質）
-  renderFormat: 'png' | 'jpeg' | 'webp' | 'raw'  // 統一格式（包含 Raw）
-  highResDpiCap: number                  // 高清渲染 DPI 上限（fit 模式用，防卡頓）
-  dprCap: number                          // DPR 上限（避免超高清輸出）
-  maxOutputWidth: number                  // 最大輸出寬度（px）
-  actualModeDpiCap: number               // 實際大小模式 DPI 上限
-
-  // === 互動延遲（可調）===
-  zoomRerenderDelayMs: number           // 縮放後觸發高清重渲染延遲
-  hiResRerenderDelayMs: number          // 預設高清重渲染延遲（未特別指定時）
-  scrollEndDebounceMs: number           // 偵測捲動結束的延遲
+  pdfRenderDpi: number                   // PDF 檢視渲染 DPI
 
   // === 效能控制 ===
   maxConcurrentRenders: number      // 最大並行渲染數
-  highResOverscan: number           // 高清預載範圍（向上下預載的頁數，預設 2）
-  rawHighResCacheSize: number       // Raw 高清快取上限（激進模式用，預設 10）
-
-  // === 編碼品質 ===
-  jpegQuality: number               // 1-100
-  pngCompression: 'fast' | 'balanced' | 'best'
 
   // === 開發工具 ===
   devPerfOverlay: boolean
@@ -81,26 +65,10 @@ export const defaultSettings: SettingsState = {
   insertCustomHeightMm: 297,
 
   // 渲染品質
-  // 高清渲染
-  renderFormat: 'raw',
-  highResDpiCap: 144,          // 高清 DPI 上限（A3: 96dpi=1.78M像素=300ms，144dpi=4M像素=700ms）
-  dprCap: 1.5,
-  maxOutputWidth: 1200,
-  actualModeDpiCap: 144,
-
-  // 互動延遲（實務預設）
-  zoomRerenderDelayMs: 150,
-  hiResRerenderDelayMs: 300,
-  scrollEndDebounceMs: 500,
+  pdfRenderDpi: 144,          // A3: 96dpi=1.78M pixels, 144dpi=4M pixels
 
   // 效能控制
   maxConcurrentRenders: 4,    // 激進降至 2（大檔案單頁 500ms）
-  highResOverscan: 4,         // 高清預載範圍（向上下預載 2 頁）
-  rawHighResCacheSize: 10,    // Raw 模式快取（10 頁約 30-120MB）
-
-  // 編碼品質
-  jpegQuality: 85,
-  pngCompression: 'balanced',
 
   // 開發工具
   devPerfOverlay: false,

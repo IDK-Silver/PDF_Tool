@@ -169,7 +169,7 @@
       "language": "Language",
       "update": "Updates",
       "appearance": "Appearance",
-      "highResRendering": "High-res rendering",
+      "highResRendering": "PDF rendering",
       "performance": "Performance",
       "zoomInteraction": "Zoom interaction",
       "fileOps": "File operations",
@@ -177,7 +177,6 @@
       "insertDefaults": "Insert defaults",
       "textLayer": "Text layer",
       "export": "Export settings",
-      "encoding": "Encoding quality",
       "debug": "Debug & assistance"
     },
     "language": {
@@ -198,37 +197,15 @@
       "invertColorsDisabled": "Dark mode is not currently active."
     },
     "highRes": {
-      "title": "High-resolution rendering",
-      "description": "High-quality pages load after scrolling stops for final viewing and output.",
-      "outputFormat": "High-res output format",
-      "formatRaw": "Raw (Default, fastest)",
-      "formatWebP": "WebP (High compression ratio)",
-      "formatPNG": "PNG (Lossless)",
-      "formatJPEG": "JPEG (Good compatibility)",
-      "formatDescription": "Format follows settings exactly. No forced downgrade for large pages.",
-      "rawCacheLimit": "Raw cache limit (pages)",
-      "rawCacheDescription": "Raw images consume memory. Recommend 10-15 pages (approx. 30-120 MB).",
-      "dpiCap": "High-res DPI cap",
-      "dpiCapDescription": "Limit high-res rendering DPI to avoid stuttering. Default 144.",
-      "dprCap": "DPR cap",
-      "dprCapDescription": "Control device pixel ratio scale for output width. Default 1.5.",
-      "maxOutputWidth": "Maximum output width (px)",
-      "maxOutputWidthDescription": "Prevent output bitmap from becoming too large in extra-wide containers. Default 1200.",
-      "actualSizeDpiCap": "Actual size DPI cap",
-      "actualSizeDpiCapDescription": "Prevent DPI from becoming too large during high zoom. Default 144.",
-      "zoomRerenderDelay": "Zoom re-render delay (ms)",
-      "zoomRerenderDelayDescription": "Delay for triggering high-res re-render after zoom. Default 150 ms.",
-      "hiResRerenderDelay": "High-res re-render default delay (ms)",
-      "hiResRerenderDelayDescription": "Default value when no delay specified. Default 300 ms.",
-      "scrollEndDelay": "Scroll end delay (ms)",
-      "scrollEndDelayDescription": "Delay for batch rendering after detecting scroll end. Default 500 ms."
+      "title": "PDF rendering",
+      "description": "PDF pages are rasterized to RAW images at a fixed DPI, then displayed through WebGPU.",
+      "pdfRenderDpi": "PDF render DPI",
+      "pdfRenderDpiDescription": "Higher DPI is sharper and uses more memory and render time. Default 144. Zoom only scales the WebGPU output and does not re-render the PDF."
     },
     "performance": {
       "title": "Performance control",
       "maxConcurrentRenders": "Max concurrent renders",
       "maxConcurrentRendersDescription": "Limit concurrent pages being rendered. Default 4.",
-      "highResOverscan": "High-res preload range",
-      "highResOverscanDescription": "Pages to preload above and below visible area. Default 4.",
       "structureOverscan": "DOM structure retention range",
       "structureOverscanDescription": "Retain DOM structure for pages within ± N of viewport. Beyond that, only render placeholders. Default 10."
     },
@@ -299,16 +276,6 @@
       "dpiDescription": "72 = 1x. Recommend 150 or 300.",
       "jpegQuality": "JPEG quality (1-100)",
       "jpegQualityDescription": "Only effective for JPEG. Higher values = clearer, larger files."
-    },
-    "encoding": {
-      "title": "Encoding quality",
-      "jpegQuality": "JPEG quality (1-100)",
-      "jpegQualityDescription": "Higher values = clearer, larger files. Recommend 80-85.",
-      "pngCompression": "PNG compression level",
-      "pngFast": "Fast (larger file)",
-      "pngBalanced": "Balanced",
-      "pngBest": "Best (smallest file, slower)",
-      "pngCompressionDescription": "Balance between speed and file size."
     },
     "debug": {
       "title": "Debug & assistance",

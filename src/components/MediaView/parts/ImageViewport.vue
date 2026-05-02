@@ -8,6 +8,7 @@ import { dirname, join } from '@tauri-apps/api/path'
 import { useFileListStore } from '@/modules/filelist/store'
 import { useZoom, type ZoomContext } from '@/modules/media/useZoom'
 import AnnotationLayer from './AnnotationLayer.vue'
+import WebGpuImageCanvas from './WebGpuImageCanvas.vue'
 import { useAnnotationStore } from '@/modules/annotation/store'
 import type { MediaSession } from '@/modules/media/session'
 
@@ -37,7 +38,6 @@ const filelist = useFileListStore()
 const annotationStore = useAnnotationStore()
 
 const scrollRootEl = ref<HTMLElement | null>(null)
-const imageEl = ref<HTMLImageElement | null>(null)
 const imageNaturalWidth = ref<number | null>(null)
 const imageNaturalHeight = ref<number | null>(null)
 const containerWidth = ref(0)
@@ -48,8 +48,7 @@ const menu = ref<{ open: boolean; x: number; y: number }>({ open: false, x: 0, y
 // 這是讓 useZoom 能夠操作此組件的關鍵介面
 function createZoomContext(): ZoomContext | null {
   const root = scrollRootEl.value
-  const img = imageEl.value
-  if (!root || !img) return null
+  if (!root) return null
 
   return {
     scrollContainer: root,
@@ -189,14 +188,6 @@ async function convertImageToPdfFromMenu() {
   }
 }
 
-function imgTransformStyle() {
-  const styles: Record<string, string> = {}
-  if (shouldInvertColors.value) {
-    styles.filter = 'invert(1) hue-rotate(180deg)'
-  }
-  return Object.keys(styles).length > 0 ? styles : undefined
-}
-
 // --- 縮放封裝函數 (對接 activeControls) ---
 
 function handleZoomIn() {
@@ -273,13 +264,15 @@ function scheduleUpdateFitPercent() {
   }, 150)
 }
 
-function onImageLoad(e: Event) {
-  const el = e.target as HTMLImageElement
-  imageNaturalWidth.value = el?.naturalWidth || null
-  imageNaturalHeight.value = el?.naturalHeight || null
-  // 圖片載入完成後，更新 Fit 比例
+function onWebGpuImageReady(payload: { width: number; height: number }) {
+  imageNaturalWidth.value = payload.width || null
+  imageNaturalHeight.value = payload.height || null
   syncContainerMetrics()
   scheduleUpdateFitPercent()
+}
+
+function onWebGpuImageError() {
+  void media.fallbackLoadImageBlob()
 }
 
 // Annotation layer support
@@ -366,6 +359,18 @@ watch(() => media.imageUrl, () => {
   scheduleUpdateFitPercent()
 })
 
+watch(
+  () => [media.descriptor?.path, media.descriptor?.width, media.descriptor?.height] as const,
+  ([, width, height]) => {
+    if (media.descriptor?.type !== 'image') return
+    imageNaturalWidth.value = width || null
+    imageNaturalHeight.value = height || null
+    syncContainerMetrics()
+    scheduleUpdateFitPercent()
+  },
+  { immediate: true },
+)
+
 watch(() => media.descriptor?.path, () => closeMenu())
 
 // 曝露給父層使用
@@ -409,17 +414,15 @@ defineExpose({
         :style="imageCardStyle"
         data-image-card
       >
-        <img
-          :src="media.imageUrl || undefined"
-          alt="image"
+        <WebGpuImageCanvas
+          v-if="media.imageUrl"
+          :src="media.imageUrl"
+          :invert="shouldInvertColors"
           :class="viewMode === 'fit' ? 'w-full block' : 'block'"
-          :style="[
-             imgTransformStyle(),
-             viewMode === 'actual' ? { width: '100%' } : {}
-          ]"
-          ref="imageEl"
-          @load="onImageLoad"
-          @error="media.fallbackLoadImageBlob()"
+          :style="viewMode === 'actual' ? { width: '100%' } : undefined"
+          aria-label="image"
+          @ready="onWebGpuImageReady"
+          @error="onWebGpuImageError"
           draggable="false"
         />
         <!-- Annotation layer (SVG overlay for annotations) -->

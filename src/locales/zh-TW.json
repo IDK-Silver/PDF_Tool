@@ -169,7 +169,7 @@
       "language": "語言",
       "update": "更新",
       "appearance": "外觀",
-      "highResRendering": "高畫質渲染",
+      "highResRendering": "PDF 渲染",
       "performance": "效能控制",
       "zoomInteraction": "縮放互動",
       "fileOps": "檔案操作",
@@ -177,7 +177,6 @@
       "insertDefaults": "插入預設",
       "textLayer": "文字層",
       "export": "匯出設定",
-      "encoding": "編碼品質",
       "debug": "除錯與輔助"
     },
     "language": {
@@ -198,37 +197,15 @@
       "invertColorsDisabled": "需先啟用暗色模式。"
     },
     "highRes": {
-      "title": "高畫質渲染",
-      "description": "停止捲動後會載入高畫質頁面，用於最終檢視與輸出。",
-      "outputFormat": "高畫質輸出格式",
-      "formatRaw": "Raw（預設，最快速）",
-      "formatWebP": "WebP（高壓縮比）",
-      "formatPNG": "PNG（無損）",
-      "formatJPEG": "JPEG（相容性佳）",
-      "formatDescription": "格式完全依設定選擇，無大頁面強制降級。",
-      "rawCacheLimit": "Raw 快取上限（頁）",
-      "rawCacheDescription": "Raw 影像佔用記憶體，建議維持 10–15 頁（約 30–120 MB）。",
-      "dpiCap": "高畫質 DPI 上限",
-      "dpiCapDescription": "限制高畫質渲染 DPI，避免卡頓。預設 144。",
-      "dprCap": "DPR 上限",
-      "dprCapDescription": "控制裝置像素比對輸出寬度的放大。預設 1.5。",
-      "maxOutputWidth": "最大輸出寬度（px）",
-      "maxOutputWidthDescription": "避免超寬容器時輸出位圖過大。預設 1200。",
-      "actualSizeDpiCap": "實際大小 DPI 上限",
-      "actualSizeDpiCapDescription": "防止高倍縮放時 DPI 過大。預設 144。",
-      "zoomRerenderDelay": "縮放重渲染延遲（ms）",
-      "zoomRerenderDelayDescription": "縮放操作後觸發高畫質重渲染的延遲。預設 150 ms。",
-      "hiResRerenderDelay": "高畫質重渲染預設延遲（ms）",
-      "hiResRerenderDelayDescription": "未指定延遲時使用的預設值。預設 300 ms。",
-      "scrollEndDelay": "捲動結束延遲（ms）",
-      "scrollEndDelayDescription": "辨識「捲動結束」後再批次渲染的延遲。預設 500 ms。"
+      "title": "PDF 渲染",
+      "description": "PDF 頁面會用固定 DPI 轉成 RAW 影像，再交由 WebGPU 顯示。",
+      "pdfRenderDpi": "PDF 渲染 DPI",
+      "pdfRenderDpiDescription": "DPI 越高越清晰，也越吃記憶體與渲染時間。預設 144。縮放只放大或縮小 WebGPU 畫面，不會重新渲染 PDF。"
     },
     "performance": {
       "title": "效能控制",
       "maxConcurrentRenders": "最大並行渲染",
       "maxConcurrentRendersDescription": "限制同時間的渲染頁數。預設 4。",
-      "highResOverscan": "高畫質預載範圍",
-      "highResOverscanDescription": "向可見區域上下預載的頁數。預設 4。",
       "structureOverscan": "DOM 結構保留範圍",
       "structureOverscanDescription": "視野外 ± N 頁仍保留 DOM 結構，超出範圍只渲染占位。預設 10。"
     },
@@ -299,16 +276,6 @@
       "dpiDescription": "72 = 1 倍，建議 150 或 300。",
       "jpegQuality": "JPEG 品質（1–100）",
       "jpegQualityDescription": "僅 JPEG 有效；值越高越清晰，檔案越大。"
-    },
-    "encoding": {
-      "title": "編碼品質",
-      "jpegQuality": "JPEG 品質（1–100）",
-      "jpegQualityDescription": "數值越高越清晰，檔案也會變大。建議 80–85。",
-      "pngCompression": "PNG 壓縮等級",
-      "pngFast": "快速（檔案較大）",
-      "pngBalanced": "平衡",
-      "pngBest": "最佳（檔案最小，較慢）",
-      "pngCompressionDescription": "在速度與檔案大小之間取得平衡。"
     },
     "debug": {
       "title": "除錯與輔助",
