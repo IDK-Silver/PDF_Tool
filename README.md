@@ -43,6 +43,9 @@ Or scan the QR Code:
 | Windows | x64 | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_x64-setup.exe) |
 | Linux | x64 (AppImage) | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_amd64.AppImage) |
 
+
+> **Linux Note**: WebGPU is unsupported on Linux as of June 4 2026. Please use version prior to v3.14.0 as a temporary workaround. [See](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status)
+
 > **macOS Note**: The Universal Binary includes both Intel (x86_64) and Apple Silicon (ARM64) architectures. The app is signed and notarized by Apple.
 
 > **Auto Update**: The app includes built-in auto-update functionality.
