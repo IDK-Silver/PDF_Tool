@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri_plugin_updater::UpdaterExt;
 
 #[cfg(not(feature = "app-store"))]
-const GITHUB_API_URL: &str = "https://api.github.com/repos/IDK-Silver/PDF_Tool/releases/latest";
+const GITHUB_API_URL: &str = "https://api.github.com/repos/IDK-Silver/kano-pdf-tool/releases/latest";
 
 // ============================================================================
 // Data Structures

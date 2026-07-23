@@ -10,13 +10,13 @@ title: Support - Kano PDF Tool
 If you have any questions, issues, or suggestions:
 
 - **Email**: [a288235403@gmail.com](mailto:a288235403@gmail.com)
-- **GitHub Issues**: [Report a bug or request a feature](https://github.com/IDK-Silver/PDF_Tool/issues)
+- **GitHub Issues**: [Report a bug or request a feature](https://github.com/IDK-Silver/kano-pdf-tool/issues)
 
 ## FAQ
 
 ### How do I report a bug?
 
-Please open an issue on our [GitHub repository](https://github.com/IDK-Silver/PDF_Tool/issues) with a detailed description of the problem.
+Please open an issue on our [GitHub repository](https://github.com/IDK-Silver/kano-pdf-tool/issues) with a detailed description of the problem.
 
 ### Which platforms are supported?
 

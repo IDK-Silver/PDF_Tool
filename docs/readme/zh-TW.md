@@ -39,9 +39,9 @@
 
 | 平台 | 版本 | 連結 |
 |------|------|------|
-| macOS | Universal Binary<br/>（支援 Intel 與 Apple Silicon） | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_universal.dmg) |
-| Windows | x64 | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_x64-setup.exe) |
-| Linux | x64 (AppImage) | [下載](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_amd64.AppImage) |
+| macOS | Universal Binary<br/>（支援 Intel 與 Apple Silicon） | [下載](https://github.com/IDK-Silver/kano-pdf-tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_universal.dmg) |
+| Windows | x64 | [下載](https://github.com/IDK-Silver/kano-pdf-tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_x64-setup.exe) |
+| Linux | x64 (AppImage) | [下載](https://github.com/IDK-Silver/kano-pdf-tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_amd64.AppImage) |
 
 > **macOS 說明**：Universal Binary 版本包含 Intel (x86_64) 和 Apple Silicon (ARM64) 兩種架構，可自動適配您的 Mac 機型。應用程式已通過 Apple 開發者簽名及公證 (Notarization)，可直接安裝使用。
 
@@ -49,7 +49,7 @@
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=IDK-Silver/PDF_Tool&type=Date)](https://star-history.com/#IDK-Silver/PDF_Tool&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=IDK-Silver/kano-pdf-tool&type=Date)](https://star-history.com/#IDK-Silver/kano-pdf-tool&Date)
 
 ## 貢獻
 
@@ -66,8 +66,8 @@
 
 1. 克隆專案
     ```bash
-    git clone https://github.com/IDK-Silver/PDF_Tool.git
-    cd PDF_Tool
+    git clone https://github.com/IDK-Silver/kano-pdf-tool.git
+    cd kano-pdf-tool
     ```
 
 2. 安裝依賴

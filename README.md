@@ -39,9 +39,9 @@ Or scan the QR Code:
 
 | Platform | Version | Link |
 |----------|---------|------|
-| macOS | Universal Binary<br/>(Intel & Apple Silicon) | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_universal.dmg) |
-| Windows | x64 | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_x64-setup.exe) |
-| Linux | x64 (AppImage) | [Download](https://github.com/IDK-Silver/PDF_Tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_amd64.AppImage) |
+| macOS | Universal Binary<br/>(Intel & Apple Silicon) | [Download](https://github.com/IDK-Silver/kano-pdf-tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_universal.dmg) |
+| Windows | x64 | [Download](https://github.com/IDK-Silver/kano-pdf-tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_x64-setup.exe) |
+| Linux | x64 (AppImage) | [Download](https://github.com/IDK-Silver/kano-pdf-tool/releases/download/v3.14.0/Kano.PDF.Tool_3.14.0_amd64.AppImage) |
 
 
 > **Linux Note**: WebGPU is unsupported on Linux as of June 4 2026. Please use version prior to v3.14.0 as a temporary workaround. [See](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status)
@@ -52,7 +52,7 @@ Or scan the QR Code:
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=IDK-Silver/PDF_Tool&type=Date)](https://star-history.com/#IDK-Silver/PDF_Tool&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=IDK-Silver/kano-pdf-tool&type=Date)](https://star-history.com/#IDK-Silver/kano-pdf-tool&Date)
 
 ## Contributing
 
@@ -69,8 +69,8 @@ Issues and Pull Requests are welcome!
 
 1. Clone the repository
     ```bash
-    git clone https://github.com/IDK-Silver/PDF_Tool.git
-    cd PDF_Tool
+    git clone https://github.com/IDK-Silver/kano-pdf-tool.git
+    cd kano-pdf-tool
     ```
 
 2. Install dependencies
