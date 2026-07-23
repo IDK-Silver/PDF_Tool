@@ -48,7 +48,7 @@ async function openSponsor() {
 }
 
 async function openHomepage() {
-  await openLink('https://github.com/IDK-Silver/PDF_Tool')
+  await openLink('https://github.com/IDK-Silver/kano-pdf-tool')
 }
 
 async function openLink(url: string) {

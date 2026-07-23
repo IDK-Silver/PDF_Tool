@@ -1,8 +1,8 @@
-# PDF_Tool 設計文件
+# Kano PDF Tool 設計文件
 
 ## 專案概述
 
-PDF_Tool 是一個基於 Tauri + Vue 3 的 PDF 與圖片檢視器及編輯工具。
+Kano PDF Tool 是一個基於 Tauri + Vue 3 的 PDF 與圖片檢視器及編輯工具。
 
 ## 架構
 

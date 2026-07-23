@@ -6,7 +6,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/IDK-Silver/PDF_Tool/releases/latest/download/latest.json"
+        "https://github.com/IDK-Silver/kano-pdf-tool/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0N0Q0ODZFNDBFMkY2MzEKUldReDl1SkFia2g5dEZDZ21oR0dyK0pzMUd4TGY3SUlsdHUzNEtHNm54Yis4NWJMdWdOZEFqTmYK"
     }
